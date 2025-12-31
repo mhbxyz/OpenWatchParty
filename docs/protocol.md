@@ -3,6 +3,9 @@
 This document defines the JSON message protocol used between clients and the
 session server over WebSocket.
 
+If `JWT_SECRET` is configured on the server, `create_room` requires `auth_token`
+and `join_room` requires either `auth_token` or `invite_token`.
+
 ## Envelope
 
 ```json
@@ -29,7 +32,8 @@ Payload:
   "media_url": "...",
   "start_pos": 0,
   "host_id": "...",
-  "options": {}
+  "options": {},
+  "auth_token": "JWT"
 }
 ```
 
@@ -40,7 +44,8 @@ Payload:
 ```json
 {
   "name": "...",
-  "auth_token": "..."
+  "auth_token": "JWT",
+  "invite_token": "JWT"
 }
 ```
 
@@ -146,5 +151,26 @@ Payload:
 {
   "code": "...",
   "message": "..."
+}
+```
+
+### create_invite
+
+Payload:
+
+```json
+{
+  "expires_in": 3600
+}
+```
+
+### invite_created
+
+Payload:
+
+```json
+{
+  "invite_token": "JWT",
+  "expires_at": 1733823600
 }
 ```

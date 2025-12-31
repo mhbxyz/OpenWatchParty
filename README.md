@@ -23,11 +23,18 @@ OpenSyncParty aims to fill the gap left by missing native watch-party support in
 - Docker Compose: `docker-compose.yml`
 - Demo helper: `scripts/serve-demo.sh`
 
+## M2 (Auth + invite)
+
+- JWT auth côté serveur (env `JWT_SECRET`)
+- Invites de room via `create_invite` / `invite_created`
+- Plugin Jellyfin (émission de JWT + invites) dans `plugins/jellyfin`
+
 ## Démarrage rapide (PoC)
 
 1) Lancer le serveur (uv):
 
 ```bash
+export JWT_SECRET=devsecret
 uv sync --group server
 .venv/bin/python session-server/app.py
 ```
