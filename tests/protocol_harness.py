@@ -1,10 +1,12 @@
 import argparse
 import asyncio
 import json
+import os
 import sys
 import time
 
 import websockets
+import jwt
 
 
 def now_ms() -> int:
@@ -27,6 +29,21 @@ async def run_harness(args) -> int:
     room_id = args.room
     host_id = "host-1"
     join_id = "client-2"
+    jwt_secret = os.getenv("JWT_SECRET", "").strip()
+    auth_token = None
+    if jwt_secret:
+        auth_token = jwt.encode(
+            {"user_id": "u1", "username": "Host", "exp": int(time.time()) + 3600},
+            jwt_secret,
+            algorithm="HS256",
+        )
+        join_token = jwt.encode(
+            {"user_id": "u2", "username": "Joiner", "exp": int(time.time()) + 3600},
+            jwt_secret,
+            algorithm="HS256",
+        )
+    else:
+        join_token = None
 
     async with websockets.connect(args.ws) as host_ws:
         await host_ws.send(
@@ -35,7 +52,12 @@ async def run_harness(args) -> int:
                     "type": "create_room",
                     "room": room_id,
                     "client": host_id,
-                    "payload": {"media_url": "demo", "start_pos": 0, "name": "Host"},
+                    "payload": {
+                        "media_url": "demo",
+                        "start_pos": 0,
+                        "name": "Host",
+                        "auth_token": auth_token,
+                    },
                     "ts": now_ms(),
                 }
             )
@@ -52,7 +74,7 @@ async def run_harness(args) -> int:
                         "type": "join_room",
                         "room": room_id,
                         "client": join_id,
-                        "payload": {"name": "Joiner"},
+                        "payload": {"name": "Joiner", "auth_token": join_token},
                         "ts": now_ms(),
                     }
                 )
