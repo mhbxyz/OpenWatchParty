@@ -78,12 +78,20 @@ class SyncClient:
                 "media_url": media_url,
                 "start_pos": self.last_time_pos or 0,
                 "name": self.args.name,
+                "auth_token": self.args.auth_token,
                 "options": {"free_play": False},
             },
         )
 
     async def join_room(self) -> None:
-        await self.send_ws("join_room", {"name": self.args.name})
+        await self.send_ws(
+            "join_room",
+            {
+                "name": self.args.name,
+                "auth_token": self.args.auth_token,
+                "invite_token": self.args.invite_token,
+            },
+        )
 
     async def apply_player_event(self, payload: dict) -> None:
         action = payload.get("action")
@@ -167,6 +175,8 @@ async def main() -> None:
     parser.add_argument("--mpv-socket", default="/tmp/mpv-socket", help="MPV JSON IPC socket path")
     parser.add_argument("--host", action="store_true", help="Create room and act as host")
     parser.add_argument("--media-url", default=None, help="Override media URL")
+    parser.add_argument("--auth-token", default=None, help="JWT auth token")
+    parser.add_argument("--invite-token", default=None, help="Invite token for join")
     args = parser.parse_args()
 
     client = SyncClient(args)

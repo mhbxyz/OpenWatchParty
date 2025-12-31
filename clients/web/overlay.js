@@ -115,6 +115,14 @@
       return;
     }
 
+    if (msg.type === "invite_created") {
+      const inviteEl = byId("osp-invite");
+      if (inviteEl) {
+        inviteEl.value = payload.invite_token || "";
+      }
+      return;
+    }
+
     if (msg.type === "room_state") {
       byId("osp-host").textContent = payload.host_id || "unknown";
       if (payload.state && payload.state.play_state) {
@@ -228,6 +236,7 @@
       media_url: mediaUrl,
       start_pos: video ? video.currentTime : 0,
       name: state.name,
+      auth_token: byId("osp-auth").value.trim() || undefined,
       options: {
         free_play: false,
       },
@@ -238,7 +247,15 @@
     state.isHost = false;
     state.followHost = true;
     byId("osp-follow").checked = true;
-    sendMessage("join_room", { name: state.name });
+    sendMessage("join_room", {
+      name: state.name,
+      auth_token: byId("osp-auth").value.trim() || undefined,
+      invite_token: byId("osp-invite").value.trim() || undefined,
+    });
+  };
+
+  const createInvite = () => {
+    sendMessage("create_invite", { expires_in: 3600 });
   };
 
   const createUI = () => {
@@ -294,9 +311,12 @@
       <input id="osp-room" type="text" placeholder="Room ID" />
       <input id="osp-name" type="text" placeholder="Display name" />
       <input id="osp-media" type="text" placeholder="Media URL (host)" />
+      <input id="osp-auth" type="text" placeholder="Auth token (JWT)" />
+      <input id="osp-invite" type="text" placeholder="Invite token (JWT)" />
       <button id="osp-connect">Connect</button>
       <button id="osp-create" class="secondary">Create room (host)</button>
       <button id="osp-join">Join room</button>
+      <button id="osp-invite-btn" class="secondary">Create invite</button>
       <label style="display:flex; align-items:center; gap:6px; margin-top:6px;">
         <input id="osp-follow" type="checkbox" checked /> Follow host
       </label>
@@ -319,6 +339,7 @@
     });
     byId("osp-create").addEventListener("click", () => createRoom());
     byId("osp-join").addEventListener("click", () => joinRoom());
+    byId("osp-invite-btn").addEventListener("click", () => createInvite());
     byId("osp-follow").addEventListener("change", (e) => {
       state.followHost = e.target.checked;
     });

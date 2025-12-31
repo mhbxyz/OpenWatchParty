@@ -13,6 +13,13 @@ Usage:
 3. Paste the script in the browser console or load it with a userscript manager.
 4. Connect, then create or join a room.
 
+If auth is enabled on the server, fill in `Auth token (JWT)` and optionally
+`Invite token (JWT)` before joining.
+
+Le bouton `Create invite` génère un token d'invitation (si JWT actif).
+
+Le JWT peut être émis par le plugin Jellyfin (`/OpenSyncParty/token`).
+
 ## Demo page
 
 Open `clients/web/demo.html` in a local server (or with a simple `python -m http.server`).
