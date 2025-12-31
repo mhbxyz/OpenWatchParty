@@ -11,9 +11,12 @@ session server over WebSocket.
   "room": "room_id",
   "client": "client_id",
   "payload": {},
-  "ts": 1733820000
+  "ts": 1733820000,
+  "server_ts": 1733820001
 }
 ```
+
+`server_ts` is optional and added by the session server when relaying messages.
 
 ## Events
 
@@ -61,6 +64,57 @@ Payload:
   "position": 0.0,
   "play_state": "playing|paused|buffering",
   "reported_latency": 0
+}
+```
+
+### room_state
+
+Payload:
+
+```json
+{
+  "room": "room_id",
+  "host_id": "client_id",
+  "media_url": "...",
+  "options": {},
+  "state": { "position": 0.0, "play_state": "playing|paused|buffering" },
+  "participants": [
+    { "client_id": "client-1", "name": "Alice", "is_host": true }
+  ],
+  "participant_count": 1
+}
+```
+
+### client_joined / client_left
+
+Payload:
+
+```json
+{
+  "name": "..."
+}
+```
+
+### participants_update
+
+Payload:
+
+```json
+{
+  "participants": [
+    { "client_id": "client-1", "name": "Alice", "is_host": true }
+  ],
+  "participant_count": 1
+}
+```
+
+### host_change
+
+Payload:
+
+```json
+{
+  "host_id": "client_id"
 }
 ```
 
