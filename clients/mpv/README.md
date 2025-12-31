@@ -10,16 +10,13 @@ Usage:
 
 ```bash
 mpv --input-ipc-server=/tmp/mpv-socket /path/to/video.mp4
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python opensyncparty.py --room my-room --host
+make mpv-host ROOM=my-room
 ```
 
 For a joiner:
 
 ```bash
-python opensyncparty.py --room my-room
+make mpv-join ROOM=my-room
 ```
 
 The adapter prints RTT samples every few seconds to help gauge latency.

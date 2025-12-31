@@ -25,33 +25,40 @@ OpenSyncParty aims to fill the gap left by missing native watch-party support in
 
 ## Démarrage rapide (PoC)
 
-1) Lancer le serveur:
+1) Lancer le serveur (uv):
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r session-server/requirements.txt
-python session-server/app.py
+uv sync --group server
+.venv/bin/python session-server/app.py
 ```
 
 2) Ouvrir la démo web:
 
 ```bash
-./scripts/serve-demo.sh
+make demo
 ```
 
 3) Adapter MPV:
 
 ```bash
 mpv --input-ipc-server=/tmp/mpv-socket /path/to/video.mp4
-python clients/mpv/opensyncparty.py --room my-room --host
+make mpv-host ROOM=my-room
 ```
 
 4) Vérifier le protocole:
 
 ```bash
-python -m venv .venv
-. .venv/bin/activate
-pip install -r tests/requirements.txt
-python tests/protocol_harness.py --ws ws://localhost:8999/ws
+make test-harness
 ```
+
+## Contrôle centralisé
+
+- `make server` / `make demo` / `make test-harness`
+- `docker compose up --build session-server web-demo`
+- `docker compose run --rm protocol-harness`
+
+## Prérequis
+
+- Python 3.11 (voir `.python-version`)
+- `uv` pour la gestion des environnements et dépendances
+- Dépendances centralisées dans `pyproject.toml` et verrouillées via `uv.lock`

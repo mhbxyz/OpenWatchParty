@@ -19,10 +19,14 @@ WebSocket coordination service for rooms, state, and sync events.
 ## Run (PoC)
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install -r requirements.txt
-python app.py
+uv sync --group server
+.venv/bin/python app.py
+```
+
+Ou via Makefile:
+
+```bash
+make server
 ```
 
 The server listens on `ws://localhost:8999/ws` with a health check at
@@ -31,7 +35,7 @@ The server listens on `ws://localhost:8999/ws` with a health check at
 ## Run with Docker Compose
 
 ```bash
-docker compose up --build
+docker compose up --build session-server
 ```
 
 ## Notes

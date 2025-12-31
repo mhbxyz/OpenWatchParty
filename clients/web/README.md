@@ -8,7 +8,7 @@ Browser-based client integration (Jellyfin web overlay or fork).
 
 Usage:
 
-1. Run the session server (see `session-server/README.md`).
+1. Run the session server (see `session-server/README.md` or `make server`).
 2. Open a Jellyfin web player or any HTML5 video page.
 3. Paste the script in the browser console or load it with a userscript manager.
 4. Connect, then create or join a room.
@@ -21,5 +21,11 @@ The overlay loads automatically and provides a quick room sync test.
 Option rapide:
 
 ```bash
-./scripts/serve-demo.sh
+make demo
+```
+
+Via Docker:
+
+```bash
+docker compose up --build web-demo
 ```
