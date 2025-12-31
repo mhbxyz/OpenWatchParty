@@ -1,0 +1,16 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+
+  session-server:
+    build: ../../session-server
+    ports:
+      - "8999:8999"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=changeme
+    depends_on:
+      - redis
