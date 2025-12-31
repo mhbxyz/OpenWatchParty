@@ -13,6 +13,8 @@ services:
       - JWT_AUDIENCE=${JWT_AUDIENCE:-}
       - JWT_ISSUER=${JWT_ISSUER:-}
       - INVITE_TTL_SECONDS=${INVITE_TTL_SECONDS:-3600}
+      - HOST_ROLES=${HOST_ROLES:-}
+      - INVITE_ROLES=${INVITE_ROLES:-}
   web-demo:
     image: python:3.11-slim
     working_dir: /workspace
