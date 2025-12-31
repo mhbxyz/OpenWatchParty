@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  session-server:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./session-server:/app
+    command: bash -lc "pip install -r requirements.txt && python app.py"
+    ports:
+      - "8999:8999"
