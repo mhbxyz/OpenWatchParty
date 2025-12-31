@@ -30,10 +30,15 @@ async def run_harness(args) -> int:
     host_id = "host-1"
     join_id = "client-2"
     jwt_secret = os.getenv("JWT_SECRET", "").strip()
+    host_roles = [r.strip() for r in os.getenv("HOST_ROLES", "").split(",") if r.strip()]
     auth_token = None
     if jwt_secret:
+        role_claim = host_roles[0] if host_roles else None
+        host_claims = {"user_id": "u1", "username": "Host", "exp": int(time.time()) + 3600}
+        if role_claim:
+            host_claims["role"] = role_claim
         auth_token = jwt.encode(
-            {"user_id": "u1", "username": "Host", "exp": int(time.time()) + 3600},
+            host_claims,
             jwt_secret,
             algorithm="HS256",
         )
