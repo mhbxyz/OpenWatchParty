@@ -14,3 +14,44 @@ The system operates through a small server component and client-side adapters, m
 * Fully open-source and easily extensible
 
 OpenSyncParty aims to fill the gap left by missing native watch-party support in Jellyfin by providing a robust, player-independent, community-driven solution.
+
+## M1 PoC
+
+- Session server: `session-server/app.py`
+- Web overlay: `clients/web/overlay.js`
+- MPV adapter: `clients/mpv/opensyncparty.py`
+- Docker Compose: `docker-compose.yml`
+- Demo helper: `scripts/serve-demo.sh`
+
+## Démarrage rapide (PoC)
+
+1) Lancer le serveur:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r session-server/requirements.txt
+python session-server/app.py
+```
+
+2) Ouvrir la démo web:
+
+```bash
+./scripts/serve-demo.sh
+```
+
+3) Adapter MPV:
+
+```bash
+mpv --input-ipc-server=/tmp/mpv-socket /path/to/video.mp4
+python clients/mpv/opensyncparty.py --room my-room --host
+```
+
+4) Vérifier le protocole:
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r tests/requirements.txt
+python tests/protocol_harness.py --ws ws://localhost:8999/ws
+```
