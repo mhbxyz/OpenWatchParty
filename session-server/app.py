@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
 import jwt
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Header, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 
 def now_ms() -> int:
@@ -38,6 +39,8 @@ JWT_SECRET = os.getenv("JWT_SECRET", "").strip()
 JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "").strip()
 JWT_ISSUER = os.getenv("JWT_ISSUER", "").strip()
 INVITE_TTL_SECONDS = int(os.getenv("INVITE_TTL_SECONDS", "3600"))
+HOST_ROLES = [role.strip().lower() for role in os.getenv("HOST_ROLES", "").split(",") if role.strip()]
+INVITE_ROLES = [role.strip().lower() for role in os.getenv("INVITE_ROLES", "").split(",") if role.strip()]
 
 
 @app.get("/health")
@@ -80,6 +83,28 @@ def verify_jwt(token: str) -> Tuple[bool, Optional[dict], Optional[str]]:
         return False, None, "token_invalid"
 
 
+def extract_roles(claims: dict) -> set:
+    roles = []
+    role_claim = claims.get("role")
+    if isinstance(role_claim, list):
+        roles.extend(role_claim)
+    elif isinstance(role_claim, str):
+        roles.extend([part.strip() for part in role_claim.split(",")])
+    roles_claim = claims.get("roles")
+    if isinstance(roles_claim, list):
+        roles.extend(roles_claim)
+    elif isinstance(roles_claim, str):
+        roles.extend([part.strip() for part in roles_claim.split(",")])
+    return {str(role).lower() for role in roles if role}
+
+
+def require_roles(claims: dict, required: list) -> bool:
+    if not required:
+        return True
+    roles = extract_roles(claims)
+    return any(role in roles for role in required)
+
+
 def require_auth(payload: dict) -> Tuple[bool, Optional[dict], Optional[str]]:
     if not JWT_SECRET:
         return True, {}, None
@@ -120,6 +145,29 @@ def issue_invite(room_id: str, ttl_seconds: Optional[int] = None) -> dict:
         payload["iss"] = JWT_ISSUER
     token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
     return {"invite_token": token, "expires_at": exp}
+
+
+class InviteRequest(BaseModel):
+    room: str
+    expires_in: Optional[int] = None
+
+
+@app.post("/invite")
+async def create_invite_http(request: InviteRequest, authorization: Optional[str] = Header(default=None)) -> JSONResponse:
+    if not JWT_SECRET:
+        raise HTTPException(status_code=400, detail="JWT_SECRET required")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    ok, claims, err = verify_jwt(token)
+    if not ok or not claims:
+        raise HTTPException(status_code=401, detail=err or "Invalid token")
+    if not require_roles(claims, INVITE_ROLES or HOST_ROLES):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    if request.room not in rooms:
+        raise HTTPException(status_code=404, detail="Room not found")
+    invite = issue_invite(request.room, request.expires_in)
+    return JSONResponse(invite)
 
 
 async def send_error(ws: WebSocket, code: str, message: str, room: Optional[str], client: Optional[str]) -> None:
@@ -182,6 +230,9 @@ async def handle_create_room(msg: dict, ws: WebSocket) -> None:
     ok, claims, err = require_auth(payload)
     if not ok:
         await send_error(ws, err or "auth_failed", "auth required", room_id, client_id)
+        return
+    if claims and not require_roles(claims, HOST_ROLES):
+        await send_error(ws, "forbidden", "insufficient role", room_id, client_id)
         return
     if room_id in rooms:
         await send_error(ws, "room_exists", "room already exists", room_id, client_id)
@@ -325,6 +376,13 @@ async def handle_create_invite(msg: dict, ws: WebSocket) -> None:
         return
     if not JWT_SECRET:
         await send_error(ws, "invite_disabled", "JWT_SECRET required", room_id, client_id)
+        return
+    ok, claims, err = require_auth(payload)
+    if not ok:
+        await send_error(ws, err or "auth_failed", "auth required", room_id, client_id)
+        return
+    if claims and not require_roles(claims, INVITE_ROLES or HOST_ROLES):
+        await send_error(ws, "forbidden", "insufficient role", room_id, client_id)
         return
     ttl_seconds = payload.get("expires_in")
     invite = issue_invite(room_id, ttl_seconds)

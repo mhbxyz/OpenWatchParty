@@ -55,3 +55,13 @@ Environment variables:
 - `JWT_AUDIENCE` (optional)
 - `JWT_ISSUER` (optional)
 - `INVITE_TTL_SECONDS` (default 3600)
+- `HOST_ROLES` (comma-separated roles allowed to create rooms)
+- `INVITE_ROLES` (comma-separated roles allowed to create invites)
+
+## REST Invite
+
+If you need an HTTP flow, POST `/invite` with a bearer JWT and payload:
+
+```json
+{ "room": "room_id", "expires_in": 3600 }
+```
