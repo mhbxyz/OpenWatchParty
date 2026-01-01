@@ -2,61 +2,30 @@
 
 ## Prerequisites
 
-*   **Docker** & **Docker Compose**: For running the development environment.
-*   **Make**: For executing build commands.
-*   **.NET 9.0 SDK** (Optional, but recommended for IDE support): The project targets .NET 9.0.
-
-## Project Structure
-
-*   `plugins/jellyfin/OpenSyncParty`: Source code for the C# plugin.
-*   `clients/web-plugin`: Source code for the client-side JavaScript.
-*   `infra/docker`: Docker Compose configuration for the dev stack.
-*   `Makefile`: Main entry point for development tasks.
+*   Docker & Docker Compose
+*   Make
+*   .NET 9.0 SDK
 
 ## Quick Start
 
-1.  **Start the Stack**:
-    This command starts Jellyfin and builds the plugin.
-    ```bash
-    make up
-    ```
-    *   Jellyfin will be available at `http://localhost:8096`.
-    *   The plugin source code is mounted into the builder container.
-    *   The web client code is mounted into the Jellyfin container.
+```bash
+make up
+```
 
-2.  **Rebuild Plugin**:
-    If you modify C# code, you need to rebuild the plugin and restart Jellyfin.
-    ```bash
-    make build-plugin
-    docker compose -f infra/docker/docker-compose.yml restart jellyfin-dev
-    ```
-    *(Note: `make up` handles this automatically)*
+This will:
+1.  Start Jellyfin on `http://localhost:8096`.
+2.  Build the plugin and mount it.
+3.  **Auto-inject the script**: The `docker-compose.yml` uses a custom entrypoint to inject `<script src="/OpenSyncParty/ClientScript"></script>` into `index.html` automatically. This saves you from doing the manual step described in the User Guide during development.
 
-3.  **Client-Side Changes**:
-    If you modify `clients/web-plugin/opensyncparty.js`, simply refresh your browser. The file is mounted directly into the container.
+## Project Structure
 
-4.  **Logs**:
-    To see Jellyfin logs (including plugin logs):
-    ```bash
-    make logs
-    ```
+*   `plugins/jellyfin/OpenSyncParty`: C# Source.
+    *   `Controllers/OpenSyncPartyController.cs`: Handles WS and JS serving.
+    *   `Web/plugin.js`: The client-side script (Embedded Resource).
+*   `clients/web-plugin`: Source for the JS. **Note**: When building, this file is copied to `plugins/.../Web/plugin.js` to be embedded.
 
-## Debugging
+## Workflow
 
-*   The plugin logs to the standard Jellyfin log. Look for lines starting with `[OpenSyncParty]`.
-*   You can use `curl` to test the WebSocket endpoint:
-    ```bash
-    curl -I http://localhost:8096/OpenSyncParty/ws
-    ```
-    It should return `400 Bad Request` (because it expects a WS handshake), confirming the endpoint is active.
-
-## Release Build
-
-To create a release artifact:
-
-1.  Run the build:
-    ```bash
-    make build-plugin
-    ```
-2.  The compiled DLLs are located in `plugins/jellyfin/OpenSyncParty/dist/`.
-3.  Zip the contents of this directory to create a release package.
+1.  Modify `clients/web-plugin/plugin.js`.
+2.  Run `make build-plugin` (this copies the JS and rebuilds the DLL).
+3.  Restart Jellyfin: `docker compose -f infra/docker/docker-compose.yml restart jellyfin-dev`.
