@@ -2,6 +2,6 @@
 
 Client adapters for different players.
 
-- `web/overlay.js` minimal HTML5 overlay client
-- `web/demo.html` page de démonstration rapide
+- `web-plugin/` plugin UI Jellyfin Web (injection Watch Party)
+- `web-overlay/` overlay HTML5 minimal + démo rapide
 - `mpv/opensyncparty.py` MPV JSON IPC adapter

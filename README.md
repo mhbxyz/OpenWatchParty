@@ -18,7 +18,8 @@ OpenSyncParty aims to fill the gap left by missing native watch-party support in
 ## M1 PoC
 
 - Session server: `session-server/app.py`
-- Web overlay: `clients/web/overlay.js`
+- Web UI plugin: `clients/web-plugin/`
+- Web overlay: `clients/web-overlay/overlay.js`
 - MPV adapter: `clients/mpv/opensyncparty.py`
 - Docker Compose: `docker-compose.yml`
 - Demo helper: `scripts/serve-demo.sh`
@@ -29,6 +30,10 @@ OpenSyncParty aims to fill the gap left by missing native watch-party support in
 - Invites de room via `create_invite` / `invite_created`
 - Plugin Jellyfin (émission de JWT + invites) dans `plugins/jellyfin`
 - Roles optionnels via `HOST_ROLES` / `INVITE_ROLES`
+
+## Plugin UI Jellyfin Web
+
+Copie `clients/web-plugin/` dans le dossier plugins du client web Jellyfin, puis recharge l’UI.
 
 ## Démarrage rapide (PoC)
 
@@ -45,6 +50,8 @@ uv sync --group server
 ```bash
 make demo
 ```
+
+Le plugin UI Jellyfin Web est dans `clients/web-plugin/`.
 
 3) Adapter MPV:
 

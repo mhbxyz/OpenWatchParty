@@ -1,0 +1,7 @@
+{
+  "id": "opensyncparty",
+  "name": "OpenSyncParty",
+  "description": "Watch Party controls for Jellyfin Web.",
+  "version": "0.1.0",
+  "entryPoint": "opensyncparty.js"
+}
