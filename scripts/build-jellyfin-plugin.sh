@@ -8,7 +8,7 @@ DIST_DIR="$PLUGIN_DIR/dist"
 cd "$PLUGIN_DIR"
 
 if ! command -v dotnet >/dev/null 2>&1; then
-  echo "dotnet SDK not found. Use: make jellyfin-build-plugin"
+  echo "dotnet SDK not found. Use: make build-plugin"
   exit 1
 fi
 

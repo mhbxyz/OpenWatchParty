@@ -1,24 +1,27 @@
-.PHONY: help compose-up compose-down jellyfin-sync-refs jellyfin-build-plugin jellyfin-logs
+.PHONY: help up down sync-refs build-plugin logs
 
 help:
 	@echo "OpenSyncParty targets:"
-	@echo "  make compose-up    - start jellyfin stack (and build plugin if needed)"
-	@echo "  make compose-down  - stop jellyfin stack"
-	@echo "  make jellyfin-sync-refs - sync Jellyfin DLL refs from container"
-	@echo "  make jellyfin-build-plugin - build Jellyfin server plugin"
-	@echo "  make jellyfin-logs - tail Jellyfin container logs"
+	@echo "  make up           - start jellyfin stack (and build plugin if needed)"
+	@echo "  make down         - stop jellyfin stack"
+	@echo "  make sync-refs    - sync Jellyfin DLL refs from container"
+	@echo "  make build-plugin - build Jellyfin server plugin"
+	@echo "  make logs         - tail Jellyfin container logs"
 
-compose-up: jellyfin-build-plugin
-	docker compose -f infra/docker/docker-compose.yml up -d jellyfin
+up: build-plugin
+	docker compose -f infra/docker/docker-compose.yml restart jellyfin-dev
 
-compose-down:
+down:
 	docker compose -f infra/docker/docker-compose.yml down
 
-jellyfin-sync-refs:
+sync-refs:
 	./scripts/sync-jellyfin-refs.sh
 
-jellyfin-build-plugin: jellyfin-sync-refs
+start-server:
+	docker compose -f infra/docker/docker-compose.yml up -d jellyfin-dev && sleep 5
+
+build-plugin: start-server sync-refs
 	docker compose -f infra/docker/docker-compose.yml run --rm plugin-builder
 
-jellyfin-logs:
-	docker compose -f infra/docker/docker-compose.yml logs -f jellyfin
+logs:
+	docker compose -f infra/docker/docker-compose.yml logs -f jellyfin-dev

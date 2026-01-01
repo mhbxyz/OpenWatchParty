@@ -1,12 +1,13 @@
 services:
-  jellyfin:
+  jellyfin-dev:
     image: jellyfin/jellyfin:10.11.3
-    container_name: jellyfin
+    container_name: jellyfin-dev
     ports:
       - "8096:8096"
     volumes:
-      - jellyfin-config:/config
+      - ./config:/config
       - jellyfin-cache:/cache
+      - ~/Videos/Movies/:/media/Movies:ro
       - ../../clients/web-plugin:/jellyfin/jellyfin-web/plugins/opensyncparty:ro
       - ../../plugins/jellyfin/OpenSyncParty/dist:/config/plugins/OpenSyncParty
 
@@ -20,5 +21,4 @@ services:
     command: dotnet publish -c Release -o /out OpenSyncPartyPlugin.csproj /p:UseLocalJellyfinRefs=true
 
 volumes:
-  jellyfin-config:
   jellyfin-cache:
