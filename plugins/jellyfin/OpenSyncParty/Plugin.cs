@@ -21,6 +21,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public override string Name => "OpenSyncParty";
 
     public override Guid Id => new("0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d");
+    
+    // Developer: https://github.com/mhbxyz
+    // Repository: https://github.com/mhbxyz/OpenSyncParty
 
     public IEnumerable<PluginPageInfo> GetPages()
     {

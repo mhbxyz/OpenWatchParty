@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
+    <RootNamespace>OpenSyncParty.Plugin</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseLocalJellyfinRefs Condition="Exists('refs/MediaBrowser.Common.dll')">true</UseLocalJellyfinRefs>

@@ -1,75 +1,52 @@
-# OpenSyncParty — Synchronized Watch Parties for Jellyfin and Local Players
+# OpenSyncParty — Synchronized Watch Parties for Jellyfin
 
-OpenSyncParty is an open-source synchronization layer designed to bring real-time watch-party functionality to Jellyfin and other local media players. It provides a lightweight, latency-aware coordinator that keeps multiple viewers perfectly in sync, regardless of their device or player.
-
-The system operates through a small server component and client-side adapters, currently focusing on Web/Jellyfin integration. Its modular architecture allows easy integration, community-driven extensions, and long-term maintainability.
+OpenSyncParty is an open-source Jellyfin plugin that brings real-time watch-party functionality to your media server. It provides a lightweight, latency-aware synchronization layer that keeps multiple viewers in sync, requiring no external infrastructure other than the plugin itself.
 
 ## Key Features
 
-* Real-time synchronization of play, pause, seek, and playback position
-* Works with Jellyfin libraries, hosted locally or via Cloudflare tunnels
-* Browser-based players support (Web Overlay)
-* Group session management with rooms, permissions, and chat API
-* Designed for WAN environments with jitter-tolerant syncing
-* Fully open-source and easily extensible
+* **All-in-One Plugin**: No external servers to deploy. Everything runs inside Jellyfin.
+* **Real-time Sync**: Instant synchronization of play, pause, and seek actions.
+* **Integrated UI**: Injected "Watch Party" button and controls directly within the Jellyfin web player.
+* **Latency Compensation**: RTT-based adjustments to handle different network conditions.
+* **Easy Setup**: Zero configuration needed for basic use; advanced options available in the Dashboard.
 
-OpenSyncParty aims to fill the gap left by missing native watch-party support in Jellyfin by providing a robust, player-independent, community-driven solution.
+## Getting Started
 
-## M1 PoC
+### Prerequisites
 
-- Session server: `session-server/app.py`
-- Web UI plugin: `clients/web-plugin/`
-- Web overlay: `clients/web-overlay/overlay.js`
-- Docker Compose: `docker-compose.yml`
-- Demo helper: `scripts/serve-demo.sh`
+* Jellyfin Server 10.11.x
+* Docker & Docker Compose (for development)
 
-## M2 (Auth + invite)
+### Quick Launch (Dev Mode)
 
-- JWT auth côté serveur (env `JWT_SECRET`)
-- Invites de room via `create_invite` / `invite_created`
-- Plugin Jellyfin (émission de JWT + invites) dans `plugins/jellyfin`
-- Roles optionnels via `HOST_ROLES` / `INVITE_ROLES`
+1. Clone the repository.
+2. Build and start the environment:
+   ```bash
+   make up
+   ```
+3. Open Jellyfin at `http://localhost:8096`.
+4. Start a video and click the "Watch Party" icon in the player controls.
 
-## Plugin UI Jellyfin Web
+## Documentation
 
-Copie `clients/web-plugin/` dans le dossier plugins du client web Jellyfin, puis recharge l’UI.
+Comprehensive documentation is available in the `docs/` directory:
 
-## Docker (Jellyfin + plugins)
+* [User Guide](docs/user-guide.md): Installation and usage instructions.
+* [Architecture](docs/architecture.md): Technical overview of how the plugin works.
+* [Development Guide](docs/development.md): How to contribute and build from source.
+* [Protocol](docs/protocol.md): Detailed WebSocket message specifications.
 
-Voir `infra/docker/README.md` pour lancer Jellyfin avec les plugins préinstallés.
+## Project Structure
 
-## Démarrage rapide (PoC)
+* `plugins/jellyfin/OpenSyncParty`: Core C# plugin source code.
+* `clients/web-plugin`: JavaScript client-side logic.
+* `infra/docker`: Development stack configuration.
+* `scripts/`: Helper scripts for builds and environment management.
 
-1) Lancer le serveur (uv):
+## Roadmap
 
-```bash
-export JWT_SECRET=devsecret
-uv sync --group server
-.venv/bin/python session-server/app.py
-```
+Check our [Roadmap](docs/roadmap.md) for planned features like integrated chat, playback rate smoothing, and more.
 
-2) Ouvrir la démo web:
+## License
 
-```bash
-make demo
-```
-
-Le plugin UI Jellyfin Web est dans `clients/web-plugin/`.
-
-3) Vérifier le protocole:
-
-```bash
-make test-harness
-```
-
-## Contrôle centralisé
-
-- `make server` / `make demo` / `make test-harness`
-- `docker compose up --build session-server web-demo`
-- `docker compose run --rm protocol-harness`
-
-## Prérequis
-
-- Python 3.11 (voir `.python-version`)
-- `uv` pour la gestion des environnements et dépendances
-- Dépendances centralisées dans `pyproject.toml` et verrouillées via `uv.lock`
+This project is open-source and available under the MIT License.

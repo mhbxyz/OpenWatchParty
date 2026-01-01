@@ -3,5 +3,7 @@
   "name": "OpenSyncParty",
   "description": "Watch Party controls for Jellyfin Web.",
   "version": "0.1.0",
+  "author": "mhbxyz (https://github.com/mhbxyz)",
+  "repository": "https://github.com/mhbxyz/OpenSyncParty",
   "entryPoint": "plugin.js"
 }
