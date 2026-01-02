@@ -13,12 +13,12 @@
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
-    SUPPRESS_MS: 1000,
-    SEEK_THRESHOLD: 0.5,
+    SUPPRESS_MS: 2000,
+    SEEK_THRESHOLD: 2.5,
     STATE_UPDATE_MS: 1000,
     SYNC_LEAD_MS: 120,
     DRIFT_DEADZONE_SEC: 0.04,
-    DRIFT_SOFT_MAX_SEC: 1.0,
+    DRIFT_SOFT_MAX_SEC: 2.5,
     PLAYBACK_RATE_MIN: 0.95,
     PLAYBACK_RATE_MAX: 1.05,
     DRIFT_GAIN: 0.5
@@ -50,6 +50,9 @@
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',
-    readyRoomId: ''
+    readyRoomId: '',
+    isBuffering: false,
+    wantsToPlay: false,
+    isSyncing: false
   };
 })();

@@ -96,7 +96,7 @@
         if (video && !state.isHost && msg.payload && msg.payload.state) {
           const basePos = msg.payload.state.position || 0;
           const targetPos = utils.adjustedPosition(basePos, msg.server_ts);
-          utils.suppress();
+          utils.startSyncing();
           if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
             video.currentTime = targetPos;
           }
@@ -132,7 +132,7 @@
 
       case 'player_event':
         if (state.isHost || !video) return;
-        utils.suppress();
+        utils.startSyncing();
         if (msg.payload && typeof msg.payload.position === 'number') {
           const targetPos = utils.adjustedPosition(msg.payload.position, msg.server_ts);
           if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
@@ -177,13 +177,16 @@
         if (msg.payload && typeof msg.payload.position === 'number') {
           const targetPos = utils.adjustedPosition(msg.payload.position, msg.server_ts);
           if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
-            utils.suppress(); video.currentTime = targetPos;
+            utils.startSyncing();
+            video.currentTime = targetPos;
           }
         }
         if (msg.payload.play_state === 'playing' && video.paused) {
-          utils.suppress(); video.play().catch(() => {});
+          utils.startSyncing();
+          video.play().catch(() => {});
         } else if (msg.payload.play_state === 'paused' && !video.paused) {
-          utils.suppress(); video.pause();
+          utils.startSyncing();
+          video.pause();
         }
         if (msg.payload) {
           state.lastSyncServerTs = msg.server_ts || utils.getServerNow();

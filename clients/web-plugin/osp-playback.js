@@ -92,17 +92,52 @@
     const video = utils.getVideo();
     if (!video || state.bound) return;
     state.bound = true;
+
+    // Track buffering state to distinguish from user pauses
+    video.addEventListener('waiting', () => {
+      state.isBuffering = true;
+    });
+    video.addEventListener('canplay', () => {
+      state.isBuffering = false;
+    });
+    video.addEventListener('playing', () => {
+      state.isBuffering = false;
+    });
+
     const sendStateUpdate = () => {
       const actions = OSP.actions;
       if (!state.isHost || !actions || !actions.send) return;
+      // Don't send while syncing to server command (prevents feedback loop)
+      if (state.isSyncing) return;
+      // Don't send while seeking (HLS lies about state during seek)
+      if (utils.isSeeking()) return;
+      // Don't send while buffering or if video not ready
+      if (state.isBuffering || !utils.isVideoReady()) return;
       const now = utils.nowMs();
       if (now - state.lastStateSentAt < STATE_UPDATE_MS) return;
       state.lastStateSentAt = now;
       actions.send('state_update', { position: video.currentTime, play_state: video.paused ? 'paused' : 'playing' });
     };
+
     const onEvent = (action) => {
       const actions = OSP.actions;
       if (!state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
+      // Don't send while syncing to server command (prevents feedback loop)
+      if (state.isSyncing) return;
+      // Don't send events if video not ready (HLS still loading)
+      if (!utils.isVideoReady()) return;
+
+      if (action === 'pause') {
+        // Ignore pause events caused by buffering or seeking (not user-initiated)
+        if (state.isBuffering) return;
+        if (utils.isSeeking()) return;
+        state.wantsToPlay = false;
+      }
+      if (action === 'play') {
+        // Ignore play events during seeking (HLS internal state)
+        if (utils.isSeeking()) return;
+        state.wantsToPlay = true;
+      }
       if (action === 'seek') {
         const now = utils.nowMs();
         if (now - state.lastSeekSentAt < 500) return;
@@ -115,6 +150,7 @@
         sendStateUpdate();
       }
     };
+
     video.addEventListener('play', () => onEvent('play'));
     video.addEventListener('pause', () => onEvent('pause'));
     video.addEventListener('seeked', () => onEvent('seek'));
@@ -132,6 +168,10 @@
     }
     if (!state.lastSyncServerTs || state.lastSyncPlayState !== 'playing') {
       if (video.playbackRate !== 1) video.playbackRate = 1;
+      return;
+    }
+    // Don't adjust during buffering - let the video load
+    if (state.isBuffering || !utils.isVideoReady()) {
       return;
     }
     if (video.paused) {
@@ -153,6 +193,7 @@
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
+    // Speed catch-up: adjust playback rate to gradually sync without seeking
     const rate = Math.min(Math.max(1 + drift * DRIFT_GAIN, PLAYBACK_RATE_MIN), PLAYBACK_RATE_MAX);
     video.playbackRate = rate;
   };

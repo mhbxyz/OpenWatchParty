@@ -9,6 +9,28 @@
   const shouldSend = () => nowMs() > state.suppressUntil;
   const suppress = (ms = SUPPRESS_MS) => { state.suppressUntil = nowMs() + ms; };
   const getVideo = () => document.querySelector('video');
+  const isVideoReady = () => {
+    const video = getVideo();
+    return video && video.readyState >= 3;
+  };
+  const isBuffering = () => {
+    const video = getVideo();
+    if (!video) return false;
+    return video.readyState < 3 || (video.networkState === 2 && video.readyState < 4);
+  };
+  const isSeeking = () => {
+    const video = getVideo();
+    return video && video.seeking;
+  };
+  let syncingTimer = null;
+  const startSyncing = () => {
+    state.isSyncing = true;
+    if (syncingTimer) clearTimeout(syncingTimer);
+    syncingTimer = setTimeout(() => {
+      state.isSyncing = false;
+      syncingTimer = null;
+    }, SUPPRESS_MS);
+  };
   const getPlaybackManager = () => window.playbackManager || window.PlaybackManager || window.app?.playbackManager;
   const getCurrentItem = () => {
     const pm = getPlaybackManager();
@@ -63,6 +85,10 @@
     shouldSend,
     suppress,
     getVideo,
+    isVideoReady,
+    isBuffering,
+    isSeeking,
+    startSyncing,
     getPlaybackManager,
     getCurrentItem,
     getCurrentItemId,

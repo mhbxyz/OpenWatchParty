@@ -10,6 +10,9 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 const PLAY_SCHEDULE_MS: u64 = 1500;
 const CONTROL_SCHEDULE_MS: u64 = 300;
 const MAX_READY_WAIT_MS: u64 = 2000;
+const MIN_STATE_UPDATE_INTERVAL_MS: u64 = 500;
+const POSITION_JITTER_THRESHOLD: f64 = 0.5;
+const COMMAND_COOLDOWN_MS: u64 = 2000;
 
 pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
@@ -124,6 +127,8 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                     ready_clients: HashSet::from([client_id.to_string()]),
                     pending_play: None,
                     state: PlaybackState { position: start_pos, play_state: "paused".to_string() },
+                    last_state_ts: now_ms(),
+                    last_command_ts: 0,
                 };
 
                 locked_rooms.insert(room_id.clone(), room.clone());
@@ -203,6 +208,47 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                     if room.host_id != client_id {
                         return;
                     }
+
+                    let current_ts = now_ms();
+
+                    // For state_update: filter out updates that are too frequent or have insignificant changes
+                    if parsed.msg_type == "state_update" {
+                        // Ignore state_updates during command cooldown (HLS echo prevention)
+                        // After broadcasting a player_event, HLS clients may send back
+                        // false states while buffering - ignore them for 2 seconds
+                        if room.last_command_ts > 0 && current_ts - room.last_command_ts < COMMAND_COOLDOWN_MS {
+                            return;
+                        }
+
+                        if let Some(payload) = &parsed.payload {
+                            let new_pos = payload.get("position").and_then(|v| v.as_f64()).unwrap_or(room.state.position);
+                            let new_play_state = payload.get("play_state").and_then(|v| v.as_str()).unwrap_or(&room.state.play_state);
+                            let play_state_changed = new_play_state != room.state.play_state;
+                            let pos_diff = new_pos - room.state.position;
+
+                            // Always allow play_state changes through immediately
+                            if !play_state_changed {
+                                // Rate limit position-only updates
+                                if current_ts - room.last_state_ts < MIN_STATE_UPDATE_INTERVAL_MS {
+                                    return;
+                                }
+
+                                // Ignore backward jitter (HLS glitch): small backward jumps are noise
+                                // Only accept if moving forward OR if it's a significant backward jump (real seek)
+                                if pos_diff < -POSITION_JITTER_THRESHOLD && pos_diff > -2.0 {
+                                    // Small backward jump (between -0.5s and -2s): likely HLS jitter, ignore
+                                    return;
+                                }
+
+                                // Ignore very small forward changes (less than threshold)
+                                if pos_diff >= 0.0 && pos_diff < POSITION_JITTER_THRESHOLD {
+                                    // Position barely changed, don't relay this update
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
                     if let Some(payload) = &parsed.payload {
                         if let Some(pos) = payload.get("position").and_then(|v| v.as_f64()) { room.state.position = pos; }
                         if let Some(st) = payload.get("play_state").and_then(|v| v.as_str()) { room.state.play_state = st.to_string(); }
@@ -213,8 +259,14 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                              }
                         }
                     }
+
+                    room.last_state_ts = current_ts;
+
                     if parsed.msg_type == "player_event" {
                         let action = parsed.payload.as_ref().and_then(|p| p.get("action")).and_then(|v| v.as_str()).unwrap_or("");
+                        // Mark command timestamp for cooldown (HLS echo prevention)
+                        room.last_command_ts = current_ts;
+
                         if action == "play" {
                             let position = parsed.payload.as_ref().and_then(|p| p.get("position")).and_then(|v| v.as_f64()).unwrap_or(room.state.position);
                             if all_ready(room) {

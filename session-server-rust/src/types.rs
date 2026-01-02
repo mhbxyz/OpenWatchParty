@@ -22,6 +22,10 @@ pub struct Room {
     pub ready_clients: HashSet<String>,
     pub pending_play: Option<PendingPlay>,
     pub state: PlaybackState,
+    #[serde(skip)]
+    pub last_state_ts: u64,
+    #[serde(skip)]
+    pub last_command_ts: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
