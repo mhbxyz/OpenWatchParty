@@ -1,374 +1,44 @@
 (() => {
-  console.log("%c OpenSyncParty Plugin Loaded (OSD Mode) ", "background: #2e7d32; color: #fff; font-size: 12px; padding: 2px; border-radius: 2px;");
-  
-  const PANEL_ID = 'osp-panel';
-  const BTN_ID = 'osp-osd-btn';
-  const STYLE_ID = 'osp-style';
-  
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const host = window.location.hostname;
-  const DEFAULT_WS_URL = `${protocol}//${host}:3000/ws`;
-  const SUPPRESS_MS = 1000;
-  const SEEK_THRESHOLD = 0.5;
-  const STATE_UPDATE_MS = 1000;
-  const SYNC_LEAD_MS = 120;
+  if (window.OpenSyncParty && window.OpenSyncParty.__loaded) return;
+  const OSP = window.OpenSyncParty = window.OpenSyncParty || {};
+  OSP.__loaded = true;
 
-  // --- STATE ---
-  const state = {
-    ws: null,
-    roomId: '',
-    clientId: '',
-    name: '',
-    isHost: false,
-    followHost: true,
-    suppressUntil: 0,
-    rooms: [], 
-    inRoom: false,
-    bound: false,
-    autoReconnect: true,
-    serverOffsetMs: 0
-  };
-  state.lastSeekSentAt = 0;
-  state.lastStateSentAt = 0;
-  state.lastSentPosition = 0;
-  state.hasTimeSync = false;
+  const currentScript = document.currentScript;
+  let cacheBust = '';
+  if (currentScript && currentScript.src) {
+    try {
+      const url = new URL(currentScript.src, window.location.href);
+      cacheBust = url.searchParams.get('v') || '';
+    } catch (err) {}
+  }
+  if (!cacheBust) cacheBust = String(Date.now());
 
-  const nowMs = () => Date.now();
-  const shouldSend = () => nowMs() > state.suppressUntil;
-  const suppress = (ms = SUPPRESS_MS) => { state.suppressUntil = nowMs() + ms; };
-  const getVideo = () => document.querySelector('video');
-  const adjustedPosition = (position, serverTs) => {
-    const serverNow = nowMs() + (state.serverOffsetMs || 0);
-    const ts = typeof serverTs === 'number' ? serverTs : serverNow;
-    const elapsed = Math.max(0, serverNow - ts) + SYNC_LEAD_MS;
-    return position + (elapsed / 1000);
-  };
+  const base = '/web/plugins/opensyncparty';
+  const scripts = [
+    'osp-state.js',
+    'osp-utils.js',
+    'osp-ui.js',
+    'osp-playback.js',
+    'osp-ws.js',
+    'osp-app.js'
+  ];
 
-  // --- UI ---
+  const loadScript = (src) => new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `${base}/${src}?v=${cacheBust}`;
+    script.async = false;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
 
-  const injectStyles = () => {
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = `
-      #${PANEL_ID} {
-        position: fixed; bottom: 100px; right: 20px; width: 300px; max-height: 450px;
-        padding: 16px; border-radius: 12px; background: rgba(10, 10, 10, 0.98);
-        backdrop-filter: blur(20px); color: #fff; font-family: sans-serif; z-index: 20000;
-        border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 12px 40px rgba(0,0,0,0.8);
-        display: flex; flex-direction: column;
+  scripts.reduce((p, src) => p.then(() => loadScript(src)), Promise.resolve())
+    .then(() => {
+      if (window.OpenSyncParty && window.OpenSyncParty.app && typeof window.OpenSyncParty.app.init === 'function') {
+        window.OpenSyncParty.app.init();
       }
-      #${PANEL_ID}.hide { display: none; }
-      .osp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
-      .osp-section { margin-bottom: 15px; overflow-y: auto; }
-      .osp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
-      .osp-room-item { 
-        background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px;
-        display: flex; justify-content: space-between; align-items: center; cursor: pointer;
-        border: 1px solid transparent; transition: all 0.2s;
-      }
-      .osp-room-item:hover { background: rgba(255,255,255,0.1); border-color: #1565c0; }
-      .osp-btn { 
-        border: none; border-radius: 6px; padding: 10px 15px; 
-        background: #388e3c; color: #fff; cursor: pointer; font-weight: bold; font-size: 13px;
-      }
-      .osp-btn.secondary { background: #1565c0; }
-      .osp-btn.danger { background: #d32f2f; }
-      .osp-input { 
-        width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; 
-        background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;
-      }
-      .osp-footer { font-size: 10px; color: #555; text-align: center; margin-top: auto; padding-top: 10px; }
-    `;
-    document.head.appendChild(style);
-  };
-
-  const render = () => {
-    const panel = document.getElementById(PANEL_ID);
-    if (!panel) return;
-
-    if (!state.inRoom) {
-      panel.innerHTML = `
-        <div class="osp-header"><span>OpenSyncParty</span> <span id="osp-ws-indicator"></span></div>
-        <div class="osp-lobby-container">
-            <div class="osp-section">
-              <div class="osp-label">Available Rooms</div>
-              <div id="osp-room-list"></div>
-            </div>
-            <div class="osp-section" style="border-top: 1px solid #333; padding-top: 15px;">
-              <div class="osp-label">Create a Room</div>
-              <input class="osp-input" id="osp-new-room-name" type="text" placeholder="e.g. Movie Night" />
-              <button class="osp-btn" style="width:100%" id="osp-btn-create">Create & Host</button>
-            </div>
-        </div>
-        <div class="osp-footer">Connected to: ${host}:3000</div>
-      `;
-      panel.querySelector('#osp-btn-create').onclick = createRoom;
-      updateRoomListUI();
-    } else {
-      panel.innerHTML = `
-        <div class="osp-header">
-          <span style="color:#69f0ae">●</span>
-          <span style="flex-grow:1; margin-left:8px;">${state.roomName}</span>
-          <button class="osp-btn danger" id="osp-btn-leave">${state.isHost ? 'Close' : 'Leave'}</button>
-        </div>
-        <div class="osp-section">
-          <div class="osp-label">Participants</div>
-          <div id="osp-participants-list" style="font-size:13px;">Online: ${state.participantCount || 1}</div>
-        </div>
-        <div class="osp-meta" style="font-size:10px; color:#666; display:flex; justify-content:space-between;">
-            <span>RTT: <span class="osp-latency">-</span></span>
-            <span>ID: ${state.clientId.split('-')[1] || '...'}</span>
-        </div>
-      `;
-      panel.querySelector('#osp-btn-leave').onclick = leaveRoom;
-    }
-    updateStatusIndicator();
-  };
-
-  const updateRoomListUI = () => {
-    const roomList = document.getElementById('osp-room-list');
-    if (!roomList) return;
-    if (state.rooms.length === 0) {
-        roomList.innerHTML = '<div style="font-size:12px; color:#555; padding: 10px; text-align:center;">No active rooms.</div>';
-        return;
-    }
-    roomList.innerHTML = '';
-    state.rooms.forEach(room => {
-      const item = document.createElement('div');
-      item.className = 'osp-room-item';
-      item.innerHTML = `<div><div style="font-weight:bold">${room.name}</div><div style="font-size:10px; color:#888">${room.count} users</div></div><button class="osp-btn secondary">Join</button>`;
-      item.onclick = () => joinRoom(room.id);
-      roomList.appendChild(item);
+    })
+    .catch((err) => {
+      console.error('[OpenSyncParty] Loader error:', err);
     });
-  };
-
-  const updateStatusIndicator = () => {
-      const el = document.getElementById('osp-ws-indicator');
-      if (!el) return;
-      const connected = state.ws && state.ws.readyState === 1;
-      el.style.color = connected ? "#69f0ae" : "#ff5252";
-      el.textContent = connected ? "Online" : "Offline";
-  };
-
-  // --- ACTIONS ---
-
-  const createRoom = () => {
-    const nameInput = document.getElementById('osp-new-room-name');
-    const name = nameInput ? nameInput.value.trim() : "";
-    if (!name) return;
-    const v = getVideo();
-    send('create_room', { name: name, start_pos: v ? v.currentTime : 0 });
-  };
-
-  const joinRoom = (id) => {
-    state.roomId = id;
-    send('join_room', {}, id);
-  };
-
-  const leaveRoom = () => {
-    send('leave_room');
-    state.inRoom = false;
-    state.roomId = '';
-    render();
-  };
-
-  const connect = () => {
-    if (state.ws) state.ws.close();
-    state.ws = new WebSocket(DEFAULT_WS_URL);
-    state.ws.onopen = () => { render(); };
-    state.ws.onclose = () => { render(); if(state.autoReconnect) setTimeout(connect, 3000); };
-    state.ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        // CRITICAL FIX: Accept messages if we are in the room, OR if it's a room list, OR if it's the room state we just requested
-        if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
-            handleMessage(msg);
-        }
-      } catch (err) {}
-    };
-  };
-
-  const handleMessage = (msg) => {
-    const video = getVideo();
-    console.log('[OpenSyncParty] Received:', msg.type, msg);
-
-    switch (msg.type) {
-      case "room_list":
-        state.rooms = msg.payload || [];
-        if (!state.inRoom) updateRoomListUI();
-        break;
-
-      case "client_hello":
-        if (msg.payload && msg.payload.client_id) {
-          state.clientId = msg.payload.client_id;
-          render();
-        }
-        break;
-
-      case "room_state":
-        state.inRoom = true;
-        state.roomId = msg.room; // Store the new room ID
-        state.roomName = msg.payload.name;
-        state.participantCount = msg.payload.participant_count;
-        if (!state.clientId && msg.client) {
-          state.clientId = msg.client;
-        }
-        state.isHost = (msg.payload.host_id === state.clientId);
-        if (!state.hasTimeSync && typeof msg.server_ts === 'number') {
-          state.serverOffsetMs = msg.server_ts - nowMs();
-          state.hasTimeSync = true;
-        }
-        render();
-        if (video && !state.isHost && msg.payload && msg.payload.state) {
-          const basePos = msg.payload.state.position || 0;
-          const targetPos = adjustedPosition(basePos, msg.server_ts);
-          suppress();
-          if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
-            video.currentTime = targetPos;
-          }
-          if (msg.payload.state.play_state === 'playing') {
-            video.play().catch(()=>{});
-          } else if (msg.payload.state.play_state === 'paused') {
-            video.pause();
-          }
-        }
-        break;
-
-      case "participants_update":
-        state.participantCount = msg.payload.participant_count;
-        if (state.inRoom) {
-            const el = document.getElementById('osp-participants-list');
-            if(el) el.textContent = `Online: ${state.participantCount}`;
-        }
-        break;
-
-      case "room_closed":
-        state.inRoom = false; state.roomId = ''; render();
-        break;
-
-      case "player_event":
-        if (state.isHost || !video) return;
-        suppress();
-        if (msg.payload && typeof msg.payload.position === 'number') {
-          const targetPos = adjustedPosition(msg.payload.position, msg.server_ts);
-          if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
-            video.currentTime = targetPos;
-          }
-        }
-        if (msg.payload.action === 'play') video.play().catch(()=>{});
-        else if (msg.payload.action === 'pause') video.pause();
-        break;
-        
-      case "state_update":
-        if (state.isHost || !video) return;
-        if (msg.payload && typeof msg.payload.position === 'number') {
-          const targetPos = adjustedPosition(msg.payload.position, msg.server_ts);
-          if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
-            suppress(); video.currentTime = targetPos;
-          }
-        }
-        if (msg.payload.play_state === 'playing' && video.paused) {
-          suppress(); video.play().catch(()=>{});
-        } else if (msg.payload.play_state === 'paused' && !video.paused) {
-          suppress(); video.pause();
-        }
-        break;
-
-      case "pong":
-        if (msg.payload && msg.payload.client_ts) {
-          const now = nowMs();
-          const rtt = now - msg.payload.client_ts;
-          const latEl = document.querySelector('.osp-latency');
-          if(latEl) latEl.textContent = `${rtt} ms`;
-          if (typeof msg.server_ts === 'number' && rtt > 0) {
-            const sampleOffset = msg.server_ts + (rtt / 2) - now;
-            state.serverOffsetMs = state.hasTimeSync
-              ? (state.serverOffsetMs * 0.6 + sampleOffset * 0.4)
-              : sampleOffset;
-            state.hasTimeSync = true;
-          }
-        }
-        break;
-    }
-  };
-
-  const send = (type, payload = {}, roomOverride = null) => {
-    if (!state.ws || state.ws.readyState !== 1) return;
-    const message = {
-      type,
-      room: roomOverride || state.roomId,
-      payload,
-      ts: nowMs()
-    };
-    if (state.clientId) message.client = state.clientId;
-    state.ws.send(JSON.stringify(message));
-  };
-
-  // --- BOOTSTRAP ---
-
-  const injectOsdButton = () => {
-    if (document.getElementById(BTN_ID)) return;
-    const buttonsContainer = document.querySelector('.videoOsdBottom .buttons');
-    if (!buttonsContainer) return;
-    const btn = document.createElement('button');
-    btn.id = BTN_ID;
-    btn.className = 'paper-icon-button-light btnWatchParty autoSize';
-    btn.style.cssText = 'color: #fff !important; opacity: 1 !important; z-index: 9999;';
-    btn.innerHTML = '<span class="material-icons groups" aria-hidden="true"></span>';
-    btn.onclick = (e) => {
-      e.stopPropagation(); e.preventDefault();
-      const panel = document.getElementById(PANEL_ID);
-      panel.classList.toggle('hide');
-      if (!panel.classList.contains('hide')) render();
-    };
-    buttonsContainer.insertBefore(btn, buttonsContainer.firstChild);
-  };
-
-  const bindVideo = () => {
-    const video = getVideo();
-    if (!video || state.bound) return;
-    state.bound = true;
-    const sendStateUpdate = () => {
-      if (!state.isHost || !state.ws || state.ws.readyState !== 1) return;
-      const now = nowMs();
-      if (now - state.lastStateSentAt < STATE_UPDATE_MS) return;
-      state.lastStateSentAt = now;
-      send('state_update', { position: video.currentTime, play_state: video.paused ? 'paused' : 'playing' });
-    };
-    const onEvent = (action) => {
-      if (!state.isHost || !shouldSend()) return;
-      if (action === 'seek') {
-        const now = nowMs();
-        if (now - state.lastSeekSentAt < 500) return;
-        if (Math.abs(video.currentTime - state.lastSentPosition) < SEEK_THRESHOLD) return;
-        state.lastSeekSentAt = now;
-        state.lastSentPosition = video.currentTime;
-      }
-      send('player_event', { action, position: video.currentTime });
-      if (action === 'play' || action === 'pause') {
-        sendStateUpdate();
-      }
-    };
-    video.addEventListener('play', () => onEvent('play'));
-    video.addEventListener('pause', () => onEvent('pause'));
-    video.addEventListener('seeked', () => onEvent('seek'));
-    setInterval(() => {
-      sendStateUpdate();
-    }, STATE_UPDATE_MS);
-  };
-
-  const init = () => {
-    injectStyles();
-    if (!document.getElementById(PANEL_ID)) {
-        const panel = document.createElement('div');
-        panel.id = PANEL_ID; panel.className = 'hide';
-        document.body.appendChild(panel);
-    }
-    connect();
-    setInterval(() => { injectOsdButton(); if (getVideo()) bindVideo(); }, 1000);
-    setInterval(() => { if(state.ws && state.ws.readyState === 1) send('ping', {client_ts: nowMs()}); }, 3000);
-  };
-
-  init();
 })();

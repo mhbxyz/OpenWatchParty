@@ -1,4 +1,4 @@
-.PHONY: help up down restart sync-refs build-plugin clean logs status
+.PHONY: help up down restart sync-refs build-plugin rebuild-all clean logs status
 
 COMPOSE = docker compose -f infra/docker/docker-compose.yml
 COMPOSE_TOOLS = docker compose --profile tools -f infra/docker/docker-compose.yml
@@ -10,6 +10,7 @@ help:
 	@echo "  make restart      - restart jellyfin stack"
 	@echo "  make sync-refs    - sync Jellyfin DLL refs from container"
 	@echo "  make build-plugin - build Jellyfin server plugin"
+	@echo "  make rebuild-all  - rebuild plugin, images, and restart containers"
 	@echo "  make clean        - remove local build artifacts"
 	@echo "  make logs         - tail Jellyfin container logs"
 	@echo "  make status       - show compose status"
@@ -32,6 +33,10 @@ build-plugin: start-server sync-refs
 
 restart:
 	$(COMPOSE) restart session-server jellyfin-dev
+
+rebuild-all: build-plugin
+	$(COMPOSE) build
+	$(COMPOSE) up -d --force-recreate
 
 clean:
 	rm -rf plugins/jellyfin/OpenSyncParty/dist plugins/jellyfin/OpenSyncParty/refs plugins/jellyfin/OpenSyncParty/Web/plugin.js session-server-rust/target
