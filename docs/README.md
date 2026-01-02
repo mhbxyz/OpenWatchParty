@@ -1,6 +1,6 @@
 # OpenSyncParty Documentation
 
-OpenSyncParty is a Jellyfin plugin that enables synchronized media playback across multiple clients. It is designed to be easy to install and use, requiring no external infrastructure other than a Jellyfin server.
+OpenSyncParty is a Jellyfin plugin that enables synchronized media playback across multiple clients. It relies on a lightweight Rust session server to coordinate WebSocket sync.
 
 ## Table of Contents
 

@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 PLUGIN_DIR="$ROOT_DIR/plugins/jellyfin/OpenSyncParty"
 DIST_DIR="$PLUGIN_DIR/dist"
+CLIENT_JS="$ROOT_DIR/clients/web-plugin/plugin.js"
+EMBEDDED_JS="$PLUGIN_DIR/Web/plugin.js"
 
 cd "$PLUGIN_DIR"
 
@@ -13,6 +15,8 @@ if ! command -v dotnet >/dev/null 2>&1; then
 fi
 
 mkdir -p "$DIST_DIR"
+
+cp "$CLIENT_JS" "$EMBEDDED_JS"
 
 dotnet restore
 

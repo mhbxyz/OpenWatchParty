@@ -1,4 +1,9 @@
 services:
+  session-server:
+    build: ../../session-server-rust
+    ports:
+      - "3001:3000"
+
   jellyfin-dev:
     image: jellyfin/jellyfin:10.11.3
     container_name: jellyfin-dev
@@ -14,14 +19,19 @@ services:
       - /bin/bash
       - -c
       - |
-        # Cache busting timestamp
-        TS=$$(date +%s)
-        # Remove old injection if exists (to avoid duplicates/stale versions)
-        sed -i '/OpenSyncParty\/ClientScript/d' /jellyfin/jellyfin-web/index.html
+        # Backup original index.html if not exists
+        if [ ! -f /jellyfin/jellyfin-web/index.html.bak ]; then
+          cp /jellyfin/jellyfin-web/index.html /jellyfin/jellyfin-web/index.html.bak
+        fi
         
-        # Inject new version
+        # Restore original to ensure clean state
+        cp /jellyfin/jellyfin-web/index.html.bak /jellyfin/jellyfin-web/index.html
+        
+        # Inject new version with cache buster
+        TS=$$(date +%s)
         sed -i "s|</body>|<script src=\"/OpenSyncParty/ClientScript?v=$$TS\"></script></body>|" /jellyfin/jellyfin-web/index.html
-        echo "Injected OpenSyncParty script into index.html with cache buster v=$$TS"
+        
+        echo "Restored and injected index.html with v=$$TS"
         
         /jellyfin/jellyfin
 

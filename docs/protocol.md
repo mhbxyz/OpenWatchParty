@@ -2,7 +2,7 @@
 
 OpenSyncParty uses a JSON-based protocol over WebSocket.
 
-**Endpoint:** `ws://<server>/OpenSyncParty/ws`
+**Endpoint:** `ws(s)://<jellyfin-host>:3001/ws`
 
 ## Message Format
 
@@ -14,8 +14,8 @@ All messages sent between client and server follow this structure:
   "room": "room_id",
   "client": "client_id",
   "payload": { ... },
-  "ts": 1678900000000,       // Client timestamp (ms)
-  "server_ts": 1678900000100 // Server timestamp (added by server)
+  "ts": 1678900000000,
+  "server_ts": 1678900000100
 }
 ```
 
@@ -23,20 +23,19 @@ All messages sent between client and server follow this structure:
 
 ### Client -> Server
 
+*   **`list_rooms`**:
+    *   Payload: none
+    *   Response: `room_list`
+
 *   **`create_room`**:
     *   Payload:
-        *   `media_url` (string): Identifier or URL of the media.
         *   `start_pos` (number): Initial position in seconds.
-        *   `name` (string): Display name of the host.
-        *   `options` (object): Room options (e.g., `free_play`).
+        *   `name` (string): Room name.
     *   Response: `room_state`
 
 *   **`join_room`**:
-    *   Payload:
-        *   `name` (string): Display name of the user.
-        *   `auth_token` (string, optional): JWT for authentication.
-        *   `invite_token` (string, optional): Token to join private rooms.
-    *   Response: `room_state` (to joiner), `client_joined` (broadcast), `participants_update` (broadcast)
+    *   Payload: none
+    *   Response: `room_state` (to joiner), `participants_update` (broadcast)
 
 *   **`player_event`**:
     *   Payload:
@@ -56,20 +55,17 @@ All messages sent between client and server follow this structure:
 
 ### Server -> Client
 
+*   **`client_hello`**:
+    *   Payload: `client_id` (string).
+
+*   **`room_list`**:
+    *   Payload: array of `{ id, name, count }` objects.
+
 *   **`room_state`**:
-    *   Payload: Full details of the room (host ID, media, current state, participants list). Sent on join/create.
-
-*   **`client_joined`**:
-    *   Payload: `name` of the new user.
-
-*   **`client_left`**:
-    *   Payload: empty.
+    *   Payload: room name, host ID, state, participant count. Sent on join/create.
 
 *   **`participants_update`**:
-    *   Payload: `participants` (array of objects), `participant_count` (number).
-
-*   **`host_change`**:
-    *   Payload: `host_id` (string).
+    *   Payload: `participant_count` (number).
 
 *   **`player_event`**:
     *   Relayed from the host. Contains `action` and `position`.

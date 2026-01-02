@@ -3,14 +3,12 @@ using MediaBrowser.Common.Plugins;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 using OpenSyncParty.Plugin.Configuration;
-using OpenSyncParty.Plugin.Managers;
 
 namespace OpenSyncParty.Plugin;
 
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     public static Plugin? Instance { get; private set; }
-    public RoomManager RoomManager { get; } = new();
 
     public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
         : base(applicationPaths, xmlSerializer)

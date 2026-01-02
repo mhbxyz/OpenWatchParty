@@ -8,7 +8,19 @@
 2.  Copy the `OpenSyncParty.dll` and its dependencies to your Jellyfin plugins directory (e.g., `/var/lib/jellyfin/plugins/OpenSyncParty`).
 3.  Restart your Jellyfin server.
 
-### 2. Client Activation (Important!)
+### 2. Session Server
+
+OpenSyncParty requires a session server for WebSocket sync.
+
+*   **Docker (recommended)**:
+    ```bash
+    docker compose -f infra/docker/docker-compose.yml up -d session-server
+    ```
+*   **Manual**: build and run the Rust server in `session-server-rust` and expose port `3001`.
+
+The Jellyfin web client expects the session server at `ws(s)://<jellyfin-host>:3001/ws`.
+
+### 3. Client Activation (Important!)
 
 Since Jellyfin 10.9+, plugins cannot automatically inject scripts into the web interface for security reasons. You must enable the OpenSyncParty client script manually.
 

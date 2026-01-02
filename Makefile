@@ -9,7 +9,7 @@ help:
 	@echo "  make logs         - tail Jellyfin container logs"
 
 up: build-plugin
-	docker compose -f infra/docker/docker-compose.yml restart jellyfin-dev
+	docker compose -f infra/docker/docker-compose.yml up -d session-server jellyfin-dev
 
 down:
 	docker compose -f infra/docker/docker-compose.yml down
@@ -18,7 +18,7 @@ sync-refs:
 	./scripts/sync-jellyfin-refs.sh
 
 start-server:
-	docker compose -f infra/docker/docker-compose.yml up -d jellyfin-dev && sleep 5
+	docker compose -f infra/docker/docker-compose.yml up -d session-server jellyfin-dev && sleep 5
 
 build-plugin: start-server sync-refs
 	cp clients/web-plugin/plugin.js plugins/jellyfin/OpenSyncParty/Web/plugin.js
