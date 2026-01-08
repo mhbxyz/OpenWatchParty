@@ -308,20 +308,25 @@
             // syncLoop will handle catch-up via playback rate adjustment
             state.lastSyncServerTs = msg.server_ts;
             state.lastSyncPosition = msg.payload.position;
+            // Set cooldown: let syncLoop catch up via playback rate
+            state.syncCooldownUntil = utils.nowMs() + 5000;
             video.play().catch(() => {});
 
           } else if (msg.payload.action === 'pause') {
             state.lastSyncPlayState = 'paused';
+            state.syncCooldownUntil = 0;  // Clear cooldown on pause
             // Pause immediately, no scheduling delay
             video.pause();
 
           } else if (msg.payload.action === 'seek') {
             // Seek position was handled above, mark as paused until play event
             state.lastSyncPlayState = 'paused';
+            // Don't clear cooldown - we'll get a play event soon and need protection
 
           } else if (msg.payload.action === 'buffering') {
             // Host is buffering - pause and wait for seek/play event
             state.lastSyncPlayState = 'paused';
+            // Don't clear cooldown - we'll get a play event soon and need protection
             video.pause();
           }
         }
@@ -333,23 +338,37 @@
         if (msg.payload) {
           state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
         }
+        // Handle play/pause BEFORE buffering check - browser queues play() during buffering
+        if (msg.payload.play_state === 'playing' && video.paused) {
+          utils.startSyncing();
+          video.play().catch(() => {});
+          // Establish sync baseline at CLIENT's current position when resuming
+          // This prevents immediate HARD_SEEK after buffering - syncLoop will use
+          // playback rate to catch up gradually.
+          state.lastSyncServerTs = utils.getServerNow();
+          state.lastSyncPosition = video.currentTime;
+          // Set cooldown: ignore position updates for 3s to let syncLoop catch up
+          // via playback rate instead of triggering HARD_SEEK from stale HOST position
+          state.syncCooldownUntil = utils.nowMs() + 5000;
+          return;  // Don't update position in this message - let video start playing first
+        } else if (msg.payload.play_state === 'paused' && !video.paused) {
+          utils.startSyncing();
+          state.syncCooldownUntil = 0;  // Clear cooldown on pause
+          video.pause();
+        }
         // Don't update position sync state while buffering - this prevents the seek loop
         // where syncLoop sees huge drift after buffering because state_update kept
         // advancing lastSyncPosition while video was stuck loading
         if (state.isBuffering || !utils.isVideoReady()) return;
-        // Update position sync state only when video is ready
+        // Skip position updates during cooldown after resume - let syncLoop handle drift
+        // via playback rate instead of jumping to HOST position immediately
+        if (state.syncCooldownUntil && utils.nowMs() < state.syncCooldownUntil) {
+          return;
+        }
+        // Update position sync state only when video is ready and playing
         if (msg.payload) {
           state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
           state.lastSyncPosition = msg.payload.position || state.lastSyncPosition;
-        }
-        // Only handle play/pause state - let syncLoop handle position drift
-        // (syncLoop uses playback rate adjustment for smooth catch-up)
-        if (msg.payload.play_state === 'playing' && video.paused) {
-          utils.startSyncing();
-          video.play().catch(() => {});
-        } else if (msg.payload.play_state === 'paused' && !video.paused) {
-          utils.startSyncing();
-          video.pause();
         }
         break;
 

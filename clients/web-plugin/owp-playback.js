@@ -210,8 +210,9 @@
       if (!state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
       // Don't send while syncing to server command (prevents feedback loop)
       if (state.isSyncing) return;
-      // Don't send events if video not ready (HLS still loading)
-      if (!utils.isVideoReady()) return;
+      // Don't block play/pause on video ready - these are critical user actions
+      // Only block seek events when video not ready (HLS still loading)
+      if (action === 'seek' && !utils.isVideoReady()) return;
 
       if (action === 'pause') {
         // Ignore pause events caused by buffering or seeking (not user-initiated)
@@ -233,8 +234,11 @@
       }
       utils.log('HOST', { action, pos: video.currentTime, paused: video.paused });
       actions.send('player_event', { action, position: video.currentTime });
+      // For play/pause, send immediate state_update (bypass normal throttle/ready checks)
+      // This ensures CLIENT gets the play_state change ASAP
       if (action === 'play' || action === 'pause') {
-        sendStateUpdate();
+        actions.send('state_update', { position: video.currentTime, play_state: video.paused ? 'paused' : 'playing' });
+        state.lastStateSentAt = utils.nowMs();
       }
     };
 
@@ -337,15 +341,22 @@
       return;
     }
     if (abs >= DRIFT_SOFT_MAX_SEC) {
-      utils.log('SYNC', { type: 'HARD_SEEK', expected, actual: video.currentTime, drift });
-      utils.suppress();
-      video.currentTime = expected;
-      // Update sync state to our new position - prevents drift chase loop
-      // (otherwise next iteration sees even more drift from old sync state)
-      state.lastSyncServerTs = serverNow;
-      state.lastSyncPosition = expected;
-      if (video.playbackRate !== 1) video.playbackRate = 1;
-      return;
+      // During cooldown, skip HARD_SEEK - let rate adjustment catch up gradually
+      // This prevents seek loops after resume when CLIENT is behind HOST
+      const now = utils.nowMs();
+      if (state.syncCooldownUntil && now < state.syncCooldownUntil) {
+        // Fall through to rate adjustment below
+      } else {
+        utils.log('SYNC', { type: 'HARD_SEEK', expected, actual: video.currentTime, drift });
+        utils.suppress();
+        video.currentTime = expected;
+        // Update sync state to our new position - prevents drift chase loop
+        // (otherwise next iteration sees even more drift from old sync state)
+        state.lastSyncServerTs = serverNow;
+        state.lastSyncPosition = expected;
+        if (video.playbackRate !== 1) video.playbackRate = 1;
+        return;
+      }
     }
     // Progressive catch-up: sqrt curve gives stronger correction for larger drifts
     // while staying smooth. Example: 2s drift → 1.21x, 4s drift → 1.30x (clamped to 1.20x)

@@ -108,6 +108,7 @@
     isBuffering: false,
     wantsToPlay: false,
     isSyncing: false,
+    syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
     // Authentication
     authToken: null,
     authEnabled: false,

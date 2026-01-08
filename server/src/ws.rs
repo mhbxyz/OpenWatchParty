@@ -492,29 +492,16 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                     room.last_state_ts = current_ts;
 
                     if parsed.msg_type == "player_event" {
-                        let action = parsed.payload.as_ref().and_then(|p| p.get("action")).and_then(|v| v.as_str()).unwrap_or("");
                         room.last_command_ts = current_ts;
-
-                        if action == "play" {
-                            let raw_position = parsed.payload.as_ref().and_then(|p| p.get("position")).and_then(|v| v.as_f64()).unwrap_or(room.state.position);
-                            let position = if is_valid_position(raw_position) { raw_position } else { room.state.position };
-                            if all_ready(room) {
-                                let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-                                broadcast_scheduled_play(room, clients, position, target_server_ts).await;
-                            } else {
-                                let created_at = now_ms();
-                                room.pending_play = Some(PendingPlay { position, created_at });
-                                schedule_pending_play(room_id.clone(), created_at, rooms.clone(), clients.clone());
-                            }
-                        } else {
-                            let target_server_ts = now_ms() + CONTROL_SCHEDULE_MS;
-                            if let Some(payload) = parsed.payload.as_mut() {
-                                payload["target_server_ts"] = serde_json::json!(target_server_ts);
-                            }
-                            parsed.server_ts = Some(target_server_ts);
-                            for dest_id in &room.clients {
-                                if dest_id != client_id { send_to_client(dest_id, &locked_clients, &parsed); }
-                            }
+                        // Broadcast all player events (play, pause, seek, etc) immediately
+                        // Client-side syncLoop handles drift correction via playback rate
+                        let target_server_ts = now_ms() + CONTROL_SCHEDULE_MS;
+                        if let Some(payload) = parsed.payload.as_mut() {
+                            payload["target_server_ts"] = serde_json::json!(target_server_ts);
+                        }
+                        parsed.server_ts = Some(target_server_ts);
+                        for dest_id in &room.clients {
+                            if dest_id != client_id { send_to_client(dest_id, &locked_clients, &parsed); }
                         }
                     } else {
                         parsed.server_ts = Some(now_ms());
