@@ -52,6 +52,8 @@ impl JwtConfig {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&[&self.audience]);
         validation.set_issuer(&[&self.issuer]);
+        validation.validate_exp = true;  // Enforce expiration check
+        validation.leeway = 60;  // 60 seconds tolerance for clock skew
 
         match decode::<Claims>(
             token,

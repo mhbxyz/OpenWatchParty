@@ -105,54 +105,15 @@ async fn main() {
         })
         .untuple_one();
 
-    // Token query parameter
-    #[derive(Debug, serde::Deserialize)]
-    struct WsQuery {
-        token: Option<String>,
-    }
-
-    // JWT validation filter
-    let auth_check = warp::query::<WsQuery>()
-        .and(jwt_filter.clone())
-        .and_then(|query: WsQuery, jwt_config: Arc<JwtConfig>| async move {
-            if !jwt_config.enabled {
-                // Auth disabled, allow all connections
-                return Ok(auth::Claims {
-                    sub: "anonymous".to_string(),
-                    name: "Anonymous".to_string(),
-                    aud: "OpenWatchParty".to_string(),
-                    iss: "Jellyfin".to_string(),
-                    exp: 0,
-                    iat: 0,
-                });
-            }
-
-            match query.token {
-                Some(token) => {
-                    match jwt_config.validate_token(&token) {
-                        Ok(claims) => Ok(claims),
-                        Err(e) => {
-                            warn!("JWT validation failed: {}", e);
-                            Err(warp::reject::custom(AuthRejected))
-                        }
-                    }
-                }
-                None => {
-                    warn!("Missing token in WebSocket connection");
-                    Err(warp::reject::custom(AuthRejected))
-                }
-            }
-        });
-
-    // WebSocket route with Origin and Auth validation
+    // WebSocket route with Origin validation (auth via message after connection)
     let ws_route = warp::path("ws")
         .and(origin_check)
-        .and(auth_check)
         .and(warp::ws())
         .and(clients_filter)
         .and(rooms_filter)
-        .map(|claims: auth::Claims, ws: warp::ws::Ws, clients, rooms| {
-            ws.on_upgrade(move |socket| ws::client_connection(socket, clients, rooms, claims))
+        .and(jwt_filter.clone())
+        .map(|ws: warp::ws::Ws, clients, rooms, jwt_config: Arc<JwtConfig>| {
+            ws.on_upgrade(move |socket| ws::client_connection(socket, clients, rooms, jwt_config))
         });
 
     // Health check endpoint with CORS
@@ -181,7 +142,3 @@ async fn main() {
 #[derive(Debug)]
 struct OriginRejected;
 impl warp::reject::Reject for OriginRejected {}
-
-#[derive(Debug)]
-struct AuthRejected;
-impl warp::reject::Reject for AuthRejected {}

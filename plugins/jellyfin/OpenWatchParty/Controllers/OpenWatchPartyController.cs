@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -12,6 +13,9 @@ namespace OpenWatchParty.Plugin.Controllers;
 [Route("OpenWatchParty")]
 public class OpenWatchPartyController : ControllerBase
 {
+    // Rate limiting: max 10 tokens per minute per user
+    private const int MaxTokensPerMinute = 10;
+    private static readonly ConcurrentDictionary<string, (int Count, DateTime ResetTime)> TokenRateLimits = new();
     [HttpGet("ClientScript")]
     [Produces("text/javascript")]
     public ActionResult GetClientScript()
@@ -45,6 +49,23 @@ public class OpenWatchPartyController : ControllerBase
         var userName = User.FindFirst(ClaimTypes.Name)?.Value
                     ?? User.Identity?.Name
                     ?? "Unknown User";
+
+        // Rate limiting check
+        var now = DateTime.UtcNow;
+        var limit = TokenRateLimits.GetOrAdd(userId, _ => (0, now.AddMinutes(1)));
+        if (now >= limit.ResetTime)
+        {
+            limit = (1, now.AddMinutes(1));
+            TokenRateLimits[userId] = limit;
+        }
+        else if (limit.Count >= MaxTokensPerMinute)
+        {
+            return StatusCode(429, new { error = "Rate limit exceeded. Try again later." });
+        }
+        else
+        {
+            TokenRateLimits[userId] = (limit.Count + 1, limit.ResetTime);
+        }
 
         // Check if JWT is configured
         if (string.IsNullOrEmpty(config.JwtSecret))

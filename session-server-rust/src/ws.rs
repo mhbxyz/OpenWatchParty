@@ -1,4 +1,4 @@
-use crate::auth::Claims;
+use crate::auth::JwtConfig;
 use crate::messaging::{broadcast_room_list, broadcast_to_room, send_room_list, send_to_client};
 use crate::room::handle_leave;
 use crate::types::{Clients, PendingPlay, PlaybackState, Room, WsMessage};
@@ -6,6 +6,7 @@ use crate::utils::now_ms;
 use futures::StreamExt;
 use log::{debug, info, warn};
 use std::collections::HashSet;
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 
@@ -40,7 +41,7 @@ fn is_valid_media_id(id: &str) -> bool {
     id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit())
 }
 
-pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms, claims: Claims) {
+pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms, jwt_config: Arc<JwtConfig>) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
     let (client_sender, client_rcv) = mpsc::unbounded_channel();
     let client_rcv = UnboundedReceiverStream::new(client_rcv);
@@ -51,12 +52,22 @@ pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms:
 
     let temp_id = uuid::Uuid::new_v4().to_string();
     let now = now_ms();
-    info!("Client connected: {} (user: {}, name: {})", temp_id, claims.sub, claims.name);
+
+    // Start unauthenticated (or authenticated if auth is disabled)
+    let authenticated = !jwt_config.enabled;
+    let (user_id, user_name) = if authenticated {
+        ("anonymous".to_string(), "Anonymous".to_string())
+    } else {
+        ("".to_string(), "".to_string())
+    };
+
+    info!("Client connected: {} (auth_required: {})", temp_id, jwt_config.enabled);
     clients.write().await.insert(temp_id.clone(), crate::types::Client {
         sender: client_sender,
         room_id: None,
-        user_id: claims.sub,
-        user_name: claims.name,
+        user_id,
+        user_name,
+        authenticated,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -78,7 +89,7 @@ pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms:
 
     while let Some(result) = client_ws_rcv.next().await {
         if let Ok(msg) = result {
-            client_msg(&temp_id, msg, &clients, &rooms).await;
+            client_msg(&temp_id, msg, &clients, &rooms, &jwt_config).await;
         }
     }
 
@@ -175,7 +186,13 @@ async fn send_error(client_id: &str, clients: &Clients, message: &str) {
     });
 }
 
-async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, rooms: &crate::types::Rooms) {
+/// Check if client is authenticated
+async fn is_authenticated(client_id: &str, clients: &Clients) -> bool {
+    let locked = clients.read().await;
+    locked.get(client_id).map(|c| c.authenticated).unwrap_or(false)
+}
+
+async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, rooms: &crate::types::Rooms, jwt_config: &Arc<JwtConfig>) {
     // Rate limiting check
     if check_rate_limit(client_id, clients).await {
         warn!("Rate limited client: {}", client_id);
@@ -198,10 +215,47 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
     debug!("Message from {}: {}", client_id, parsed.msg_type);
 
     match parsed.msg_type.as_str() {
+        "auth" => {
+            // Handle authentication via message (security: token not in URL)
+            if let Some(payload) = &parsed.payload {
+                if let Some(token) = payload.get("token").and_then(|v| v.as_str()) {
+                    match jwt_config.validate_token(token) {
+                        Ok(claims) => {
+                            let mut locked = clients.write().await;
+                            if let Some(client) = locked.get_mut(client_id) {
+                                client.authenticated = true;
+                                client.user_id = claims.sub;
+                                client.user_name = claims.name.clone();
+                                info!("Client {} authenticated as {}", client_id, claims.name);
+                            }
+                            drop(locked);
+                            let locked_clients = clients.read().await;
+                            send_to_client(client_id, &locked_clients, &WsMessage {
+                                msg_type: "auth_success".to_string(),
+                                room: None,
+                                client: Some(client_id.to_string()),
+                                payload: Some(serde_json::json!({ "user_name": claims.name })),
+                                ts: now_ms(),
+                                server_ts: Some(now_ms()),
+                            });
+                        }
+                        Err(e) => {
+                            warn!("Auth failed for {}: {}", client_id, e);
+                            send_error(client_id, clients, "Authentication failed").await;
+                        }
+                    }
+                }
+            }
+        },
         "list_rooms" => {
             send_room_list(client_id, clients, rooms).await;
         },
         "create_room" => {
+            // Require authentication for room operations
+            if !is_authenticated(client_id, clients).await {
+                send_error(client_id, clients, "Authentication required").await;
+                return;
+            }
             if let Some(payload) = &parsed.payload {
                 // Check if user already hosts too many rooms
                 {
@@ -270,6 +324,11 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
             }
         },
         "join_room" => {
+            // Require authentication for room operations
+            if !is_authenticated(client_id, clients).await {
+                send_error(client_id, clients, "Authentication required").await;
+                return;
+            }
             if let Some(ref room_id) = parsed.room {
                 let mut locked_rooms = rooms.write().await;
                 let mut locked_clients = clients.write().await;

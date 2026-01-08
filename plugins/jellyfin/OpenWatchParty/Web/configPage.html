@@ -9,8 +9,8 @@
             <div class="content-primary">
                 <form class="openwatchpartyConfigurationForm">
                     <div class="inputContainer">
-                        <input is="emby-input" type="text" id="JwtSecret" label="JWT Secret" />
-                        <div class="fieldDescription">Secret used to sign and verify session tokens.</div>
+                        <input is="emby-input" type="password" id="JwtSecret" label="JWT Secret" autocomplete="new-password" />
+                        <div class="fieldDescription">Secret used to sign and verify session tokens. Leave empty to keep current value.</div>
                     </div>
                     <div class="inputContainer">
                         <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
@@ -37,7 +37,9 @@
                 Dashboard.showLoadingMsg();
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
-                    $('#JwtSecret', page).val(config.JwtSecret || '');
+                    // Don't expose secret - show placeholder if configured
+                    $('#JwtSecret', page).val('');
+                    $('#JwtSecret', page).attr('placeholder', config.JwtSecret ? '••••••••' : 'Not configured');
                     $('#JwtAudience', page).val(config.JwtAudience || 'OpenWatchParty');
                     $('#JwtIssuer', page).val(config.JwtIssuer || 'Jellyfin');
                     Dashboard.hideLoadingMsg();
@@ -49,7 +51,11 @@
                 var page = $(this).parents('.pluginConfigurationPage')[0];
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
-                    config.JwtSecret = $('#JwtSecret', page).val();
+                    // Only update secret if a new value is provided
+                    var newSecret = $('#JwtSecret', page).val();
+                    if (newSecret) {
+                        config.JwtSecret = newSecret;
+                    }
                     config.JwtAudience = $('#JwtAudience', page).val();
                     config.JwtIssuer = $('#JwtIssuer', page).val();
 

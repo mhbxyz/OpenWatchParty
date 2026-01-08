@@ -92,11 +92,8 @@
     // Fetch auth token before connecting
     const token = await fetchAuthToken();
 
-    // Build WebSocket URL with token if available
-    let wsUrl = DEFAULT_WS_URL;
-    if (token) {
-      wsUrl = `${DEFAULT_WS_URL}?token=${encodeURIComponent(token)}`;
-    }
+    // Connect without token in URL (security: avoid token in logs/history)
+    const wsUrl = DEFAULT_WS_URL;
 
     // Security warning for non-secure WebSocket
     if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {
@@ -106,7 +103,13 @@
     }
 
     state.ws = new WebSocket(wsUrl);
-    state.ws.onopen = () => { ui.render(); };
+    state.ws.onopen = () => {
+      // Send auth message after connection (secure: token not in URL)
+      if (token) {
+        state.ws.send(JSON.stringify({ type: 'auth', payload: { token } }));
+      }
+      ui.render();
+    };
     state.ws.onclose = () => { ui.render(); if (state.autoReconnect) setTimeout(connect, 3000); };
     state.ws.onmessage = (e) => {
       try {

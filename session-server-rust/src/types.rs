@@ -12,6 +12,7 @@ pub struct Client {
     pub room_id: Option<String>,
     pub user_id: String,
     pub user_name: String,
+    pub authenticated: bool,  // Whether client has authenticated via auth message
     pub message_count: u32,
     pub last_reset: u64,
     pub last_seen: u64,  // For zombie connection detection

@@ -10,11 +10,11 @@
 
 | Sévérité | Total | Résolus | Restants |
 |----------|-------|---------|----------|
-| 🔴 Critique | 4 | 0 | 4 |
+| 🔴 Critique | 4 | 4 | 0 |
 | 🟠 Haute | 10 | 0 | 10 |
 | 🟡 Moyenne | 65 | 0 | 65 |
 | 🟢 Basse | 24 | 0 | 24 |
-| **Total** | **103** | **0** | **103** |
+| **Total** | **103** | **4** | **99** |
 
 ### Répartition par Composant
 
@@ -36,7 +36,7 @@
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-ws.js` |
 | **Ligne** | 98 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 | **Assigné** | - |
 
 **Description**
@@ -69,7 +69,7 @@ Implémenter une authentification par message après connexion WebSocket :
 | **Composant** | Rust Server |
 | **Fichier** | `session-server-rust/src/auth.rs` |
 | **Ligne** | 52-60 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 | **Assigné** | - |
 
 **Description**
@@ -104,7 +104,7 @@ validation.leeway = 60; // 60 secondes de tolérance
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
 | **Ligne** | 61 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 | **Assigné** | - |
 
 **Description**
@@ -133,7 +133,7 @@ Implémenter un rate-limiter :
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Web/configPage.html` |
 | **Ligne** | 40-42 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 | **Assigné** | - |
 
 **Description**
