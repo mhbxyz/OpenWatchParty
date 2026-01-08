@@ -11,8 +11,7 @@ bin/
 obj/
 plugins/jellyfin/OpenWatchParty/dist/
 plugins/jellyfin/OpenWatchParty/refs/
-plugins/jellyfin/OpenWatchParty/Web/plugin.js
-plugins/jellyfin/OpenWatchParty/Web/owp-*.js
+plugins/jellyfin/OpenWatchParty/Web/*.js
 
 # Rust build artifacts
 server/target/
