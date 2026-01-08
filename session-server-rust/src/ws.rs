@@ -25,18 +25,21 @@ pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms:
 
     let temp_id = uuid::Uuid::new_v4().to_string();
     println!("[server] Client connected: {}", temp_id);
-    clients.lock().unwrap().insert(temp_id.clone(), crate::types::Client { sender: client_sender, room_id: None });
+    clients.write().await.insert(temp_id.clone(), crate::types::Client { sender: client_sender, room_id: None });
 
-    send_to_client(&temp_id, &clients.lock().unwrap(), &WsMessage {
-        msg_type: "client_hello".to_string(),
-        room: None,
-        client: Some(temp_id.clone()),
-        payload: Some(serde_json::json!({ "client_id": temp_id.clone() })),
-        ts: now_ms(),
-        server_ts: Some(now_ms()),
-    });
+    {
+        let locked_clients = clients.read().await;
+        send_to_client(&temp_id, &locked_clients, &WsMessage {
+            msg_type: "client_hello".to_string(),
+            room: None,
+            client: Some(temp_id.clone()),
+            payload: Some(serde_json::json!({ "client_id": temp_id.clone() })),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        });
+    }
 
-    send_room_list(&temp_id, &clients, &rooms);
+    send_room_list(&temp_id, &clients, &rooms).await;
 
     while let Some(result) = client_ws_rcv.next().await {
         if let Ok(msg) = result {
@@ -44,14 +47,14 @@ pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms:
         }
     }
 
-    crate::room::handle_disconnect(&temp_id, &clients, &rooms);
+    crate::room::handle_disconnect(&temp_id, &clients, &rooms).await;
 }
 
 fn all_ready(room: &Room) -> bool {
     room.ready_clients.len() >= room.clients.len()
 }
 
-fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, target_server_ts: u64) {
+async fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, target_server_ts: u64) {
     room.state.position = position;
     room.state.play_state = "playing".to_string();
     let msg = WsMessage {
@@ -66,14 +69,14 @@ fn broadcast_scheduled_play(room: &mut Room, clients: &Clients, position: f64, t
         ts: now_ms(),
         server_ts: Some(target_server_ts),
     };
-    let locked_clients = clients.lock().unwrap();
+    let locked_clients = clients.read().await;
     broadcast_to_room(room, &locked_clients, &msg, None);
 }
 
 fn schedule_pending_play(room_id: String, created_at: u64, rooms: crate::types::Rooms, clients: Clients) {
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(MAX_READY_WAIT_MS)).await;
-        let mut locked_rooms = rooms.lock().unwrap();
+        let mut locked_rooms = rooms.write().await;
         if let Some(room) = locked_rooms.get_mut(&room_id) {
             if let Some(pending) = &room.pending_play {
                 if pending.created_at != created_at {
@@ -82,7 +85,24 @@ fn schedule_pending_play(room_id: String, created_at: u64, rooms: crate::types::
                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
                 let position = pending.position;
                 room.pending_play = None;
-                broadcast_scheduled_play(room, &clients, position, target_server_ts);
+
+                // Update room state
+                room.state.position = position;
+                room.state.play_state = "playing".to_string();
+                let msg = WsMessage {
+                    msg_type: "player_event".to_string(),
+                    room: Some(room.room_id.clone()),
+                    client: None,
+                    payload: Some(serde_json::json!({
+                        "action": "play",
+                        "position": position,
+                        "target_server_ts": target_server_ts
+                    })),
+                    ts: now_ms(),
+                    server_ts: Some(target_server_ts),
+                };
+                let locked_clients = clients.read().await;
+                broadcast_to_room(room, &locked_clients, &msg, None);
             }
         }
     });
@@ -100,14 +120,9 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
         }
     };
 
-    let mut locked_rooms = rooms.lock().unwrap();
-    let mut locked_clients = clients.lock().unwrap();
-
     match parsed.msg_type.as_str() {
         "list_rooms" => {
-            drop(locked_rooms);
-            drop(locked_clients);
-            send_room_list(client_id, clients, rooms);
+            send_room_list(client_id, clients, rooms).await;
         },
         "create_room" => {
             if let Some(payload) = &parsed.payload {
@@ -131,27 +146,33 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                     last_command_ts: 0,
                 };
 
-                locked_rooms.insert(room_id.clone(), room.clone());
-                if let Some(client) = locked_clients.get_mut(client_id) {
-                    client.room_id = Some(room_id.clone());
+                {
+                    let mut locked_rooms = rooms.write().await;
+                    let mut locked_clients = clients.write().await;
+
+                    locked_rooms.insert(room_id.clone(), room.clone());
+                    if let Some(client) = locked_clients.get_mut(client_id) {
+                        client.room_id = Some(room_id.clone());
+                    }
+
+                    send_to_client(client_id, &locked_clients, &WsMessage {
+                        msg_type: "room_state".to_string(),
+                        room: Some(room_id.clone()),
+                        client: Some(client_id.to_string()),
+                        payload: Some(serde_json::json!({ "name": room.name, "host_id": room.host_id, "state": room.state, "participant_count": 1, "media_id": room.media_id })),
+                        ts: now_ms(),
+                        server_ts: Some(now_ms()),
+                    });
                 }
 
-                send_to_client(client_id, &locked_clients, &WsMessage {
-                    msg_type: "room_state".to_string(),
-                    room: Some(room_id.clone()),
-                    client: Some(client_id.to_string()),
-                    payload: Some(serde_json::json!({ "name": room.name, "host_id": room.host_id, "state": room.state, "participant_count": 1, "media_id": room.media_id })),
-                    ts: now_ms(),
-                    server_ts: Some(now_ms()),
-                });
-
-                drop(locked_rooms);
-                drop(locked_clients);
-                broadcast_room_list(clients, rooms);
+                broadcast_room_list(clients, rooms).await;
             }
         },
         "join_room" => {
             if let Some(ref room_id) = parsed.room {
+                let mut locked_rooms = rooms.write().await;
+                let mut locked_clients = clients.write().await;
+
                 if let Some(room) = locked_rooms.get_mut(room_id) {
                     println!("[server] Client {} joining room {}", client_id, room_id);
                     if !room.clients.contains(&client_id.to_string()) {
@@ -184,26 +205,32 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
         },
         "ready" => {
             if let Some(ref room_id) = parsed.room {
+                let mut locked_rooms = rooms.write().await;
                 if let Some(room) = locked_rooms.get_mut(room_id) {
                     room.ready_clients.insert(client_id.to_string());
                     if room.pending_play.is_some() && all_ready(room) {
                         let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
                         let position = room.pending_play.as_ref().map(|p| p.position).unwrap_or(room.state.position);
                         room.pending_play = None;
-                        broadcast_scheduled_play(room, clients, position, target_server_ts);
+                        broadcast_scheduled_play(room, clients, position, target_server_ts).await;
                     }
                 }
             }
         },
         "leave_room" => {
             println!("[server] Client {} requested leave", client_id);
-            handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
-            drop(locked_rooms);
-            drop(locked_clients);
-            broadcast_room_list(clients, rooms);
+            {
+                let mut locked_clients = clients.write().await;
+                let mut locked_rooms = rooms.write().await;
+                handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
+            }
+            broadcast_room_list(clients, rooms).await;
         },
         "player_event" | "state_update" => {
             if let Some(ref room_id) = parsed.room {
+                let mut locked_rooms = rooms.write().await;
+                let locked_clients = clients.read().await;
+
                 if let Some(room) = locked_rooms.get_mut(room_id) {
                     if room.host_id != client_id {
                         return;
@@ -214,8 +241,6 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                     // For state_update: filter out updates that are too frequent or have insignificant changes
                     if parsed.msg_type == "state_update" {
                         // Ignore state_updates during command cooldown (HLS echo prevention)
-                        // After broadcasting a player_event, HLS clients may send back
-                        // false states while buffering - ignore them for 2 seconds
                         if room.last_command_ts > 0 && current_ts - room.last_command_ts < COMMAND_COOLDOWN_MS {
                             return;
                         }
@@ -226,23 +251,14 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                             let play_state_changed = new_play_state != room.state.play_state;
                             let pos_diff = new_pos - room.state.position;
 
-                            // Always allow play_state changes through immediately
                             if !play_state_changed {
-                                // Rate limit position-only updates
                                 if current_ts - room.last_state_ts < MIN_STATE_UPDATE_INTERVAL_MS {
                                     return;
                                 }
-
-                                // Ignore backward jitter (HLS glitch): small backward jumps are noise
-                                // Only accept if moving forward OR if it's a significant backward jump (real seek)
                                 if pos_diff < -POSITION_JITTER_THRESHOLD && pos_diff > -2.0 {
-                                    // Small backward jump (between -0.5s and -2s): likely HLS jitter, ignore
                                     return;
                                 }
-
-                                // Ignore very small forward changes (less than threshold)
                                 if pos_diff >= 0.0 && pos_diff < POSITION_JITTER_THRESHOLD {
-                                    // Position barely changed, don't relay this update
                                     return;
                                 }
                             }
@@ -264,14 +280,13 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
 
                     if parsed.msg_type == "player_event" {
                         let action = parsed.payload.as_ref().and_then(|p| p.get("action")).and_then(|v| v.as_str()).unwrap_or("");
-                        // Mark command timestamp for cooldown (HLS echo prevention)
                         room.last_command_ts = current_ts;
 
                         if action == "play" {
                             let position = parsed.payload.as_ref().and_then(|p| p.get("position")).and_then(|v| v.as_f64()).unwrap_or(room.state.position);
                             if all_ready(room) {
                                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-                                broadcast_scheduled_play(room, clients, position, target_server_ts);
+                                broadcast_scheduled_play(room, clients, position, target_server_ts).await;
                             } else {
                                 let created_at = now_ms();
                                 room.pending_play = Some(PendingPlay { position, created_at });
@@ -297,6 +312,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
             }
         },
         "ping" => {
+            let locked_clients = clients.read().await;
             send_to_client(client_id, &locked_clients, &WsMessage {
                 msg_type: "pong".to_string(),
                 room: parsed.room,

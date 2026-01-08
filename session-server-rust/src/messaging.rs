@@ -2,8 +2,8 @@ use crate::types::{Client, Clients, Room, Rooms, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
-pub fn send_room_list(client_id: &str, clients: &Clients, rooms: &Rooms) {
-    let locked_rooms = rooms.lock().unwrap();
+pub async fn send_room_list(client_id: &str, clients: &Clients, rooms: &Rooms) {
+    let locked_rooms = rooms.read().await;
     let list: Vec<serde_json::Value> = locked_rooms.values().map(|r| {
         serde_json::json!({ "id": r.room_id, "name": r.name, "count": r.clients.len(), "media_id": r.media_id })
     }).collect();
@@ -17,17 +17,17 @@ pub fn send_room_list(client_id: &str, clients: &Clients, rooms: &Rooms) {
         server_ts: Some(now_ms()),
     };
 
-    let locked_clients = clients.lock().unwrap();
+    let locked_clients = clients.read().await;
     send_to_client(client_id, &locked_clients, &msg);
 }
 
-pub fn broadcast_room_list(clients: &Clients, rooms: &Rooms) {
+pub async fn broadcast_room_list(clients: &Clients, rooms: &Rooms) {
     let client_ids: Vec<String> = {
-        let locked_clients = clients.lock().unwrap();
+        let locked_clients = clients.read().await;
         locked_clients.keys().cloned().collect()
     };
     for id in client_ids {
-        send_room_list(&id, clients, rooms);
+        send_room_list(&id, clients, rooms).await;
     }
 }
 

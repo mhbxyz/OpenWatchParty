@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc;
+use std::sync::Arc;
+use tokio::sync::{mpsc, RwLock};
 
-pub type Clients = Arc<Mutex<HashMap<String, Client>>>;
-pub type Rooms = Arc<Mutex<HashMap<String, Room>>>;
+pub type Clients = Arc<RwLock<HashMap<String, Client>>>;
+pub type Rooms = Arc<RwLock<HashMap<String, Room>>>;
 
 #[derive(Debug, Clone)]
 pub struct Client {

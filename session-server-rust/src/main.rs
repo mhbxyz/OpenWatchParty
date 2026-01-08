@@ -28,8 +28,8 @@ async fn main() {
     let allowed_origins = get_allowed_origins();
     println!("[server] Allowed origins: {:?}", allowed_origins);
 
-    let clients: Clients = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
-    let rooms: Rooms = std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new()));
+    let clients: Clients = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
+    let rooms: Rooms = std::sync::Arc::new(tokio::sync::RwLock::new(std::collections::HashMap::new()));
 
     let clients_filter = warp::any().map(move || clients.clone());
     let rooms_filter = warp::any().map(move || rooms.clone());

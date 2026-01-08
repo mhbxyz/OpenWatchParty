@@ -3,15 +3,15 @@ use crate::types::{Client, Clients, Room, Rooms, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
-pub fn handle_disconnect(client_id: &str, clients: &Clients, rooms: &Rooms) {
+pub async fn handle_disconnect(client_id: &str, clients: &Clients, rooms: &Rooms) {
     println!("[server] Disconnecting client {}", client_id);
-    let mut locked_clients = clients.lock().unwrap();
-    let mut locked_rooms = rooms.lock().unwrap();
-    handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
-    locked_clients.remove(client_id);
-    drop(locked_rooms);
-    drop(locked_clients);
-    broadcast_room_list(clients, rooms);
+    {
+        let mut locked_clients = clients.write().await;
+        let mut locked_rooms = rooms.write().await;
+        handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
+        locked_clients.remove(client_id);
+    }
+    broadcast_room_list(clients, rooms).await;
 }
 
 pub fn handle_leave(client_id: &str, clients: &mut HashMap<String, Client>, rooms: &mut HashMap<String, Room>) {

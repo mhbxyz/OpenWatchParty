@@ -606,7 +606,7 @@ homeRoomCache: new LRUCache(50),
 ---
 
 ### P6 - Mutex synchrone dans contexte async
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P0` | **Effort**: `M`
 - **Fichiers**: `session-server-rust/src/main.rs`, `session-server-rust/src/ws.rs`
 
@@ -808,7 +808,7 @@ tokio::spawn(async move {
 ### Phase 1 - Critiques (avant toute mise en production)
 1. [x] S2 - XSS (plus rapide à corriger, impact immédiat)
 2. [x] S3 - CORS
-3. [ ] P6 - Mutex async
+3. [x] P6 - Mutex async
 4. [ ] S1 - Authentification JWT
 
 ### Phase 2 - Élevées
@@ -845,3 +845,4 @@ tokio::spawn(async move {
 - 4 problèmes critiques P0
 - **S2 corrigé** : Ajout de `escapeHtml()` dans `osp-utils.js`, utilisé dans `osp-ui.js` pour échapper `room.name`, `room.id`, `room.media_id`, et `state.roomName`
 - **S3 corrigé** : Ajout de validation Origin pour WebSocket et CORS pour `/health`. Variable d'environnement `ALLOWED_ORIGINS` (défaut: `localhost:8096`)
+- **P6 corrigé** : Migration de `std::sync::Mutex` vers `tokio::sync::RwLock`. Toutes les fonctions utilisant les locks sont maintenant async avec `.read().await` / `.write().await`
