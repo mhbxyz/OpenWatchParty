@@ -11,10 +11,10 @@
 | Sévérité | Total | Résolus | Restants |
 |----------|-------|---------|----------|
 | 🔴 Critique | 4 | 4 | 0 |
-| 🟠 Haute | 10 | 0 | 10 |
+| 🟠 Haute | 10 | 10 | 0 |
 | 🟡 Moyenne | 65 | 0 | 65 |
 | 🟢 Basse | 24 | 0 | 24 |
-| **Total** | **103** | **4** | **99** |
+| **Total** | **103** | **14** | **89** |
 
 ### Répartition par Composant
 
@@ -168,7 +168,7 @@ $('#JwtSecret', page).val(config.JwtSecret || '');
 | **Composant** | Rust Server |
 | **Fichier** | `session-server-rust/src/main.rs` |
 | **Ligne** | 29-34 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```rust
@@ -201,7 +201,7 @@ fn is_origin_allowed(origin: &str, allowed: &[String]) -> bool {
 | **Composant** | Rust Server |
 | **Fichier** | `session-server-rust/src/ws.rs` |
 | **Ligne** | 178-195 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 Les messages WebSocket sont parsés sans validation de taille. Un client malveillant peut envoyer des payloads de plusieurs Mo.
@@ -230,7 +230,7 @@ if msg.len() > MAX_MESSAGE_SIZE {
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-ui.js` |
 | **Ligne** | 90 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```javascript
@@ -259,7 +259,7 @@ cover.style.backgroundImage = `url(${CSS.escape(imageUrl)})`;
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/plugin.js` |
 | **Ligne** | 18-25 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 Le chargement séquentiel des scripts n'a pas de timeout. Si un script ne charge pas, toute la chaîne bloque indéfiniment.
@@ -290,7 +290,7 @@ const loadScript = (src, timeout = 10000) => new Promise((resolve, reject) => {
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
 | **Ligne** | 23-25 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```csharp
@@ -320,7 +320,7 @@ return await reader.ReadToEndAsync();
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
 | **Ligne** | 21-27 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 Le script est rechargé à chaque requête sans headers de cache.
@@ -347,7 +347,7 @@ Response.Headers.Add("ETag", $"\"{ComputeHash(script)}\"");
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Web/configPage.html` |
 | **Ligne** | 39-44 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```javascript
@@ -382,7 +382,7 @@ ApiClient.getPluginConfiguration(...).then(function (config) {
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Plugin.cs` |
 | **Ligne** | 12 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```csharp
@@ -409,7 +409,7 @@ Utiliser l'injection de dépendances Jellyfin standard.
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
 | **Ligne** | 42-46 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 ```csharp
@@ -436,7 +436,7 @@ Retourner 401 Unauthorized si claims manquants.
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Configuration/PluginConfiguration.cs` |
 | **Ligne** | 7-22 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 Aucune validation sur les propriétés de configuration :

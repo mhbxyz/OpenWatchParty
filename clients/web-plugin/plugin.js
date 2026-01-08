@@ -15,12 +15,17 @@
 
   const base = '/web/plugins/openwatchparty';
 
+  const SCRIPT_TIMEOUT_MS = 10000;  // 10 seconds timeout per script
+
   const loadScript = (src) => new Promise((resolve, reject) => {
     const script = document.createElement('script');
     script.src = `${base}/${src}?v=${cacheBust}`;
     script.async = false;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    const timer = setTimeout(() => {
+      reject(new Error(`Timeout loading ${src}`));
+    }, SCRIPT_TIMEOUT_MS);
+    script.onload = () => { clearTimeout(timer); resolve(); };
+    script.onerror = () => { clearTimeout(timer); reject(new Error(`Failed to load ${src}`)); };
     document.head.appendChild(script);
   });
 

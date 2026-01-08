@@ -28,6 +28,8 @@ fn get_allowed_origins() -> Vec<String> {
 
 fn is_origin_allowed(origin: &str, allowed: &[String]) -> bool {
     if allowed.iter().any(|o| o == "*") {
+        // Security warning: wildcard allows all origins
+        warn!("SECURITY: Wildcard origin (*) configured - ALL origins allowed. This disables CORS protection!");
         return true;
     }
     allowed.iter().any(|o| o == origin)

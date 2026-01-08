@@ -86,8 +86,12 @@
 
     const cover = document.createElement('div');
     cover.style.cssText = 'width:120px;height:180px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;';
-    if (imageUrl) {
-      cover.style.background = `#111 url('${imageUrl}') center/cover no-repeat`;
+    // Security: only allow http(s) URLs to prevent XSS via javascript: or data: URLs
+    if (imageUrl && /^https?:\/\//i.test(imageUrl)) {
+      cover.style.backgroundImage = `url('${imageUrl.replace(/'/g, "\\'")}')`;
+      cover.style.backgroundPosition = 'center';
+      cover.style.backgroundSize = 'cover';
+      cover.style.backgroundRepeat = 'no-repeat';
     } else {
       cover.innerHTML = '<span style="color:#666;font-size:12px;">No Cover</span>';
     }

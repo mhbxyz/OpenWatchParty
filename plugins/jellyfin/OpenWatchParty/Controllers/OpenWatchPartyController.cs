@@ -16,19 +16,39 @@ public class OpenWatchPartyController : ControllerBase
     // Rate limiting: max 10 tokens per minute per user
     private const int MaxTokensPerMinute = 10;
     private static readonly ConcurrentDictionary<string, (int Count, DateTime ResetTime)> TokenRateLimits = new();
+
+    // Cache for embedded script content (read once at startup)
+    private static string? _cachedScript;
+    private static string? _cachedScriptETag;
+
     [HttpGet("ClientScript")]
     [Produces("text/javascript")]
-    public ActionResult GetClientScript()
+    public async Task<ActionResult> GetClientScript()
     {
-        var assembly = typeof(OpenWatchPartyController).Assembly;
-        var resourceName = "OpenWatchParty.Plugin.Web.plugin.js";
-        using var stream = assembly.GetManifestResourceStream(resourceName);
-        if (stream == null) return NotFound();
-        using var reader = new StreamReader(stream);
+        // Check If-None-Match header for cache validation
+        var requestETag = Request.Headers["If-None-Match"].FirstOrDefault();
+        if (!string.IsNullOrEmpty(requestETag) && requestETag == _cachedScriptETag)
+        {
+            return StatusCode(304); // Not Modified
+        }
 
-        var script = reader.ReadToEnd();
+        // Load script from embedded resource (cached after first load)
+        if (_cachedScript == null)
+        {
+            var assembly = typeof(OpenWatchPartyController).Assembly;
+            var resourceName = "OpenWatchParty.Plugin.Web.plugin.js";
+            using var stream = assembly.GetManifestResourceStream(resourceName);
+            if (stream == null) return NotFound();
+            using var reader = new StreamReader(stream);
+            _cachedScript = await reader.ReadToEndAsync();
+            _cachedScriptETag = $"\"{Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(_cachedScript)))[..16]}\"";
+        }
 
-        return Content(script, "text/javascript");
+        // Set cache headers
+        Response.Headers["Cache-Control"] = "public, max-age=3600";
+        Response.Headers["ETag"] = _cachedScriptETag;
+
+        return Content(_cachedScript, "text/javascript");
     }
 
     [HttpGet("Token")]
@@ -44,11 +64,19 @@ public class OpenWatchPartyController : ControllerBase
 
         // Get user info from the authenticated context
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                  ?? User.FindFirst("Jellyfin-UserId")?.Value
-                  ?? "unknown";
+                  ?? User.FindFirst("Jellyfin-UserId")?.Value;
         var userName = User.FindFirst(ClaimTypes.Name)?.Value
-                    ?? User.Identity?.Name
-                    ?? "Unknown User";
+                    ?? User.Identity?.Name;
+
+        // Validate user claims are present
+        if (string.IsNullOrEmpty(userId))
+        {
+            return Unauthorized(new { error = "User identity not found in claims" });
+        }
+        if (string.IsNullOrEmpty(userName))
+        {
+            userName = "User";  // Fallback for display name only
+        }
 
         // Rate limiting check
         var now = DateTime.UtcNow;

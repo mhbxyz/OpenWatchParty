@@ -9,6 +9,10 @@ namespace OpenWatchParty.Plugin;
 
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
+    /// <summary>
+    /// Singleton instance - standard Jellyfin plugin pattern.
+    /// Thread-safe: set once during plugin initialization by Jellyfin's plugin loader.
+    /// </summary>
     public static Plugin? Instance { get; private set; }
     private readonly ILogger<Plugin> _logger;
 

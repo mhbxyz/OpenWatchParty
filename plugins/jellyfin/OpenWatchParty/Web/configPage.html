@@ -43,10 +43,14 @@
                     $('#JwtAudience', page).val(config.JwtAudience || 'OpenWatchParty');
                     $('#JwtIssuer', page).val(config.JwtIssuer || 'Jellyfin');
                     Dashboard.hideLoadingMsg();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Failed to load configuration: ' + (err.message || 'Unknown error'));
                 });
             });
 
-            $('.openwatchpartyConfigurationForm').on('submit', function () {
+            $('.openwatchpartyConfigurationForm').on('submit', function (e) {
+                e.preventDefault();
                 Dashboard.showLoadingMsg();
                 var page = $(this).parents('.pluginConfigurationPage')[0];
 
@@ -59,10 +63,13 @@
                     config.JwtAudience = $('#JwtAudience', page).val();
                     config.JwtIssuer = $('#JwtIssuer', page).val();
 
-                    ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config).then(Dashboard.processServerConfigurationUpdateResult);
+                    return ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config);
+                }).then(function () {
+                    Dashboard.processServerConfigurationUpdateResult();
+                }).catch(function (err) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Failed to save configuration: ' + (err.message || 'Unknown error'));
                 });
-
-                return false;
             });
         </script>
     </div>

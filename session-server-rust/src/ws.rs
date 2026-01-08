@@ -27,6 +27,7 @@ const MAX_CLIENTS_PER_ROOM: usize = 20;  // Max clients in a room
 
 // Payload validation
 const MAX_POSITION_SECONDS: f64 = 86400.0;  // 24 hours max
+const MAX_MESSAGE_SIZE: usize = 64 * 1024;  // 64 KB max message size
 
 fn is_valid_position(pos: f64) -> bool {
     pos.is_finite() && pos >= 0.0 && pos <= MAX_POSITION_SECONDS
@@ -197,6 +198,13 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
     if check_rate_limit(client_id, clients).await {
         warn!("Rate limited client: {}", client_id);
         send_error(client_id, clients, "Rate limit exceeded").await;
+        return;
+    }
+
+    // Message size limit check (prevent OOM attacks)
+    if msg.as_bytes().len() > MAX_MESSAGE_SIZE {
+        warn!("Message too large from client {}: {} bytes", client_id, msg.as_bytes().len());
+        send_error(client_id, clients, "Message too large").await;
         return;
     }
 
