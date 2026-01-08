@@ -172,7 +172,7 @@ build-plugin: start-deps sync-refs ## Build the Jellyfin plugin
 	@echo "$(GREEN)▶ Building Jellyfin plugin...$(RESET)"
 	@mkdir -p $(PLUGIN_DIR)/Web
 	@cp $(CLIENT_DIR)/plugin.js $(PLUGIN_DIR)/Web/plugin.js
-	@cp $(CLIENT_DIR)/owp-*.js $(PLUGIN_DIR)/Web/
+	@cp $(CLIENT_DIR)/state.js $(CLIENT_DIR)/utils.js $(CLIENT_DIR)/ui.js $(CLIENT_DIR)/playback.js $(CLIENT_DIR)/ws.js $(CLIENT_DIR)/app.js $(PLUGIN_DIR)/Web/
 	@$(COMPOSE_TOOLS) run --rm plugin-builder
 	@echo "$(GREEN)✓ Plugin built: $(PLUGIN_DIR)/dist/$(RESET)"
 

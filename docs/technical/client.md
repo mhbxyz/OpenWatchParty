@@ -8,15 +8,15 @@ The OpenWatchParty client is a set of JavaScript modules (IIFE pattern) injected
 
 ```
 plugin.js              # Loader - loads modules in order
-    ├── owp-state.js      # Global state and constants
-    ├── owp-utils.js      # Utility functions
-    ├── owp-ui.js         # User interface
-    ├── owp-playback.js   # Video playback management
-    ├── owp-ws.js         # WebSocket communication
-    └── owp-app.js        # Initialization and main loops
+    ├── state.js      # Global state and constants
+    ├── utils.js      # Utility functions
+    ├── ui.js         # User interface
+    ├── playback.js   # Video playback management
+    ├── ws.js         # WebSocket communication
+    └── app.js        # Initialization and main loops
 ```
 
-## Module: `owp-state.js`
+## Module: `state.js`
 
 ### Description
 Defines global shared state and configuration constants.
@@ -74,7 +74,7 @@ Defines global shared state and configuration constants.
 | `wantsToPlay` | boolean | `true` if user wants to play |
 | `isSyncing` | boolean | Anti-feedback lock during sync |
 
-## Module: `owp-utils.js`
+## Module: `utils.js`
 
 ### Description
 Shared utility functions.
@@ -138,7 +138,7 @@ return position + (elapsed / 1000);
 #### `scheduleAt(serverTs: number, fn: Function) -> void`
 Schedules function execution at a given server timestamp.
 
-## Module: `owp-playback.js`
+## Module: `playback.js`
 
 ### Description
 Manages HTML5 video element interaction and playback synchronization.
@@ -210,7 +210,7 @@ Synchronization loop called every second (non-hosts only).
    rate = clamp(1 + drift * DRIFT_GAIN, 0.95, 1.05)
 ```
 
-## Module: `owp-ws.js`
+## Module: `ws.js`
 
 ### Description
 Manages WebSocket communication with the session server.
@@ -288,7 +288,7 @@ sampleOffset = server_ts + (rtt / 2) - now;
 serverOffsetMs = hasTimeSync ? (0.6 * old + 0.4 * sample) : sample;
 ```
 
-## Module: `owp-ui.js`
+## Module: `ui.js`
 
 ### Description
 Manages the plugin user interface.
@@ -318,7 +318,7 @@ Injects "Watch Party" button into video player OSD controls.
 #### `showToast(message: string) -> void`
 Shows a toast notification.
 
-## Module: `owp-app.js`
+## Module: `app.js`
 
 ### Description
 Main entry point and initialization loops.

@@ -92,12 +92,12 @@ Modular JavaScript injected into Jellyfin's web interface.
 
 **Modules:**
 - `plugin.js` - Loader, script initialization
-- `owp-state.js` - Global state and constants
-- `owp-utils.js` - Utility functions
-- `owp-ui.js` - User interface rendering
-- `owp-playback.js` - Video binding and sync
-- `owp-ws.js` - WebSocket communication
-- `owp-app.js` - Application initialization
+- `state.js` - Global state and constants
+- `utils.js` - Utility functions
+- `ui.js` - User interface rendering
+- `playback.js` - Video binding and sync
+- `ws.js` - WebSocket communication
+- `app.js` - Application initialization
 
 ## Data Flow
 

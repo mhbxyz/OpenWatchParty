@@ -55,12 +55,12 @@ OpenWatchParty/
 ├── clients/
 │   └── web-plugin/          # JavaScript client modules
 │       ├── plugin.js        # Loader/entry point
-│       ├── owp-state.js     # State management
-│       ├── owp-utils.js     # Utilities
-│       ├── owp-ui.js        # User interface
-│       ├── owp-playback.js  # Video sync
-│       ├── owp-ws.js        # WebSocket
-│       └── owp-app.js       # Initialization
+│       ├── state.js     # State management
+│       ├── utils.js     # Utilities
+│       ├── ui.js        # User interface
+│       ├── playback.js  # Video sync
+│       ├── ws.js        # WebSocket
+│       └── app.js       # Initialization
 │
 ├── plugins/
 │   └── jellyfin/

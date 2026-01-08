@@ -32,14 +32,14 @@
   // Optimized parallel loading based on dependencies:
   // 1. state (no deps) → 2. utils (state) → 3. ui + playback (parallel) → 4. ws (ui) → 5. app (all)
   const loadAll = async () => {
-    await loadScript('owp-state.js');
-    await loadScript('owp-utils.js');
+    await loadScript('state.js');
+    await loadScript('utils.js');
     await Promise.all([
-      loadScript('owp-ui.js'),
-      loadScript('owp-playback.js')
+      loadScript('ui.js'),
+      loadScript('playback.js')
     ]);
-    await loadScript('owp-ws.js');
-    await loadScript('owp-app.js');
+    await loadScript('ws.js');
+    await loadScript('app.js');
   };
 
   loadAll()

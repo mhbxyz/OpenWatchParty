@@ -15,7 +15,7 @@ OpenWatchParty is a Jellyfin plugin that enables synchronized watch parties. It 
    - Uses warp, tokio, handles JWT validation
 
 3. **Web Client (JavaScript)** - `clients/web-plugin/`
-   - Modular IIFE structure: `owp-state.js` → `owp-utils.js` → `owp-ui.js`/`owp-playback.js` → `owp-ws.js` → `owp-app.js`
+   - Modular IIFE structure: `state.js` → `utils.js` → `ui.js`/`playback.js` → `ws.js` → `app.js`
    - Injected into Jellyfin via `plugin.js` loader
    - Global namespace: `window.OpenWatchParty` (alias: `OWP`)
 
@@ -74,7 +74,7 @@ JWT_SECRET=               # Enable auth (empty = disabled)
 ## File Naming Conventions
 
 - CSS/HTML IDs: `owp-` prefix (e.g., `#owp-panel`, `.owp-header`)
-- JS modules: `owp-*.js`
+- JS modules: `state.js`, `utils.js`, `ui.js`, `playback.js`, `ws.js`, `app.js`
 - Rust modules: `auth.rs`, `ws.rs`, `room.rs`, `messaging.rs`, `types.rs`, `utils.rs`
 
 ## Commit Rules

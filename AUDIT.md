@@ -34,7 +34,7 @@
 | **ID** | C01 |
 | **Sévérité** | 🔴 Critique |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 98 |
 | **Statut** | ✅ Résolu |
 | **Assigné** | - |
@@ -228,7 +228,7 @@ if msg.len() > MAX_MESSAGE_SIZE {
 | **ID** | H03 |
 | **Sévérité** | 🟠 Haute |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 90 |
 | **Statut** | ✅ Résolu |
 
@@ -463,7 +463,7 @@ Ajouter des attributs de validation `[Required]`, `[MinLength]`, `[Range]`.
 | **ID** | M-UX01 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 101-106 |
 | **Statut** | ⬜ Non résolu |
 
@@ -481,7 +481,7 @@ Afficher un banner visible dans l'UI.
 | **ID** | M-UX02 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 257 |
 | **Statut** | ✅ Résolu |
 
@@ -496,7 +496,7 @@ Augmenter à 3-4s ou permettre dismiss manuel.
 | **ID** | M-UX03 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 65 |
 | **Statut** | ⬜ Non résolu |
 
@@ -511,7 +511,7 @@ Désactiver ou changer le label si déjà membre.
 | **ID** | M-UX04 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-playback.js` |
+| **Fichier** | `clients/web-plugin/playback.js` |
 | **Ligne** | 46-65 |
 | **Statut** | ⬜ Non résolu |
 
@@ -523,7 +523,7 @@ Désactiver ou changer le label si déjà membre.
 | **ID** | M-UX05 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 202 |
 | **Statut** | ✅ Résolu |
 
@@ -550,7 +550,7 @@ N'importe qui peut rejoindre n'importe quelle room. Pas de mot de passe ou code 
 | **ID** | M-UX07 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 219 |
 | **Statut** | ⬜ Non résolu |
 
@@ -565,7 +565,7 @@ RTT affiché uniquement dans le panneau, pas visible pendant la lecture.
 | **ID** | M-UX08 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 192 |
 | **Statut** | ✅ Résolu |
 
@@ -658,7 +658,7 @@ RTT affiché uniquement dans le panneau, pas visible pendant la lecture.
 | **ID** | M-P04 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-app.js` |
+| **Fichier** | `clients/web-plugin/app.js` |
 | **Ligne** | 35-38 |
 | **Statut** | ✅ Résolu |
 
@@ -673,7 +673,7 @@ Utiliser MutationObserver.
 | **ID** | M-P05 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-app.js` |
+| **Fichier** | `clients/web-plugin/app.js` |
 | **Ligne** | 48-52 |
 | **Statut** | ✅ Résolu |
 
@@ -685,7 +685,7 @@ Utiliser MutationObserver.
 | **ID** | M-P06 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-playback.js` |
+| **Fichier** | `clients/web-plugin/playback.js` |
 | **Ligne** | 198-238 |
 | **Statut** | ⬜ Non résolu |
 
@@ -700,7 +700,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-P07 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-state.js` |
+| **Fichier** | `clients/web-plugin/state.js` |
 | **Ligne** | 29 |
 | **Statut** | ⬜ Non résolu |
 
@@ -712,7 +712,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-P08 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ui.js` |
+| **Fichier** | `clients/web-plugin/ui.js` |
 | **Ligne** | 149-181 |
 | **Statut** | ⬜ Non résolu |
 
@@ -772,7 +772,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-P13 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 111-118 |
 | **Statut** | ⬜ Non résolu |
 
@@ -851,7 +851,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-Q05 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-utils.js` |
+| **Fichier** | `clients/web-plugin/utils.js` |
 | **Ligne** | 34 |
 | **Statut** | ⬜ Non résolu |
 
@@ -863,7 +863,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-Q06 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-playback.js` |
+| **Fichier** | `clients/web-plugin/playback.js` |
 | **Ligne** | 21-28 |
 | **Statut** | ⬜ Non résolu |
 
@@ -875,7 +875,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **ID** | M-Q07 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 114 |
 | **Statut** | ⬜ Non résolu |
 
@@ -1066,7 +1066,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | **ID** | B04 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-playback.js` |
+| **Fichier** | `clients/web-plugin/playback.js` |
 | **Ligne** | 96-99 |
 | **Statut** | ⬜ Non résolu |
 
@@ -1078,7 +1078,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | **ID** | B05 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-ws.js` |
+| **Fichier** | `clients/web-plugin/ws.js` |
 | **Ligne** | 159-170 |
 | **Statut** | ⬜ Non résolu |
 
@@ -1090,7 +1090,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | **ID** | B06 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-playback.js` |
+| **Fichier** | `clients/web-plugin/playback.js` |
 | **Ligne** | 152-176 |
 | **Statut** | ⬜ Non résolu |
 
@@ -1150,7 +1150,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | **ID** | B11 |
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | JavaScript Client |
-| **Fichier** | `clients/web-plugin/owp-state.js` |
+| **Fichier** | `clients/web-plugin/state.js` |
 | **Ligne** | 86 |
 | **Statut** | ⬜ Non résolu |
 
