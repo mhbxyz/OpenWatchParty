@@ -12,9 +12,9 @@
 |----------|-------|---------|----------|
 | 🔴 Critique | 4 | 4 | 0 |
 | 🟠 Haute | 10 | 10 | 0 |
-| 🟡 Moyenne | 65 | 0 | 65 |
+| 🟡 Moyenne | 65 | 12 | 53 |
 | 🟢 Basse | 24 | 0 | 24 |
-| **Total** | **103** | **14** | **89** |
+| **Total** | **103** | **26** | **77** |
 
 ### Répartition par Composant
 
@@ -483,7 +483,7 @@ Afficher un banner visible dans l'UI.
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-ui.js` |
 | **Ligne** | 257 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Recommandation**
 Augmenter à 3-4s ou permettre dismiss manuel.
@@ -525,7 +525,7 @@ Désactiver ou changer le label si déjà membre.
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-ui.js` |
 | **Ligne** | 202 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -567,7 +567,7 @@ RTT affiché uniquement dans le panneau, pas visible pendant la lecture.
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-ws.js` |
 | **Ligne** | 192 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -660,7 +660,7 @@ RTT affiché uniquement dans le panneau, pas visible pendant la lecture.
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-app.js` |
 | **Ligne** | 35-38 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Recommandation**
 Utiliser MutationObserver.
@@ -675,7 +675,7 @@ Utiliser MutationObserver.
 | **Composant** | JavaScript Client |
 | **Fichier** | `clients/web-plugin/owp-app.js` |
 | **Ligne** | 48-52 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -762,7 +762,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Composant** | Rust Server |
 | **Fichier** | `server/src/messaging.rs` |
 | **Ligne** | 36, 42 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -830,7 +830,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Composant** | Rust Server |
 | **Fichier** | `server/src/messaging.rs` |
 | **Ligne** | 36, 42 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -841,7 +841,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | Rust Server |
 | **Fichier** | `server/src/messaging.rs` |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -898,7 +898,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -964,7 +964,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -995,7 +995,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Sévérité** | 🟡 Moyenne |
 | **Composant** | Rust Server |
 | **Fichier** | `server/src/main.rs` |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -1053,7 +1053,7 @@ Utiliser requestAnimationFrame ou event-driven.
 | **Composant** | Rust Server |
 | **Fichier** | `server/src/room.rs` |
 | **Ligne** | 51-56 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 **Description**
 Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMessage` structuré.
@@ -1128,7 +1128,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | **Composant** | C# Plugin |
 | **Fichier** | `plugins/jellyfin/OpenWatchParty/Controllers/OpenWatchPartyController.cs` |
 | **Ligne** | 86-92 |
-| **Statut** | ⬜ Non résolu |
+| **Statut** | ✅ Résolu |
 
 ---
 
@@ -1246,6 +1246,7 @@ Le message `room_closed` est créé comme string JSON brute au lieu d'un `WsMess
 | Date | Version | Auteur | Changements |
 |------|---------|--------|-------------|
 | 2026-01-08 | 1.0 | Claude Code | Création initiale |
+| 2026-01-08 | 1.1 | Claude Code | Résolution de 12 issues moyennes (B03, B09, M-UX02, M-UX05, M-UX08, M-P04, M-P05, M-P12, M-Q03, M-Q04, M-Q09, M-Q15, M-Q18) |
 
 ---
 

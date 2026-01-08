@@ -48,10 +48,20 @@ pub fn handle_leave(client_id: &str, clients: &mut HashMap<String, Client>, room
     if let Some(room_id) = room_to_remove {
         info!("Closing room {}", room_id);
         rooms.remove(&room_id);
-        let msg_json = serde_json::json!({"type": "room_closed"}).to_string();
-        for cid in clients_to_notify {
-            if let Some(c) = clients.get(&cid) {
-                let _ = c.sender.send(Ok(warp::ws::Message::text(msg_json.clone())));
+        // Use WsMessage struct for consistent message format (fixes B03)
+        let msg = WsMessage {
+            msg_type: "room_closed".to_string(),
+            room: Some(room_id),
+            client: None,
+            payload: Some(serde_json::json!({ "reason": "Host left the room" })),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        };
+        if let Ok(msg_json) = serde_json::to_string(&msg) {
+            for cid in clients_to_notify {
+                if let Some(c) = clients.get(&cid) {
+                    let _ = c.sender.send(Ok(warp::ws::Message::text(msg_json.clone())));
+                }
             }
         }
     }

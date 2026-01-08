@@ -2,7 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   if (OWP.ui) return;
 
-  const { PANEL_ID, BTN_ID, STYLE_ID, HOME_SECTION_ID, host } = OWP.constants;
+  const { PANEL_ID, BTN_ID, STYLE_ID, HOME_SECTION_ID, DEFAULT_WS_URL } = OWP.constants;
   const state = OWP.state;
   const utils = OWP.utils;
 
@@ -203,7 +203,7 @@
               <button class="owp-btn" style="width:100%" id="owp-btn-create">Create & Host</button>
             </div>
         </div>
-        <div class="owp-footer">Connected to: ${host}:3000</div>
+        <div class="owp-footer">Server: ${DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', '')}</div>
       `;
       const btn = panel.querySelector('#owp-btn-create');
       if (btn) btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
@@ -256,9 +256,10 @@
     }
     const toast = document.createElement('div');
     toast.textContent = message;
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#202020;color:#fff;padding:10px 14px;border-radius:6px;z-index:30000;font-size:12px;';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#202020;color:#fff;padding:10px 14px;border-radius:6px;z-index:30000;font-size:12px;cursor:pointer;';
+    toast.onclick = () => toast.remove();  // Allow manual dismiss (fixes M-UX02)
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2000);
+    setTimeout(() => toast.remove(), 4000);  // Increased from 2s to 4s (fixes M-UX02)
   };
 
   OWP.ui = {

@@ -33,13 +33,25 @@ pub async fn broadcast_room_list(clients: &Clients, rooms: &Rooms) {
 
 pub fn send_to_client(client_id: &str, clients: &HashMap<String, Client>, msg: &WsMessage) {
     if let Some(client) = clients.get(client_id) {
-        let json = serde_json::to_string(msg).unwrap();
-        let _ = client.sender.send(Ok(warp::ws::Message::text(json)));
+        match serde_json::to_string(msg) {
+            Ok(json) => {
+                let _ = client.sender.send(Ok(warp::ws::Message::text(json)));
+            }
+            Err(e) => {
+                log::error!("Failed to serialize message for client {}: {}", client_id, e);
+            }
+        }
     }
 }
 
 pub fn broadcast_to_room(room: &Room, clients: &HashMap<String, Client>, msg: &WsMessage, exclude: Option<&str>) {
-    let json = serde_json::to_string(msg).unwrap();
+    let json = match serde_json::to_string(msg) {
+        Ok(j) => j,
+        Err(e) => {
+            log::error!("Failed to serialize broadcast message for room {}: {}", room.room_id, e);
+            return;
+        }
+    };
     let warp_msg = warp::ws::Message::text(json);
     for client_id in &room.clients {
         if Some(client_id.as_str()) == exclude { continue; }

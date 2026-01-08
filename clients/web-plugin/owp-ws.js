@@ -192,7 +192,10 @@
         break;
 
       case 'room_closed':
-        state.inRoom = false; state.roomId = ''; ui.render();
+        state.inRoom = false; state.roomId = '';
+        const reason = msg.payload?.reason || 'The room was closed';
+        ui.showToast(reason);  // Show notification when room closes (fixes M-UX08)
+        ui.render();
         break;
 
       case 'player_event':

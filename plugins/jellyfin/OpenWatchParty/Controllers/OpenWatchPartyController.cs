@@ -4,15 +4,22 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using OpenWatchParty.Plugin.Configuration;
 
 namespace OpenWatchParty.Plugin.Controllers;
 
+/// <summary>
+/// Controller for OpenWatchParty plugin endpoints.
+/// Provides client script serving and JWT token generation for watch party sessions.
+/// </summary>
 [ApiController]
 [Route("OpenWatchParty")]
 public class OpenWatchPartyController : ControllerBase
 {
+    private readonly ILogger<OpenWatchPartyController> _logger;
+
     // Rate limiting: max 10 tokens per minute per user
     private const int MaxTokensPerMinute = 10;
     private static readonly ConcurrentDictionary<string, (int Count, DateTime ResetTime)> TokenRateLimits = new();
@@ -21,6 +28,20 @@ public class OpenWatchPartyController : ControllerBase
     private static string? _cachedScript;
     private static string? _cachedScriptETag;
 
+    /// <summary>
+    /// Initializes a new instance of the controller with logging support.
+    /// </summary>
+    /// <param name="logger">The logger instance for this controller.</param>
+    public OpenWatchPartyController(ILogger<OpenWatchPartyController> logger)
+    {
+        _logger = logger;
+    }
+
+    /// <summary>
+    /// Returns the OpenWatchParty client JavaScript.
+    /// Supports ETag caching for efficient client-side caching.
+    /// </summary>
+    /// <returns>The JavaScript client script.</returns>
     [HttpGet("ClientScript")]
     [Produces("text/javascript")]
     public async Task<ActionResult> GetClientScript()
@@ -51,6 +72,15 @@ public class OpenWatchPartyController : ControllerBase
         return Content(_cachedScript, "text/javascript");
     }
 
+    /// <summary>
+    /// Generates a JWT token for the authenticated user to connect to the session server.
+    /// Rate limited to 10 tokens per minute per user.
+    /// </summary>
+    /// <returns>Token response containing the JWT or indication that auth is disabled.</returns>
+    /// <response code="200">Returns the token or auth disabled response.</response>
+    /// <response code="401">User identity not found in claims.</response>
+    /// <response code="429">Rate limit exceeded.</response>
+    /// <response code="500">Plugin not configured.</response>
     [HttpGet("Token")]
     [Authorize]
     [Produces("application/json")]
@@ -88,6 +118,7 @@ public class OpenWatchPartyController : ControllerBase
         }
         else if (limit.Count >= MaxTokensPerMinute)
         {
+            _logger.LogWarning("Token rate limit exceeded for user {UserId}", userId);
             return StatusCode(429, new { error = "Rate limit exceeded. Try again later." });
         }
         else
@@ -108,6 +139,7 @@ public class OpenWatchPartyController : ControllerBase
         }
 
         var token = GenerateJwtToken(userId, userName, config);
+        _logger.LogDebug("Generated token for user {UserName} ({UserId})", userName, userId);
 
         return Ok(new {
             token,
@@ -130,6 +162,7 @@ public class OpenWatchPartyController : ControllerBase
             new Claim(JwtRegisteredClaimNames.Aud, config.JwtAudience),
             new Claim(JwtRegisteredClaimNames.Iss, config.JwtIssuer),
             new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),  // Unique token ID for revocation support (fixes B09)
         };
 
         var token = new JwtSecurityToken(

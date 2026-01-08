@@ -137,8 +137,37 @@ async fn main() {
 
     let routes = ws_route.or(health_route);
 
+    // Graceful shutdown support (fixes M-Q18)
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+
+    // Spawn a task to handle shutdown signals
+    tokio::spawn(async move {
+        #[cfg(unix)]
+        {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to register SIGTERM handler");
+            let mut sigint = signal(SignalKind::interrupt()).expect("Failed to register SIGINT handler");
+            tokio::select! {
+                _ = sigterm.recv() => info!("Received SIGTERM, initiating graceful shutdown..."),
+                _ = sigint.recv() => info!("Received SIGINT, initiating graceful shutdown..."),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            tokio::signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+            info!("Received Ctrl+C, initiating graceful shutdown...");
+        }
+        let _ = tx.send(());
+    });
+
     info!("OpenWatchParty server listening on 0.0.0.0:3000");
-    warp::serve(routes).run(([0, 0, 0, 0], 3000)).await;
+    let (_, server) = warp::serve(routes)
+        .bind_with_graceful_shutdown(([0, 0, 0, 0], 3000), async {
+            rx.await.ok();
+        });
+
+    server.await;
+    info!("Server shutdown complete");
 }
 
 #[derive(Debug)]

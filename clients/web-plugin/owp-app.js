@@ -31,8 +31,9 @@
     }
     if (OWP.actions && OWP.actions.connect) OWP.actions.connect();
 
-    // UI check interval - inject OSD button and bind video
+    // UI check interval - inject OSD button and bind video (only when tab is visible, fixes M-P04)
     state.intervals.ui = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
       ui.injectOsdButton();
       if (utils.getVideo()) playback.bindVideo();
     }, UI_CHECK_MS);
@@ -44,9 +45,9 @@
       }
     }, PING_MS);
 
-    // Home watch parties refresh - only when on home view
+    // Home watch parties refresh - only when on home view AND tab is visible (fixes M-P05)
     state.intervals.home = setInterval(() => {
-      if (utils.isHomeView()) {
+      if (document.visibilityState === 'visible' && utils.isHomeView()) {
         ui.renderHomeWatchParties();
       }
     }, HOME_REFRESH_MS);
