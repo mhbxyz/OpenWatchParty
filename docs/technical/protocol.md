@@ -1,16 +1,14 @@
-# Spécification du Protocole WebSocket
+# WebSocket Protocol Specification
 
-## Vue d'ensemble
+## Overview
 
-OpenWatchParty utilise un protocole JSON sur WebSocket pour la communication temps réel entre les clients et le serveur de session.
+OpenWatchParty uses a JSON-over-WebSocket protocol for real-time communication between clients and the session server.
 
-**Endpoint:** `ws(s)://<jellyfin-host>:3000/ws`
+**Endpoint:** `ws(s)://<host>:3000/ws`
 
----
+## Message Format
 
-## Format des messages
-
-Tous les messages suivent cette structure:
+All messages follow this structure:
 
 ```json
 {
@@ -23,22 +21,34 @@ Tous les messages suivent cette structure:
 }
 ```
 
-| Champ | Type | Requis | Description |
-|-------|------|--------|-------------|
-| `type` | string | Oui | Type de message |
-| `room` | string | Non | ID de la room concernée |
-| `client` | string | Non | ID du client émetteur |
-| `payload` | object | Non | Données spécifiques au message |
-| `ts` | number | Oui | Timestamp client (ms depuis epoch) |
-| `server_ts` | number | Non | Timestamp serveur (ajouté par le serveur) |
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `type` | string | Yes | Message type |
+| `room` | string | No | Room ID (if applicable) |
+| `client` | string | No | Sender client ID |
+| `payload` | object | No | Message-specific data |
+| `ts` | number | Yes | Client timestamp (ms since epoch) |
+| `server_ts` | number | No | Server timestamp (added by server) |
 
----
+## Client → Server Messages
 
-## Messages Client → Serveur
+### `auth`
+
+Authenticate with a JWT token (if authentication is enabled).
+
+```json
+{
+  "type": "auth",
+  "payload": {
+    "token": "eyJhbGciOiJIUzI1NiIs..."
+  },
+  "ts": 1678900000000
+}
+```
 
 ### `list_rooms`
 
-Demande la liste des rooms actives.
+Request the list of active rooms.
 
 ```json
 {
@@ -47,13 +57,11 @@ Demande la liste des rooms actives.
 }
 ```
 
-**Réponse:** `room_list`
-
----
+**Response:** `room_list`
 
 ### `create_room`
 
-Crée une nouvelle room.
+Create a new watch party room.
 
 ```json
 {
@@ -67,68 +75,62 @@ Crée une nouvelle room.
 }
 ```
 
-| Champ payload | Type | Description |
+| Payload Field | Type | Description |
 |---------------|------|-------------|
-| `name` | string | Nom de la room |
-| `start_pos` | number | Position initiale (secondes) |
-| `media_id` | string | ID Jellyfin du média (optionnel) |
+| `name` | string | Room display name |
+| `start_pos` | number | Initial position (seconds) |
+| `media_id` | string | Jellyfin media ID (optional) |
 
-**Réponse:** `room_state`
+**Response:** `room_state`
 
-**Effets:**
-- Le client devient l'hôte
-- Broadcast `room_list` à tous les clients
-
----
+**Effects:**
+- Client becomes host
+- Broadcast `room_list` to all clients
 
 ### `join_room`
 
-Rejoint une room existante.
+Join an existing room.
 
 ```json
 {
   "type": "join_room",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "ts": 1678900000000
 }
 ```
 
-**Réponse:** `room_state`
+**Response:** `room_state`
 
-**Effets:**
-- Le client est ajouté à `room.clients`
-- Le client est retiré de `room.ready_clients`
-- Broadcast `participants_update` aux autres participants
-
----
+**Effects:**
+- Client added to `room.clients`
+- Client removed from `room.ready_clients`
+- Broadcast `participants_update` to other participants
 
 ### `leave_room`
 
-Quitte la room actuelle.
+Leave the current room.
 
 ```json
 {
   "type": "leave_room",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "ts": 1678900000000
 }
 ```
 
-**Effets:**
-- Si l'hôte quitte: fermeture de la room, broadcast `room_closed`
-- Sinon: broadcast `participants_update`
-- Broadcast `room_list` à tous
-
----
+**Effects:**
+- If host leaves: room closes, broadcast `room_closed`
+- Otherwise: broadcast `participants_update`
+- Broadcast `room_list` to all
 
 ### `ready`
 
-Indique que le client est prêt à recevoir des commandes de lecture.
+Indicate client is ready to receive playback commands.
 
 ```json
 {
   "type": "ready",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "media_id": "abc123def456"
   },
@@ -136,20 +138,18 @@ Indique que le client est prêt à recevoir des commandes de lecture.
 }
 ```
 
-**Effets:**
-- Le client est ajouté à `room.ready_clients`
-- Si `pending_play` existe et `all_ready()`: déclenche le play programmé
-
----
+**Effects:**
+- Client added to `room.ready_clients`
+- If `pending_play` exists and `all_ready()`: triggers scheduled play
 
 ### `player_event`
 
-Envoie un événement de lecture (hôte uniquement).
+Send a playback event (host only).
 
 ```json
 {
   "type": "player_event",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "action": "play",
     "position": 120.5
@@ -158,34 +158,32 @@ Envoie un événement de lecture (hôte uniquement).
 }
 ```
 
-| Champ payload | Type | Description |
+| Payload Field | Type | Description |
 |---------------|------|-------------|
-| `action` | string | `"play"`, `"pause"`, ou `"seek"` |
-| `position` | number | Position actuelle (secondes) |
+| `action` | string | `"play"`, `"pause"`, or `"seek"` |
+| `position` | number | Current position (seconds) |
 
-**Comportement selon action:**
+**Behavior by action:**
 
-| Action | Comportement serveur |
-|--------|---------------------|
-| `play` | Si `all_ready()`: broadcast avec `target_server_ts = now + 1500ms`. Sinon: crée `pending_play` |
-| `pause` | Broadcast avec `target_server_ts = now + 300ms` |
-| `seek` | Broadcast avec `target_server_ts = now + 300ms` |
+| Action | Server Behavior |
+|--------|-----------------|
+| `play` | If `all_ready()`: broadcast with `target_server_ts = now + 1500ms`. Otherwise: create `pending_play` |
+| `pause` | Broadcast with `target_server_ts = now + 300ms` |
+| `seek` | Broadcast with `target_server_ts = now + 300ms` |
 
-**Effets:**
-- Met à jour `room.state`
-- Met à jour `room.last_command_ts` (cooldown)
-- Broadcast aux autres participants
-
----
+**Effects:**
+- Updates `room.state`
+- Updates `room.last_command_ts` (cooldown)
+- Broadcasts to other participants
 
 ### `state_update`
 
-Mise à jour périodique de l'état de lecture (hôte uniquement).
+Periodic playback state update (host only).
 
 ```json
 {
   "type": "state_update",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "position": 125.3,
     "play_state": "playing"
@@ -194,23 +192,21 @@ Mise à jour périodique de l'état de lecture (hôte uniquement).
 }
 ```
 
-| Champ payload | Type | Description |
+| Payload Field | Type | Description |
 |---------------|------|-------------|
-| `position` | number | Position actuelle (secondes) |
-| `play_state` | string | `"playing"` ou `"paused"` |
+| `position` | number | Current position (seconds) |
+| `play_state` | string | `"playing"` or `"paused"` |
 
-**Filtrage serveur:**
-1. Ignoré si `now - last_command_ts < 2000ms` (cooldown)
-2. Ignoré si `now - last_state_ts < 500ms` (rate limit)
-3. Ignoré si position recule de 0.5s-2s (jitter HLS)
-4. Ignoré si position avance de < 0.5s (non significatif)
-5. Toujours accepté si `play_state` change
-
----
+**Server filtering:**
+1. Ignored if `now - last_command_ts < 2000ms` (cooldown)
+2. Ignored if `now - last_state_ts < 500ms` (rate limit)
+3. Ignored if position moves back 0.5s-2s (HLS jitter)
+4. Ignored if position advances < 0.5s (insignificant)
+5. Always accepted if `play_state` changes
 
 ### `ping`
 
-Mesure de latence et synchronisation d'horloge.
+Latency measurement and clock synchronization.
 
 ```json
 {
@@ -222,40 +218,36 @@ Mesure de latence et synchronisation d'horloge.
 }
 ```
 
-**Réponse:** `pong`
+**Response:** `pong`
 
----
-
-## Messages Serveur → Client
+## Server → Client Messages
 
 ### `client_hello`
 
-Envoyé immédiatement après la connexion WebSocket.
+Sent immediately after WebSocket connection.
 
 ```json
 {
   "type": "client_hello",
-  "client": "uuid-du-client",
+  "client": "uuid-client-id",
   "payload": {
-    "client_id": "uuid-du-client"
+    "client_id": "uuid-client-id"
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
 }
 ```
 
----
-
 ### `room_list`
 
-Liste des rooms actives.
+List of active rooms.
 
 ```json
 {
   "type": "room_list",
   "payload": [
     {
-      "id": "uuid-de-la-room",
+      "id": "uuid-room-id",
       "name": "Movie Night",
       "count": 3,
       "media_id": "abc123def456"
@@ -266,20 +258,18 @@ Liste des rooms actives.
 }
 ```
 
----
-
 ### `room_state`
 
-État complet d'une room. Envoyé après `create_room` ou `join_room`.
+Full room state. Sent after `create_room` or `join_room`.
 
 ```json
 {
   "type": "room_state",
-  "room": "uuid-de-la-room",
-  "client": "uuid-du-client",
+  "room": "uuid-room-id",
+  "client": "uuid-client-id",
   "payload": {
     "name": "Movie Night",
-    "host_id": "uuid-de-l-hote",
+    "host_id": "uuid-host-id",
     "participant_count": 3,
     "media_id": "abc123def456",
     "state": {
@@ -292,16 +282,14 @@ Liste des rooms actives.
 }
 ```
 
----
-
 ### `participants_update`
 
-Mise à jour du nombre de participants.
+Participant count update.
 
 ```json
 {
   "type": "participants_update",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "participant_count": 4
   },
@@ -310,16 +298,14 @@ Mise à jour du nombre de participants.
 }
 ```
 
----
-
 ### `player_event`
 
-Commande de lecture relayée de l'hôte.
+Playback command relayed from host.
 
 ```json
 {
   "type": "player_event",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "action": "play",
     "position": 120.5,
@@ -330,27 +316,25 @@ Commande de lecture relayée de l'hôte.
 }
 ```
 
-| Champ payload | Type | Description |
+| Payload Field | Type | Description |
 |---------------|------|-------------|
-| `action` | string | `"play"`, `"pause"`, ou `"seek"` |
-| `position` | number | Position de référence (secondes) |
-| `target_server_ts` | number | Timestamp serveur cible pour l'exécution |
+| `action` | string | `"play"`, `"pause"`, or `"seek"` |
+| `position` | number | Reference position (seconds) |
+| `target_server_ts` | number | Target server timestamp for execution |
 
-**Traitement client:**
-1. Activer `isSyncing` (verrou 2s)
-2. Calculer la position ajustée avec le temps écoulé
-3. Programmer l'action à `target_server_ts`
-
----
+**Client processing:**
+1. Enable `isSyncing` lock (2s)
+2. Calculate adjusted position with elapsed time
+3. Schedule action at `target_server_ts`
 
 ### `state_update`
 
-Mise à jour périodique de l'état relayée de l'hôte.
+Periodic state update relayed from host.
 
 ```json
 {
   "type": "state_update",
-  "room": "uuid-de-la-room",
+  "room": "uuid-room-id",
   "payload": {
     "position": 125.3,
     "play_state": "playing"
@@ -360,11 +344,9 @@ Mise à jour périodique de l'état relayée de l'hôte.
 }
 ```
 
----
-
 ### `room_closed`
 
-La room a été fermée (hôte déconnecté ou room vide).
+Room was closed (host disconnected or room empty).
 
 ```json
 {
@@ -373,27 +355,23 @@ La room a été fermée (hôte déconnecté ou room vide).
 }
 ```
 
----
-
 ### `client_left`
 
-Un participant a quitté la room.
+A participant left the room.
 
 ```json
 {
   "type": "client_left",
-  "room": "uuid-de-la-room",
-  "client": "uuid-du-client-parti",
+  "room": "uuid-room-id",
+  "client": "uuid-left-client-id",
   "ts": 1678900000000,
   "server_ts": 1678900000000
 }
 ```
 
----
-
 ### `pong`
 
-Réponse au ping.
+Response to ping.
 
 ```json
 {
@@ -406,15 +384,28 @@ Réponse au ping.
 }
 ```
 
-**Calcul RTT côté client:**
+**Client-side RTT calculation:**
 ```javascript
 const rtt = Date.now() - payload.client_ts;
 const serverOffset = server_ts + (rtt / 2) - Date.now();
 ```
 
----
+### `error`
 
-## Diagramme de séquence: Session complète
+Error response.
+
+```json
+{
+  "type": "error",
+  "payload": {
+    "message": "Error description"
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+## Sequence Diagram: Complete Session
 
 ```
 Client A                    Server                    Client B

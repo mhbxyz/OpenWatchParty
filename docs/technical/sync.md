@@ -1,17 +1,15 @@
-# Algorithmes de Synchronisation
+# Synchronization Algorithms
 
-## Vue d'ensemble
+## Overview
 
-OpenWatchParty utilise plusieurs algorithmes pour maintenir la synchronisation de lecture entre les clients, en gérant les défis spécifiques du streaming HLS/transcodé.
+OpenWatchParty uses multiple algorithms to maintain playback synchronization between clients, addressing the specific challenges of HLS/transcoded streaming.
 
----
+## 1. Clock Synchronization (Simplified NTP)
 
-## 1. Synchronisation d'horloge (NTP simplifié)
+### Problem
+Clients have different system clocks. To synchronize actions, we need to know the offset between client and server clocks.
 
-### Problème
-Les clients ont des horloges système différentes. Pour synchroniser les actions, il faut connaître le décalage entre l'horloge client et l'horloge serveur.
-
-### Algorithme
+### Algorithm
 
 ```
 Client                          Server
@@ -21,38 +19,35 @@ Client                          Server
    │◄── pong { client_ts: T1,     │
    │           server_ts: T2 } ───┤
    │                              │
-   T3 (réception)                 │
+   T3 (reception)                 │
 ```
 
-**Calcul:**
+**Calculation:**
 ```javascript
 rtt = T3 - T1;                           // Round-trip time
-serverTimeAtT3 = T2 + (rtt / 2);         // Estimation du temps serveur actuel
-serverOffsetMs = serverTimeAtT3 - T3;    // Décalage client/serveur
+serverTimeAtT3 = T2 + (rtt / 2);         // Estimated current server time
+serverOffsetMs = serverTimeAtT3 - T3;    // Client/server offset
 ```
 
-**Lissage EMA (Exponential Moving Average):**
+**EMA Smoothing (Exponential Moving Average):**
 ```javascript
-// Évite les sauts brusques dus aux variations de latence
+// Prevents sudden jumps from latency variations
 serverOffsetMs = hasTimeSync
     ? (0.6 * serverOffsetMs + 0.4 * newOffset)
     : newOffset;
 ```
 
-### Utilisation
+### Usage
 ```javascript
-// Obtenir le temps serveur actuel
 function getServerNow() {
     return Date.now() + serverOffsetMs;
 }
 ```
 
----
+## 2. Synchronized Action Scheduling
 
-## 2. Programmation d'actions synchronisées
-
-### Problème
-Quand l'hôte clique "Play", tous les clients doivent démarrer la lecture au même instant, malgré la latence réseau variable.
+### Problem
+When the host clicks "Play", all clients must start playback at the same instant, despite variable network latency.
 
 ### Solution: Target Server Timestamp
 
@@ -67,14 +62,14 @@ Host                  Server                    Client B
   │                      │                    scheduleAt(target_ts)
   │                      │                          │
   │                      │                          ▼
-  │                      │                    [Attente...]
+  │                      │                    [Wait...]
   │                      │                          │
   ◄──────────────────────┼──────────────────────────┤
                     [T = target_server_ts]          │
                                               video.play()
 ```
 
-### Implémentation côté client
+### Client-Side Implementation
 
 ```javascript
 function scheduleAt(serverTs, fn) {
@@ -82,95 +77,91 @@ function scheduleAt(serverTs, fn) {
     const delay = Math.max(0, serverTs - serverNow);
 
     if (delay === 0) {
-        fn();  // Exécution immédiate
+        fn();  // Immediate execution
     } else {
         setTimeout(fn, delay);
     }
 }
 ```
 
-### Délais configurés
+### Configured Delays
 
-| Action | Délai (ms) | Raison |
+| Action | Delay (ms) | Reason |
 |--------|------------|--------|
-| `play` | 1500 | Plus long pour synchroniser le buffering |
-| `pause` | 300 | Plus court car pas de buffering |
-| `seek` | 300 | Plus court car position directe |
+| `play` | 1500 | Longer to allow buffering sync |
+| `pause` | 300 | Shorter, no buffering needed |
+| `seek` | 300 | Shorter, direct position |
 
----
+## 3. Position Correction with Lead Time
 
-## 3. Correction de position avec lead time
-
-### Problème
-Le message met du temps à arriver. Quand le client reçoit "position = 120s", l'hôte est déjà plus loin.
+### Problem
+Messages take time to arrive. When client receives "position = 120s", the host is already further ahead.
 
 ### Solution: Lead Time Compensation
 
 ```javascript
 function adjustedPosition(position, serverTs) {
     const serverNow = getServerNow();
-    const elapsed = Math.max(0, serverNow - serverTs);  // Temps écoulé depuis envoi
-    const lead = SYNC_LEAD_MS;  // 120ms de marge
+    const elapsed = Math.max(0, serverNow - serverTs);  // Time since send
+    const lead = SYNC_LEAD_MS;  // 120ms margin
 
     return position + (elapsed + lead) / 1000;
 }
 ```
 
-### Exemple
+### Example
 
 ```
-Temps serveur:  1000ms         1050ms         1100ms
+Server time:    1000ms         1050ms         1100ms
                   │               │               │
-Host envoie:    pos=120s        ─────────────────►│
+Host sends:     pos=120s        ─────────────────►│
                   │                               │
-Client reçoit:  ──────────────────────────────────│
+Client receives: ──────────────────────────────────│
                                                pos=120s
                                                elapsed=100ms
                                                lead=120ms
                                                adjusted=120.22s
 ```
 
----
+## 4. Continuous Drift Correction
 
-## 4. Correction de drift en continu
+### Problem
+Even with perfect initial synchronization, clients drift over time (slightly different playback speeds, buffers, etc.).
 
-### Problème
-Même avec une synchronisation initiale parfaite, les clients dérivent dans le temps (vitesse de lecture légèrement différente, buffers, etc.).
-
-### Algorithme: syncLoop (non-hôtes uniquement)
+### Algorithm: syncLoop (non-hosts only)
 
 ```javascript
 function syncLoop() {
-    // Calcul de la position attendue
+    // Calculate expected position
     const elapsed = (getServerNow() - lastSyncServerTs) / 1000;
     const expected = lastSyncPosition + elapsed;
 
-    // Mesure du drift
+    // Measure drift
     const drift = expected - video.currentTime;
     const absDrift = Math.abs(drift);
 
-    // Zone morte: pas de correction
+    // Dead zone: no correction
     if (absDrift < DRIFT_DEADZONE_SEC) {  // 0.04s
         video.playbackRate = 1;
         return;
     }
 
-    // Drift excessif: seek forcé
+    // Excessive drift: forced seek
     if (absDrift >= DRIFT_SOFT_MAX_SEC) {  // 2.5s
         video.currentTime = expected;
         video.playbackRate = 1;
         return;
     }
 
-    // Zone de correction douce: ajustement de vitesse
-    // drift > 0 = en retard = accélérer
-    // drift < 0 = en avance = ralentir
+    // Soft correction zone: speed adjustment
+    // drift > 0 = behind = speed up
+    // drift < 0 = ahead = slow down
     const rate = clamp(1 + drift * DRIFT_GAIN, 0.95, 1.05);
     video.playbackRate = rate;
 }
 ```
 
-### Visualisation
+### Visualization
 
 ```
                     DRIFT_SOFT_MAX_SEC = 2.5s
@@ -188,88 +179,86 @@ function syncLoop() {
                     rate = 1.0
 ```
 
-### Formule de rate
+### Rate Formula
 
 ```
 rate = 1 + (drift * DRIFT_GAIN)
      = 1 + (drift * 0.5)
 
-Exemples:
+Examples:
 - drift = +0.2s → rate = 1.10 (clamped to 1.05)
 - drift = -0.1s → rate = 0.95
 - drift = +0.05s → rate = 1.025
 ```
 
----
+## 5. HLS Handling and Feedback Loop Prevention
 
-## 5. Gestion du HLS et prévention des boucles de feedback
+### The HLS Problem
 
-### Le problème HLS
+HLS (HTTP Live Streaming) is an adaptive streaming protocol that chunks video into segments. This creates problematic behaviors:
 
-Le HLS (HTTP Live Streaming) est un protocole de streaming adaptatif qui découpe la vidéo en segments. Cela crée des comportements problématiques:
+1. **False states**: During buffering, `video.paused` may be `true` even without user pause
+2. **Unstable position**: `currentTime` may jump or go backward while loading segments
+3. **Variable latency**: Each seek triggers new segment loading
 
-1. **Faux états**: Pendant le buffering, `video.paused` peut être `true` même si l'utilisateur n'a pas cliqué pause
-2. **Position instable**: `currentTime` peut sauter ou reculer pendant le chargement d'un segment
-3. **Latence variable**: Chaque seek déclenche le chargement de nouveaux segments
-
-### Scénario de boucle de feedback
+### Feedback Loop Scenario
 
 ```
-                    SANS PROTECTION
+                    WITHOUT PROTECTION
 
 Host ──► Server ──► Client
   │                   │
   │  "play @ 10:00"   │
   │                   │
-  │            HLS bufférise...
-  │            video.paused = true (faux)
-  │            video.currentTime = 9:58 (retard)
+  │            HLS buffering...
+  │            video.paused = true (false!)
+  │            video.currentTime = 9:58 (behind)
   │                   │
-  │◄─ "pause @ 9:58" ─┤  ← ERREUR!
+  │◄─ "pause @ 9:58" ─┤  ← ERROR!
   │                   │
-Server broadcast "pause" à tous
+Server broadcasts "pause" to all
   │                   │
-Tout le monde s'arrête!
+Everyone stops!
 ```
 
-### Solutions implémentées
+### Implemented Solutions
 
-#### A. Verrou de synchronisation (`isSyncing`)
+#### A. Sync Lock (`isSyncing`)
 
 ```javascript
-// Quand on reçoit une commande serveur
+// When receiving server command
 function onServerCommand() {
     isSyncing = true;
 
-    // ... appliquer la commande ...
+    // ... apply command ...
 
-    // Libère après 2 secondes
+    // Release after 2 seconds
     setTimeout(() => { isSyncing = false; }, 2000);
 }
 
-// Avant d'envoyer au serveur
+// Before sending to server
 function onEvent() {
-    if (isSyncing) return;  // Bloqué!
+    if (isSyncing) return;  // Blocked!
     // ...
 }
 ```
 
-#### B. Détection du buffering
+#### B. Buffering Detection
 
 ```javascript
-// Tracking des événements vidéo
+// Track video events
 video.addEventListener('waiting', () => { isBuffering = true; });
 video.addEventListener('canplay', () => { isBuffering = false; });
 video.addEventListener('playing', () => { isBuffering = false; });
 
-// Filtrage
+// Filtering
 function onPauseEvent() {
-    if (isBuffering) return;  // Faux pause, ignorer
+    if (isBuffering) return;  // False pause, ignore
     // ...
 }
 ```
 
-#### C. Vérification du readyState
+#### C. ReadyState Check
 
 ```javascript
 function isVideoReady() {
@@ -277,60 +266,58 @@ function isVideoReady() {
 }
 
 function sendStateUpdate() {
-    if (!isVideoReady()) return;  // Pas assez de données
+    if (!isVideoReady()) return;  // Not enough data
     // ...
 }
 ```
 
-#### D. Vérification du seeking
+#### D. Seeking Check
 
 ```javascript
 function onEvent() {
-    if (video.seeking) return;  // En cours de seek
+    if (video.seeking) return;  // Currently seeking
     // ...
 }
 ```
 
-### Protection côté serveur
+### Server-Side Protection
 
-#### Cooldown après commande
+#### Cooldown After Command
 
 ```rust
 const COMMAND_COOLDOWN_MS: u64 = 2000;
 
-// Après broadcast d'un player_event
+// After broadcasting player_event
 room.last_command_ts = now_ms();
 
-// À la réception d'un state_update
+// On receiving state_update
 if now_ms() - room.last_command_ts < COMMAND_COOLDOWN_MS {
-    return;  // Ignorer pendant le cooldown
+    return;  // Ignore during cooldown
 }
 ```
 
-#### Filtrage du jitter de position
+#### Position Jitter Filtering
 
 ```rust
 const POSITION_JITTER_THRESHOLD: f64 = 0.5;
 
 let pos_diff = new_pos - room.state.position;
 
-// Petit saut arrière = bruit HLS
+// Small backward jump = HLS noise
 if pos_diff < -0.5 && pos_diff > -2.0 {
-    return;  // Ignorer
+    return;  // Ignore
 }
 
-// Micro-avance = pas significatif
+// Micro-advance = insignificant
 if pos_diff >= 0.0 && pos_diff < 0.5 {
-    return;  // Ignorer
+    return;  // Ignore
 }
 ```
 
----
+## 6. Ready/Pending Play Mechanism
 
-## 6. Mécanisme Ready/Pending Play
-
-### Problème
-Quand un nouveau participant rejoint, il doit charger le média avant de pouvoir lire. Si l'hôte clique Play avant que tout le monde soit prêt, certains rateront le début.
+### Problem
+When a new participant joins, they must load the media before they can play. If the host clicks Play before everyone is ready, some will miss the start.
 
 ### Solution
 
@@ -339,7 +326,7 @@ Host                     Server                   Client B
   │                         │                         │
   │                         │◄── join_room ───────────┤
   │                         │                         │
-  │                         │  B pas dans ready_clients
+  │                         │  B not in ready_clients │
   │                         │                         │
   ├── player_event: play ──►│                         │
   │                         │                         │
@@ -364,9 +351,9 @@ Host                     Server                   Client B
 video.play() @ T+1.5s       │              video.play() @ T+1.5s
 ```
 
-### Timeout de sécurité
+### Safety Timeout
 
-Si un client ne devient jamais ready (problème réseau, etc.), le play est forcé après 2 secondes:
+If a client never becomes ready (network issue, etc.), play is forced after 2 seconds:
 
 ```rust
 fn schedule_pending_play(room_id, created_at, rooms, clients) {
@@ -374,7 +361,7 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
         sleep(Duration::from_millis(2000)).await;
 
         if room.pending_play.created_at == created_at {
-            // Timeout: force le play
+            // Timeout: force play
             broadcast_scheduled_play(room, clients, position, now + 1500);
             room.pending_play = None;
         }
@@ -382,24 +369,22 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 }
 ```
 
----
+## Threshold and Timing Summary
 
-## Résumé des seuils et timings
-
-| Paramètre | Valeur | Localisation | Description |
-|-----------|--------|--------------|-------------|
-| `SUPPRESS_MS` | 2000ms | Client | Durée du verrou anti-feedback |
-| `SEEK_THRESHOLD` | 2.5s | Client | Différence min pour seek |
-| `STATE_UPDATE_MS` | 1000ms | Client | Intervalle d'envoi state |
-| `SYNC_LEAD_MS` | 120ms | Client | Avance de compensation |
-| `DRIFT_DEADZONE_SEC` | 0.04s | Client | Zone sans correction |
-| `DRIFT_SOFT_MAX_SEC` | 2.5s | Client | Seuil de seek forcé |
-| `PLAYBACK_RATE_MIN` | 0.95 | Client | Vitesse min de rattrapage |
-| `PLAYBACK_RATE_MAX` | 1.05 | Client | Vitesse max de rattrapage |
-| `DRIFT_GAIN` | 0.5 | Client | Gain proportionnel |
-| `PLAY_SCHEDULE_MS` | 1500ms | Server | Délai avant play |
-| `CONTROL_SCHEDULE_MS` | 300ms | Server | Délai avant pause/seek |
-| `MAX_READY_WAIT_MS` | 2000ms | Server | Timeout ready |
-| `MIN_STATE_UPDATE_INTERVAL_MS` | 500ms | Server | Rate limit state |
-| `POSITION_JITTER_THRESHOLD` | 0.5s | Server | Seuil de bruit position |
-| `COMMAND_COOLDOWN_MS` | 2000ms | Server | Cooldown après commande |
+| Parameter | Value | Location | Description |
+|-----------|-------|----------|-------------|
+| `SUPPRESS_MS` | 2000ms | Client | Anti-feedback lock duration |
+| `SEEK_THRESHOLD` | 2.5s | Client | Min difference for seek |
+| `STATE_UPDATE_MS` | 1000ms | Client | State send interval |
+| `SYNC_LEAD_MS` | 120ms | Client | Compensation advance |
+| `DRIFT_DEADZONE_SEC` | 0.04s | Client | No-correction zone |
+| `DRIFT_SOFT_MAX_SEC` | 2.5s | Client | Forced seek threshold |
+| `PLAYBACK_RATE_MIN` | 0.95 | Client | Min catchup speed |
+| `PLAYBACK_RATE_MAX` | 1.05 | Client | Max catchup speed |
+| `DRIFT_GAIN` | 0.5 | Client | Proportional gain |
+| `PLAY_SCHEDULE_MS` | 1500ms | Server | Delay before play |
+| `CONTROL_SCHEDULE_MS` | 300ms | Server | Delay before pause/seek |
+| `MAX_READY_WAIT_MS` | 2000ms | Server | Ready timeout |
+| `MIN_STATE_UPDATE_INTERVAL_MS` | 500ms | Server | State rate limit |
+| `POSITION_JITTER_THRESHOLD` | 0.5s | Server | Position noise threshold |
+| `COMMAND_COOLDOWN_MS` | 2000ms | Server | Cooldown after command |

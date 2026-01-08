@@ -1,242 +1,224 @@
-# Documentation Technique - Client JavaScript
+# JavaScript Client
 
-## Vue d'ensemble
+## Overview
 
-Le client OpenWatchParty est un ensemble de modules JavaScript (IIFE) injectés dans l'interface web de Jellyfin. Ces modules gèrent la synchronisation de lecture entre plusieurs utilisateurs via WebSocket.
+The OpenWatchParty client is a set of JavaScript modules (IIFE pattern) injected into Jellyfin's web interface. These modules handle playback synchronization between multiple users via WebSocket.
 
-## Architecture des modules
+## Module Architecture
 
 ```
-plugin.js          # Loader - charge les modules dans l'ordre
-    ├── osp-state.js      # État global et constantes
-    ├── osp-utils.js      # Fonctions utilitaires
-    ├── osp-ui.js         # Interface utilisateur
-    ├── osp-playback.js   # Gestion de la lecture vidéo
-    ├── osp-ws.js         # Communication WebSocket
-    └── osp-app.js        # Initialisation et boucles principales
+plugin.js              # Loader - loads modules in order
+    ├── owp-state.js      # Global state and constants
+    ├── owp-utils.js      # Utility functions
+    ├── owp-ui.js         # User interface
+    ├── owp-playback.js   # Video playback management
+    ├── owp-ws.js         # WebSocket communication
+    └── owp-app.js        # Initialization and main loops
 ```
 
----
-
-## Module: `osp-state.js`
+## Module: `owp-state.js`
 
 ### Description
-Définit l'état global partagé entre tous les modules et les constantes de configuration.
+Defines global shared state and configuration constants.
 
-### Constantes (`OSP.constants`)
+### Constants (`OSP.constants`)
 
-| Constante | Type | Valeur | Description |
-|-----------|------|--------|-------------|
-| `PANEL_ID` | string | `'osp-panel'` | ID du panneau UI |
-| `BTN_ID` | string | `'osp-osd-btn'` | ID du bouton OSD |
-| `STYLE_ID` | string | `'osp-style'` | ID de la balise style |
-| `HOME_SECTION_ID` | string | `'osp-home-section'` | ID de la section accueil |
-| `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | URL WebSocket du serveur |
-| `SUPPRESS_MS` | number | `2000` | Durée de suppression des événements (ms) |
-| `SEEK_THRESHOLD` | number | `2.5` | Seuil de différence pour déclencher un seek (secondes) |
-| `STATE_UPDATE_MS` | number | `1000` | Intervalle d'envoi des mises à jour d'état (ms) |
-| `SYNC_LEAD_MS` | number | `120` | Avance de synchronisation pour compenser la latence (ms) |
-| `DRIFT_DEADZONE_SEC` | number | `0.04` | Zone morte où aucune correction n'est appliquée (secondes) |
-| `DRIFT_SOFT_MAX_SEC` | number | `2.5` | Seuil au-delà duquel un seek forcé est effectué (secondes) |
-| `PLAYBACK_RATE_MIN` | number | `0.95` | Vitesse minimale de lecture pour rattrapage |
-| `PLAYBACK_RATE_MAX` | number | `1.05` | Vitesse maximale de lecture pour rattrapage |
-| `DRIFT_GAIN` | number | `0.5` | Gain proportionnel pour l'ajustement de vitesse |
+| Constant | Type | Value | Description |
+|----------|------|-------|-------------|
+| `PANEL_ID` | string | `'osp-panel'` | Panel element ID |
+| `BTN_ID` | string | `'osp-osd-btn'` | OSD button ID |
+| `STYLE_ID` | string | `'osp-style'` | Style tag ID |
+| `HOME_SECTION_ID` | string | `'osp-home-section'` | Home section ID |
+| `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | WebSocket server URL |
+| `SUPPRESS_MS` | number | `2000` | Event suppression duration (ms) |
+| `SEEK_THRESHOLD` | number | `2.5` | Difference threshold for seek (seconds) |
+| `STATE_UPDATE_MS` | number | `1000` | State update send interval (ms) |
+| `SYNC_LEAD_MS` | number | `120` | Sync advance to compensate latency (ms) |
+| `DRIFT_DEADZONE_SEC` | number | `0.04` | Dead zone for no correction (seconds) |
+| `DRIFT_SOFT_MAX_SEC` | number | `2.5` | Threshold for forced seek (seconds) |
+| `PLAYBACK_RATE_MIN` | number | `0.95` | Minimum playback speed for catchup |
+| `PLAYBACK_RATE_MAX` | number | `1.05` | Maximum playback speed for catchup |
+| `DRIFT_GAIN` | number | `0.5` | Proportional gain for speed adjustment |
 
-### État (`OSP.state`)
+### State (`OSP.state`)
 
-| Propriété | Type | Description |
-|-----------|------|-------------|
-| `ws` | WebSocket\|null | Instance de connexion WebSocket |
-| `roomId` | string | ID de la room actuelle |
-| `clientId` | string | ID unique du client (attribué par le serveur) |
-| `name` | string | Nom de l'utilisateur |
-| `isHost` | boolean | `true` si ce client est l'hôte de la room |
-| `followHost` | boolean | `true` si le client suit les commandes de l'hôte |
-| `suppressUntil` | number | Timestamp jusqu'auquel les événements sont ignorés |
-| `rooms` | Array | Liste des rooms disponibles |
-| `inRoom` | boolean | `true` si le client est dans une room |
-| `bound` | boolean | `true` si les événements vidéo sont liés |
-| `autoReconnect` | boolean | `true` pour reconnexion automatique |
-| `serverOffsetMs` | number | Décalage horloge client/serveur (ms) |
-| `lastSeekSentAt` | number | Timestamp du dernier seek envoyé |
-| `lastStateSentAt` | number | Timestamp de la dernière mise à jour d'état |
-| `lastSentPosition` | number | Dernière position envoyée (secondes) |
-| `hasTimeSync` | boolean | `true` si la synchronisation d'horloge est établie |
-| `pendingActionTimer` | number\|null | Timer pour actions programmées |
-| `homeRoomCache` | Map | Cache des images de couverture |
-| `lastParticipantCount` | number | Dernier nombre de participants connu |
-| `joiningItemId` | string | ID du média en cours de chargement |
-| `roomName` | string | Nom de la room actuelle |
-| `participantCount` | number | Nombre de participants dans la room |
-| `lastSyncServerTs` | number | Timestamp serveur de la dernière sync |
-| `lastSyncPosition` | number | Position de la dernière sync (secondes) |
-| `lastSyncPlayState` | string | État de lecture de la dernière sync (`'playing'`\|`'paused'`) |
-| `readyRoomId` | string | ID de la room pour laquelle "ready" a été envoyé |
-| `isBuffering` | boolean | `true` si la vidéo est en buffering (HLS) |
-| `wantsToPlay` | boolean | `true` si l'utilisateur veut lire la vidéo |
-| `isSyncing` | boolean | Verrou anti-feedback pendant la synchronisation |
+| Property | Type | Description |
+|----------|------|-------------|
+| `ws` | WebSocket\|null | WebSocket connection instance |
+| `roomId` | string | Current room ID |
+| `clientId` | string | Unique client ID (assigned by server) |
+| `name` | string | User display name |
+| `isHost` | boolean | `true` if this client is the room host |
+| `followHost` | boolean | `true` if client follows host commands |
+| `suppressUntil` | number | Timestamp until which events are ignored |
+| `rooms` | Array | List of available rooms |
+| `inRoom` | boolean | `true` if client is in a room |
+| `bound` | boolean | `true` if video events are bound |
+| `autoReconnect` | boolean | `true` for automatic reconnection |
+| `serverOffsetMs` | number | Client/server clock offset (ms) |
+| `lastSeekSentAt` | number | Timestamp of last seek sent |
+| `lastStateSentAt` | number | Timestamp of last state update sent |
+| `lastSentPosition` | number | Last sent position (seconds) |
+| `hasTimeSync` | boolean | `true` if clock sync is established |
+| `pendingActionTimer` | number\|null | Timer for scheduled actions |
+| `homeRoomCache` | Map | Cover image cache |
+| `lastParticipantCount` | number | Last known participant count |
+| `joiningItemId` | string | Media ID being loaded |
+| `roomName` | string | Current room name |
+| `participantCount` | number | Room participant count |
+| `lastSyncServerTs` | number | Server timestamp of last sync |
+| `lastSyncPosition` | number | Position of last sync (seconds) |
+| `lastSyncPlayState` | string | Play state of last sync |
+| `readyRoomId` | string | Room ID for which "ready" was sent |
+| `isBuffering` | boolean | `true` if video is buffering (HLS) |
+| `wantsToPlay` | boolean | `true` if user wants to play |
+| `isSyncing` | boolean | Anti-feedback lock during sync |
 
----
-
-## Module: `osp-utils.js`
+## Module: `owp-utils.js`
 
 ### Description
-Fonctions utilitaires partagées entre les modules.
+Shared utility functions.
 
-### Fonctions
+### Functions
 
 #### `nowMs() -> number`
-Retourne le timestamp actuel en millisecondes.
+Returns current timestamp in milliseconds.
 
 #### `shouldSend() -> boolean`
-Retourne `true` si le client peut envoyer des événements (hors période de suppression).
+Returns `true` if client can send events (outside suppression period).
 
 #### `suppress(ms?: number) -> void`
-Active la suppression des événements pour `ms` millisecondes (défaut: `SUPPRESS_MS`).
+Activates event suppression for `ms` milliseconds (default: `SUPPRESS_MS`).
 
 #### `getVideo() -> HTMLVideoElement|null`
-Retourne l'élément `<video>` de la page ou `null`.
+Returns the page's `<video>` element or `null`.
 
 #### `isVideoReady() -> boolean`
-Retourne `true` si la vidéo a un `readyState >= 3` (peut jouer sans interruption).
-- **Usage**: Vérifie que le HLS a suffisamment de buffer avant d'envoyer des événements.
+Returns `true` if video has `readyState >= 3` (can play without interruption).
 
 #### `isBuffering() -> boolean`
-Retourne `true` si la vidéo est en cours de buffering.
-- **Logique**: `readyState < 3` OU (`networkState === 2` ET `readyState < 4`)
+Returns `true` if video is currently buffering.
+- **Logic**: `readyState < 3` OR (`networkState === 2` AND `readyState < 4`)
 
 #### `isSeeking() -> boolean`
-Retourne `true` si la vidéo est en cours de seek (`video.seeking === true`).
+Returns `true` if video is seeking (`video.seeking === true`).
 
 #### `startSyncing() -> void`
-Active le verrou `isSyncing` pour `SUPPRESS_MS` millisecondes.
-- **Usage**: Appelé lors de la réception d'une commande serveur pour éviter les boucles de feedback.
-- **Effet**: Empêche l'envoi de `player_event` et `state_update` pendant 2 secondes.
+Activates `isSyncing` lock for `SUPPRESS_MS` milliseconds.
+- **Usage**: Called when receiving server commands to prevent feedback loops.
 
 #### `getPlaybackManager() -> PlaybackManager|null`
-Retourne le gestionnaire de lecture Jellyfin.
-- **Recherche**: `window.playbackManager`, `window.PlaybackManager`, `window.app?.playbackManager`
+Returns the Jellyfin playback manager.
 
 #### `getCurrentItem() -> object|null`
-Retourne l'élément média actuellement en lecture.
+Returns the currently playing media item.
 
 #### `getCurrentItemId() -> string|null`
-Retourne l'ID de l'élément média actuel.
-- **Fallback**: Extrait l'ID depuis le hash de l'URL si non disponible via l'API.
+Returns the current media item ID.
 
 #### `getItemImageUrl(itemId: string) -> string`
-Retourne l'URL de l'image de couverture d'un élément.
+Returns the cover image URL for an item.
 
 #### `isHomeView() -> boolean`
-Retourne `true` si l'utilisateur est sur la page d'accueil.
+Returns `true` if user is on the home page.
 
 #### `getServerNow() -> number`
-Retourne le timestamp actuel ajusté à l'horloge du serveur.
+Returns current timestamp adjusted to server clock.
 ```javascript
 return nowMs() + (state.serverOffsetMs || 0);
 ```
 
 #### `adjustedPosition(position: number, serverTs: number) -> number`
-Calcule la position ajustée en tenant compte du temps écoulé et de la latence.
+Calculates adjusted position accounting for elapsed time and latency.
 ```javascript
 const elapsed = Math.max(0, serverNow - serverTs) + SYNC_LEAD_MS;
 return position + (elapsed / 1000);
 ```
-- **Usage**: Compense le délai de transmission du message.
 
 #### `scheduleAt(serverTs: number, fn: Function) -> void`
-Programme l'exécution d'une fonction à un timestamp serveur donné.
-- **Usage**: Synchronise les actions play/pause/seek entre clients.
+Schedules function execution at a given server timestamp.
 
----
-
-## Module: `osp-playback.js`
+## Module: `owp-playback.js`
 
 ### Description
-Gère l'interaction avec l'élément vidéo HTML5 et la synchronisation de lecture.
+Manages HTML5 video element interaction and playback synchronization.
 
-### Fonctions
+### Functions
 
 #### `playItem(item: object) -> boolean`
-Démarre la lecture d'un élément média via l'API Jellyfin.
-- **Tentatives multiples**: Essaie différentes signatures de l'API Jellyfin.
-- **Retour**: `true` si la lecture a démarré, `false` sinon.
+Starts playback of a media item via Jellyfin API.
 
 #### `ensurePlayback(itemId: string, attempt?: number) -> void`
-S'assure que le média spécifié est en lecture.
-- **Usage**: Appelé quand un participant rejoint une room pour charger le même média que l'hôte.
-- **Retry**: Jusqu'à 5 tentatives espacées de 500ms.
+Ensures the specified media is playing.
+- **Usage**: Called when participant joins to load the same media as host.
+- **Retry**: Up to 5 attempts, 500ms apart.
 
 #### `notifyReady() -> void`
-Envoie le message `ready` au serveur pour indiquer que le client est prêt à lire.
-- **Condition**: Une seule notification par room.
+Sends `ready` message to server indicating client is ready to play.
 
 #### `watchReady() -> void`
-Attend que la vidéo soit prête (`readyState >= 2`) puis appelle `notifyReady()`.
-- **Événements écoutés**: `canplay`, `loadeddata`
+Waits for video to be ready (`readyState >= 2`) then calls `notifyReady()`.
 
 #### `bindVideo() -> void`
-Lie les événements de la vidéo aux handlers de synchronisation.
+Binds video events to synchronization handlers.
 
-**Événements écoutés:**
-- `waiting`: Marque `isBuffering = true`
-- `canplay`: Marque `isBuffering = false`
-- `playing`: Marque `isBuffering = false`
-- `play`: Envoie `player_event` si hôte
-- `pause`: Envoie `player_event` si hôte (ignoré si buffering)
-- `seeked`: Envoie `player_event` si hôte
+**Events listened:**
+- `waiting`: Sets `isBuffering = true`
+- `canplay`: Sets `isBuffering = false`
+- `playing`: Sets `isBuffering = false`
+- `play`: Sends `player_event` if host
+- `pause`: Sends `player_event` if host (ignored if buffering)
+- `seeked`: Sends `player_event` if host
 
-**Logique d'envoi (`sendStateUpdate`):**
+**Send logic (`sendStateUpdate`):**
 ```
-Si NON hôte → ignorer
-Si isSyncing → ignorer (verrou anti-feedback)
-Si isSeeking → ignorer (HLS ment pendant seek)
-Si isBuffering OU readyState < 3 → ignorer
-Si < 1000ms depuis dernier envoi → ignorer
-Sinon → envoyer state_update
+If NOT host → ignore
+If isSyncing → ignore (anti-feedback lock)
+If isSeeking → ignore (HLS lies during seek)
+If isBuffering OR readyState < 3 → ignore
+If < 1000ms since last send → ignore
+Otherwise → send state_update
 ```
 
-**Logique des événements (`onEvent`):**
+**Event logic (`onEvent`):**
 ```
-Si NON hôte → ignorer
-Si isSyncing → ignorer
-Si readyState < 3 → ignorer
-Si pause ET (isBuffering OU isSeeking) → ignorer (pas user-initiated)
-Si play ET isSeeking → ignorer
-Si seek ET < 500ms depuis dernier OU diff < SEEK_THRESHOLD → ignorer
-Sinon → envoyer player_event
+If NOT host → ignore
+If isSyncing → ignore
+If readyState < 3 → ignore
+If pause AND (isBuffering OR isSeeking) → ignore (not user-initiated)
+If play AND isSeeking → ignore
+If seek AND < 500ms since last OR diff < SEEK_THRESHOLD → ignore
+Otherwise → send player_event
 ```
 
 #### `syncLoop() -> void`
-Boucle de synchronisation appelée toutes les secondes (non-hôtes uniquement).
+Synchronization loop called every second (non-hosts only).
 
-**Algorithme de correction de drift:**
+**Drift correction algorithm:**
 ```
-1. Si hôte ou pas dans room → reset playbackRate à 1
-2. Si pas de sync ou état !== 'playing' → reset playbackRate à 1
-3. Si isBuffering ou readyState < 3 → ne rien faire (laisser charger)
-4. Si vidéo en pause → reset playbackRate à 1
-5. Calculer position attendue:
+1. If host or not in room → reset playbackRate to 1
+2. If no sync or state !== 'playing' → reset playbackRate to 1
+3. If isBuffering or readyState < 3 → do nothing (let it load)
+4. If video paused → reset playbackRate to 1
+5. Calculate expected position:
    expected = lastSyncPosition + (serverNow - lastSyncServerTs) / 1000
-6. Calculer drift:
+6. Calculate drift:
    drift = expected - video.currentTime
-7. Si |drift| < DRIFT_DEADZONE (0.04s) → playbackRate = 1
-8. Si |drift| >= DRIFT_SOFT_MAX (2.5s) → seek forcé à expected
-9. Sinon → ajuster playbackRate:
+7. If |drift| < DRIFT_DEADZONE (0.04s) → playbackRate = 1
+8. If |drift| >= DRIFT_SOFT_MAX (2.5s) → forced seek to expected
+9. Otherwise → adjust playbackRate:
    rate = clamp(1 + drift * DRIFT_GAIN, 0.95, 1.05)
 ```
 
----
-
-## Module: `osp-ws.js`
+## Module: `owp-ws.js`
 
 ### Description
-Gère la communication WebSocket avec le serveur de session.
+Manages WebSocket communication with the session server.
 
-### Fonctions
+### Functions
 
 #### `send(type: string, payload?: object, roomOverride?: string) -> void`
-Envoie un message au serveur WebSocket.
+Sends a message to the WebSocket server.
 ```javascript
 {
   type: type,
@@ -248,126 +230,116 @@ Envoie un message au serveur WebSocket.
 ```
 
 #### `createRoom() -> void`
-Crée une nouvelle room avec le nom saisi dans l'input.
-- **Payload**: `{ name, start_pos, media_id }`
+Creates a new room with the name from the input field.
 
 #### `joinRoom(id: string) -> void`
-Rejoint une room existante.
+Joins an existing room.
 
 #### `leaveRoom() -> void`
-Quitte la room actuelle.
+Leaves the current room.
 
 #### `connect() -> void`
-Établit la connexion WebSocket.
-- **Reconnexion auto**: Si `autoReconnect === true`, reconnecte après 3 secondes.
+Establishes WebSocket connection.
+- **Auto-reconnect**: If `autoReconnect === true`, reconnects after 3 seconds.
 
-### Handler de messages (`handleMessage`)
+### Message Handler (`handleMessage`)
 
 #### `room_list`
-Met à jour la liste des rooms disponibles et rafraîchit l'UI.
+Updates available rooms list and refreshes UI.
 
 #### `client_hello`
-Reçoit l'ID client attribué par le serveur.
+Receives client ID assigned by server.
 
 #### `room_state`
-Réponse à `create_room` ou `join_room`:
-1. Met à jour l'état local (roomId, roomName, isHost, etc.)
-2. Synchronise l'horloge si première connexion
-3. Applique l'état de lecture initial (seek + play/pause)
-4. Lance le chargement du média si non-hôte
+Response to `create_room` or `join_room`:
+1. Updates local state (roomId, roomName, isHost, etc.)
+2. Synchronizes clock on first connection
+3. Applies initial playback state (seek + play/pause)
+4. Loads media if non-host
 
 #### `participants_update`
-Met à jour le compteur de participants et affiche un toast si nouveau participant.
+Updates participant counter and shows toast for new participant.
 
 #### `room_closed`
-Réinitialise l'état quand la room est fermée (hôte déconnecté).
+Resets state when room is closed (host disconnected).
 
 #### `player_event`
-Commande de lecture reçue de l'hôte:
-1. Active `startSyncing()` (verrou 2s)
-2. Seek si différence > SEEK_THRESHOLD
-3. Met à jour l'état de sync local
-4. Actions selon `action`:
-   - `play`: Programme le play à `target_server_ts` ou immédiat avec compensation
-   - `pause`: Programme le pause
-   - `seek`: Programme le seek
+Playback command received from host:
+1. Activates `startSyncing()` (2s lock)
+2. Seeks if difference > SEEK_THRESHOLD
+3. Updates local sync state
+4. Actions based on `action`:
+   - `play`: Schedule play at `target_server_ts` or immediate with compensation
+   - `pause`: Schedule pause
+   - `seek`: Schedule seek
 
 #### `state_update`
-Mise à jour périodique de l'hôte:
-1. Seek si différence > SEEK_THRESHOLD
-2. Synchronise l'état play/pause
-3. Met à jour les timestamps de sync
+Periodic update from host:
+1. Seek if difference > SEEK_THRESHOLD
+2. Sync play/pause state
+3. Update sync timestamps
 
 #### `pong`
-Réponse au ping pour calcul RTT:
+Response to ping for RTT calculation:
 ```javascript
 rtt = now - payload.client_ts;
-// Ajustement EMA de l'offset serveur
+// EMA adjustment of server offset
 sampleOffset = server_ts + (rtt / 2) - now;
 serverOffsetMs = hasTimeSync ? (0.6 * old + 0.4 * sample) : sample;
 ```
 
----
-
-## Module: `osp-ui.js`
+## Module: `owp-ui.js`
 
 ### Description
-Gère l'interface utilisateur du plugin.
+Manages the plugin user interface.
 
-### Fonctions
+### Functions
 
 #### `injectStyles() -> void`
-Injecte les styles CSS du panneau dans le `<head>`.
+Injects CSS styles into `<head>`.
 
 #### `updateStatusIndicator() -> void`
-Met à jour l'indicateur de connexion (Online/Offline).
+Updates connection status indicator (Online/Offline).
 
 #### `updateRoomListUI() -> void`
-Met à jour la liste des rooms dans le panneau.
+Updates room list in the panel.
 
 #### `renderHomeWatchParties() -> void`
-Affiche les watch parties sur la page d'accueil Jellyfin.
-- **Cartes**: Affiche la couverture du média, le nom de la room et le nombre de participants.
-- **Action**: Clic rejoint la room et charge le média.
+Displays watch parties on Jellyfin homepage.
 
 #### `render() -> void`
-Rendu principal du panneau:
-- **Lobby**: Liste des rooms + formulaire de création
-- **In-room**: Nom de la room, participants, RTT, bouton quitter
+Main panel render:
+- **Lobby**: Room list + creation form
+- **In-room**: Room name, participants, RTT, leave button
 
 #### `injectOsdButton() -> void`
-Injecte le bouton "Watch Party" dans les contrôles OSD du lecteur vidéo.
+Injects "Watch Party" button into video player OSD controls.
 
 #### `showToast(message: string) -> void`
-Affiche une notification toast.
-- **Fallback**: Utilise `Dashboard.showToast()` si disponible, sinon crée un élément personnalisé.
+Shows a toast notification.
 
----
-
-## Module: `osp-app.js`
+## Module: `owp-app.js`
 
 ### Description
-Point d'entrée principal et boucles d'initialisation.
+Main entry point and initialization loops.
 
-### Fonction `init()`
+### Function `init()`
 
-1. Log de chargement
-2. Injection des styles CSS
-3. Création du panneau UI (caché par défaut)
-4. Connexion WebSocket
-5. Démarrage des intervalles:
+1. Log loading message
+2. Inject CSS styles
+3. Create UI panel (hidden by default)
+4. Connect WebSocket
+5. Start intervals:
 
-| Intervalle | Fréquence | Action |
-|------------|-----------|--------|
-| UI injection | 1000ms | Injecte le bouton OSD si absent |
-| Video binding | 1000ms | Lie les événements vidéo si vidéo présente |
-| Ping | 3000ms | Envoie ping pour mesure RTT |
-| Home render | 2000ms | Rafraîchit les watch parties sur l'accueil |
-| Sync loop | 1000ms | Exécute la boucle de synchronisation |
+| Interval | Frequency | Action |
+|----------|-----------|--------|
+| UI injection | 1000ms | Inject OSD button if missing |
+| Video binding | 1000ms | Bind video events if video present |
+| Ping | 3000ms | Send ping for RTT measurement |
+| Home render | 2000ms | Refresh watch parties on home page |
+| Sync loop | 1000ms | Execute synchronization loop |
 
----
-
-## Diagramme de flux: Synchronisation
+## Synchronization Flow Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

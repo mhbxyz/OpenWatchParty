@@ -14,8 +14,8 @@ OpenWatchParty is an open-source Jellyfin plugin that brings real-time watch-par
 
 ### Prerequisites
 
-* Jellyfin Server 10.11.x
-* Docker & Docker Compose (for development)
+* Jellyfin Server 10.8.x or 10.9.x
+* Docker & Docker Compose (recommended)
 
 ### Quick Launch (Dev Mode)
 
@@ -30,23 +30,37 @@ OpenWatchParty is an open-source Jellyfin plugin that brings real-time watch-par
 
 ## Documentation
 
-Comprehensive documentation is available in the `docs/` directory:
+Comprehensive documentation is available in the [`docs/`](docs/) directory:
 
-* [User Guide](docs/user-guide.md): Installation and usage instructions.
-* [Architecture](docs/architecture.md): Technical overview of how the plugin works.
-* [Development Guide](docs/development.md): How to contribute and build from source.
-* [Protocol](docs/protocol.md): Detailed WebSocket message specifications.
+### Getting Started
+* [Overview](docs/product/overview.md) - What is OpenWatchParty?
+* [Features](docs/product/features.md) - Full feature list
+* [User Guide](docs/product/user-guide.md) - How to use watch parties
+* [FAQ](docs/product/faq.md) - Frequently asked questions
+
+### Operations
+* [Installation](docs/operations/installation.md) - Step-by-step installation
+* [Configuration](docs/operations/configuration.md) - Configuration options
+* [Deployment](docs/operations/deployment.md) - Production deployment
+* [Security](docs/operations/security.md) - Security hardening
+* [Troubleshooting](docs/operations/troubleshooting.md) - Common issues
+
+### Technical
+* [Architecture](docs/technical/architecture.md) - System design
+* [Protocol](docs/technical/protocol.md) - WebSocket message specification
+* [Sync Algorithms](docs/technical/sync.md) - How synchronization works
+
+### Development
+* [Development Setup](docs/development/setup.md) - Set up dev environment
+* [Contributing](docs/development/contributing.md) - How to contribute
 
 ## Project Structure
 
 * `plugins/jellyfin/OpenWatchParty`: Core C# plugin source code.
 * `clients/web-plugin`: JavaScript client-side logic.
+* `session-server-rust`: Rust WebSocket session server.
 * `infra/docker`: Development stack configuration.
-* `scripts/`: Helper scripts for builds and environment management.
-
-## Roadmap
-
-Check our [Roadmap](docs/roadmap.md) for planned features like integrated chat, playback rate smoothing, and more.
+* `docs/`: Comprehensive documentation.
 
 ## License
 
