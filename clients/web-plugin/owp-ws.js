@@ -304,10 +304,10 @@
         if (msg.payload) {
           if (msg.payload.action === 'play') {
             state.lastSyncPlayState = 'playing';
-            // Update sync state directly from message (no extra adjustedPosition)
+            // Use HOST's position/timestamp as sync baseline
+            // syncLoop will handle catch-up via playback rate adjustment
             state.lastSyncServerTs = msg.server_ts;
             state.lastSyncPosition = msg.payload.position;
-            // Play immediately - syncLoop handles drift via playback rate adjustment
             video.play().catch(() => {});
 
           } else if (msg.payload.action === 'pause') {
@@ -318,20 +318,30 @@
           } else if (msg.payload.action === 'seek') {
             // Seek position was handled above, mark as paused until play event
             state.lastSyncPlayState = 'paused';
+
+          } else if (msg.payload.action === 'buffering') {
+            // Host is buffering - pause and wait for seek/play event
+            state.lastSyncPlayState = 'paused';
+            video.pause();
           }
         }
         break;
         
       case 'state_update':
         if (state.isHost || !video) return;
-        // Always update sync state (so syncLoop has accurate data)
+        // Always update play state
+        if (msg.payload) {
+          state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
+        }
+        // Don't update position sync state while buffering - this prevents the seek loop
+        // where syncLoop sees huge drift after buffering because state_update kept
+        // advancing lastSyncPosition while video was stuck loading
+        if (state.isBuffering || !utils.isVideoReady()) return;
+        // Update position sync state only when video is ready
         if (msg.payload) {
           state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
           state.lastSyncPosition = msg.payload.position || state.lastSyncPosition;
-          state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
         }
-        // Don't adjust play state while buffering
-        if (state.isBuffering || !utils.isVideoReady()) return;
         // Only handle play/pause state - let syncLoop handle position drift
         // (syncLoop uses playback rate adjustment for smooth catch-up)
         if (msg.payload.play_state === 'playing' && video.paused) {

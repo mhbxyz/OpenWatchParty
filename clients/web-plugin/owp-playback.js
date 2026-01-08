@@ -243,6 +243,10 @@
       waiting: () => {
         state.isBuffering = true;
         utils.log('VIDEO', { event: 'buffering', pos: video.currentTime, readyState: video.readyState });
+        // Host: notify clients to pause while we buffer
+        if (state.isHost && OWP.actions && OWP.actions.send) {
+          OWP.actions.send('player_event', { action: 'buffering', position: video.currentTime });
+        }
       },
       canplay: () => {
         const wasBuffering = state.isBuffering;
@@ -252,7 +256,13 @@
       playing: () => {
         const wasBuffering = state.isBuffering;
         state.isBuffering = false;
-        if (wasBuffering) utils.log('VIDEO', { event: 'playing', pos: video.currentTime });
+        if (wasBuffering) {
+          utils.log('VIDEO', { event: 'playing', pos: video.currentTime });
+          // Host: notify clients to resume after buffering
+          if (state.isHost && OWP.actions && OWP.actions.send) {
+            OWP.actions.send('player_event', { action: 'play', position: video.currentTime });
+          }
+        }
       },
       play: () => onEvent('play'),
       pause: () => onEvent('pause'),
