@@ -98,6 +98,13 @@
       wsUrl = `${DEFAULT_WS_URL}?token=${encodeURIComponent(token)}`;
     }
 
+    // Security warning for non-secure WebSocket
+    if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {
+      console.warn('[OpenSyncParty] WARNING: Using insecure WebSocket (ws://) on HTTPS page. Data may be intercepted.');
+    } else if (wsUrl.startsWith('ws://')) {
+      console.warn('[OpenSyncParty] Using insecure WebSocket (ws://). Consider using wss:// in production.');
+    }
+
     state.ws = new WebSocket(wsUrl);
     state.ws.onopen = () => { ui.render(); };
     state.ws.onclose = () => { ui.render(); if (state.autoReconnect) setTimeout(connect, 3000); };

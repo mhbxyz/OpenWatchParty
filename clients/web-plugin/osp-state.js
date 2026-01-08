@@ -5,6 +5,42 @@
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.hostname;
 
+  // LRU Cache implementation for image URLs
+  class LRUCache {
+    constructor(maxSize = 50) {
+      this.maxSize = maxSize;
+      this.cache = new Map();
+    }
+
+    get(key) {
+      if (!this.cache.has(key)) return undefined;
+      // Move to end (most recently used)
+      const value = this.cache.get(key);
+      this.cache.delete(key);
+      this.cache.set(key, value);
+      return value;
+    }
+
+    set(key, value) {
+      if (this.cache.has(key)) {
+        this.cache.delete(key);
+      } else if (this.cache.size >= this.maxSize) {
+        // Remove oldest (first) entry
+        const firstKey = this.cache.keys().next().value;
+        this.cache.delete(firstKey);
+      }
+      this.cache.set(key, value);
+    }
+
+    has(key) {
+      return this.cache.has(key);
+    }
+
+    clear() {
+      this.cache.clear();
+    }
+  }
+
   OSP.constants = {
     PANEL_ID: 'osp-panel',
     BTN_ID: 'osp-osd-btn',
@@ -47,7 +83,7 @@
     lastSentPosition: 0,
     hasTimeSync: false,
     pendingActionTimer: null,
-    homeRoomCache: new Map(),
+    homeRoomCache: new LRUCache(50),
     lastParticipantCount: 0,
     joiningItemId: '',
     roomName: '',

@@ -70,6 +70,51 @@
     });
   };
 
+  const createRoomCard = (room) => {
+    let imageUrl = '';
+    if (room.media_id) {
+      imageUrl = state.homeRoomCache.get(room.media_id) || utils.getItemImageUrl(room.media_id);
+      if (imageUrl) state.homeRoomCache.set(room.media_id, imageUrl);
+    }
+
+    const card = document.createElement('div');
+    card.className = 'osp-room-card';
+    card.dataset.roomId = room.id;
+    card.dataset.mediaId = room.media_id || '';
+    card.dataset.count = room.count;
+    card.style.cssText = 'display:flex;gap:12px;cursor:pointer;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,0.05);';
+
+    const cover = document.createElement('div');
+    cover.style.cssText = 'width:120px;height:180px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;';
+    if (imageUrl) {
+      cover.style.background = `#111 url('${imageUrl}') center/cover no-repeat`;
+    } else {
+      cover.innerHTML = '<span style="color:#666;font-size:12px;">No Cover</span>';
+    }
+
+    const info = document.createElement('div');
+    info.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
+    info.innerHTML = `
+      <div class="osp-card-name" style="font-weight:600;font-size:16px;">${utils.escapeHtml(room.name)}</div>
+      <div class="osp-card-count" style="font-size:12px;color:#aaa;">${room.count} participant${room.count > 1 ? 's' : ''}</div>
+      <div style="font-size:12px;color:#69f0ae;">Join</div>
+    `;
+
+    card.appendChild(cover);
+    card.appendChild(info);
+
+    card.addEventListener('click', () => {
+      if (OSP.actions && OSP.actions.joinRoom) {
+        OSP.actions.joinRoom(room.id);
+        if (room.media_id && OSP.playback && OSP.playback.ensurePlayback) {
+          OSP.playback.ensurePlayback(room.media_id);
+        }
+      }
+    });
+
+    return card;
+  };
+
   const renderHomeWatchParties = () => {
     if (!utils.isHomeView()) return;
     const container = document.querySelector('.homeSectionsContainer') || document.querySelector('#indexPage');
@@ -83,50 +128,56 @@
       container.prepend(section);
     }
 
+    // No rooms - clear section
     if (!state.rooms || state.rooms.length === 0) {
-      section.innerHTML = '';
+      if (section.innerHTML !== '') section.innerHTML = '';
       return;
     }
 
-    const cards = state.rooms.map((room) => {
-      let imageUrl = '';
-      if (room.media_id) {
-        imageUrl = state.homeRoomCache.get(room.media_id) || utils.getItemImageUrl(room.media_id);
-        if (imageUrl) state.homeRoomCache.set(room.media_id, imageUrl);
-      }
-      const cover = imageUrl
-        ? `<div style="width:120px;height:180px;border-radius:8px;background:#111 url('${imageUrl}') center/cover no-repeat;"></div>`
-        : `<div style="width:120px;height:180px;border-radius:8px;background:#111;display:flex;align-items:center;justify-content:center;color:#666;font-size:12px;">No Cover</div>`;
-      return `
-        <div class="osp-room-card" data-room-id="${utils.escapeHtml(room.id)}" data-media-id="${utils.escapeHtml(room.media_id || '')}" style="display:flex;gap:12px;cursor:pointer;align-items:center;padding:10px;border-radius:10px;background:rgba(255,255,255,0.05);">
-          ${cover}
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="font-weight:600;font-size:16px;">${utils.escapeHtml(room.name)}</div>
-            <div style="font-size:12px;color:#aaa;">${room.count} participant${room.count > 1 ? 's' : ''}</div>
-            <div style="font-size:12px;color:#69f0ae;">Join</div>
-          </div>
+    // Ensure container structure exists
+    let cardsContainer = section.querySelector('.osp-cards-container');
+    if (!cardsContainer) {
+      section.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-weight:700;font-size:18px;">Watch Parties</div>
         </div>
+        <div class="osp-cards-container" style="display:flex;gap:16px;flex-wrap:wrap;"></div>
       `;
-    }).join('');
+      cardsContainer = section.querySelector('.osp-cards-container');
+    }
 
-    section.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <div style="font-weight:700;font-size:18px;">Watch Parties</div>
-      </div>
-      <div style="display:flex;gap:16px;flex-wrap:wrap;">${cards}</div>
-    `;
+    // Build map of existing cards
+    const existingCards = new Map();
+    cardsContainer.querySelectorAll('.osp-room-card').forEach(card => {
+      existingCards.set(card.dataset.roomId, card);
+    });
 
-    section.querySelectorAll('.osp-room-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const roomId = card.getAttribute('data-room-id');
-        const mediaId = card.getAttribute('data-media-id');
-        if (roomId && OSP.actions && OSP.actions.joinRoom) {
-          OSP.actions.joinRoom(roomId);
-          if (OSP.playback && OSP.playback.ensurePlayback) {
-            OSP.playback.ensurePlayback(mediaId);
+    // Track which rooms still exist
+    const currentRoomIds = new Set(state.rooms.map(r => r.id));
+
+    // Remove cards for rooms that no longer exist
+    existingCards.forEach((card, roomId) => {
+      if (!currentRoomIds.has(roomId)) {
+        card.remove();
+      }
+    });
+
+    // Update or create cards
+    state.rooms.forEach(room => {
+      const existing = existingCards.get(room.id);
+      if (existing) {
+        // Update count if changed
+        if (existing.dataset.count !== String(room.count)) {
+          existing.dataset.count = room.count;
+          const countEl = existing.querySelector('.osp-card-count');
+          if (countEl) {
+            countEl.textContent = `${room.count} participant${room.count > 1 ? 's' : ''}`;
           }
         }
-      });
+      } else {
+        // Create new card
+        cardsContainer.appendChild(createRoomCard(room));
+      }
     });
   };
 

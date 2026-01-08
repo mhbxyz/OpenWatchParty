@@ -35,6 +35,11 @@ fn is_valid_play_state(state: &str) -> bool {
     state == "playing" || state == "paused"
 }
 
+fn is_valid_media_id(id: &str) -> bool {
+    // Jellyfin item IDs are 32 hex characters
+    id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit())
+}
+
 pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms, claims: Claims) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
     let (client_sender, client_rcv) = mpsc::unbounded_channel();
@@ -158,10 +163,23 @@ async fn check_rate_limit(client_id: &str, clients: &Clients) -> bool {
     false
 }
 
+async fn send_error(client_id: &str, clients: &Clients, message: &str) {
+    let locked_clients = clients.read().await;
+    send_to_client(client_id, &locked_clients, &WsMessage {
+        msg_type: "error".to_string(),
+        room: None,
+        client: Some(client_id.to_string()),
+        payload: Some(serde_json::json!({ "message": message })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    });
+}
+
 async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, rooms: &crate::types::Rooms) {
     // Rate limiting check
     if check_rate_limit(client_id, clients).await {
         warn!("Rate limited client: {}", client_id);
+        send_error(client_id, clients, "Rate limit exceeded").await;
         return;
     }
 
@@ -171,6 +189,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
         Ok(v) => v,
         Err(e) => {
             warn!("JSON parse error from {}: {}", client_id, e);
+            send_error(client_id, clients, "Invalid message format").await;
             return;
         }
     };
@@ -208,7 +227,10 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 let room_id = uuid::Uuid::new_v4().to_string();
                 let raw_start_pos = payload.get("start_pos").and_then(|v| v.as_f64()).unwrap_or(0.0);
                 let start_pos = if is_valid_position(raw_start_pos) { raw_start_pos } else { 0.0 };
-                let media_id = payload.get("media_id").and_then(|v| v.as_str()).map(|v| v.to_string());
+                let media_id = payload.get("media_id")
+                    .and_then(|v| v.as_str())
+                    .filter(|id| is_valid_media_id(id))
+                    .map(|v| v.to_string());
 
                 info!("Creating room '{}' ({}) for {}", room_name, room_id, client_id);
 
