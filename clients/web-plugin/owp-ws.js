@@ -45,20 +45,25 @@
     try {
       // Get the Jellyfin API client
       const apiClient = window.ApiClient;
-      if (!apiClient) {
+      if (!apiClient || typeof apiClient.accessToken !== 'function') {
         console.warn('[OpenWatchParty] ApiClient not available, auth disabled');
         return null;
       }
 
+      const accessToken = apiClient.accessToken();
+      if (!accessToken) {
+        console.warn('[OpenWatchParty] No access token available, user may not be logged in');
+        return null;
+      }
+
       // Build the token URL
-      const serverAddress = apiClient.serverAddress ? apiClient.serverAddress() : '';
+      const serverAddress = typeof apiClient.serverAddress === 'function' ? apiClient.serverAddress() : '';
       const tokenUrl = `${serverAddress}/OpenWatchParty/Token`;
 
       // Fetch with Jellyfin auth headers
       const response = await fetch(tokenUrl, {
         headers: {
-          'X-Emby-Token': apiClient.accessToken(),
-          'X-Emby-Authorization': apiClient._authorizationHeader || ''
+          'X-Emby-Token': accessToken
         }
       });
 
@@ -97,23 +102,36 @@
 
     // Connect without token in URL (security: avoid token in logs/history)
     const wsUrl = DEFAULT_WS_URL;
+    console.log('[OpenWatchParty] Connecting to WebSocket:', wsUrl);
 
     // Security warning for non-secure WebSocket
     if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {
       console.warn('[OpenWatchParty] WARNING: Using insecure WebSocket (ws://) on HTTPS page. Data may be intercepted.');
-    } else if (wsUrl.startsWith('ws://')) {
-      console.warn('[OpenWatchParty] Using insecure WebSocket (ws://). Consider using wss:// in production.');
     }
 
-    state.ws = new WebSocket(wsUrl);
+    try {
+      state.ws = new WebSocket(wsUrl);
+    } catch (err) {
+      console.error('[OpenWatchParty] Failed to create WebSocket:', err);
+      return;
+    }
+
     state.ws.onopen = () => {
+      console.log('[OpenWatchParty] WebSocket connected');
       // Send auth message after connection (secure: token not in URL)
       if (token) {
         state.ws.send(JSON.stringify({ type: 'auth', payload: { token } }));
       }
       ui.render();
     };
-    state.ws.onclose = () => { ui.render(); if (state.autoReconnect) setTimeout(connect, 3000); };
+    state.ws.onerror = (err) => {
+      console.error('[OpenWatchParty] WebSocket error:', err);
+    };
+    state.ws.onclose = (e) => {
+      console.log('[OpenWatchParty] WebSocket closed:', e.code, e.reason);
+      ui.render();
+      if (state.autoReconnect) setTimeout(connect, 3000);
+    };
     state.ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);

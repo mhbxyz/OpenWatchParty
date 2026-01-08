@@ -37,7 +37,12 @@
       panel.addEventListener('keyup', stopPropagation);
       panel.addEventListener('keypress', stopPropagation);
     }
-    if (OWP.actions && OWP.actions.connect) OWP.actions.connect();
+    if (OWP.actions && OWP.actions.connect) {
+      console.log('[OpenWatchParty] Initiating WebSocket connection...');
+      OWP.actions.connect();
+    } else {
+      console.error('[OpenWatchParty] OWP.actions.connect not available!');
+    }
 
     // UI check interval - inject OSD button and bind video (only when tab is visible, fixes M-P04)
     state.intervals.ui = setInterval(() => {
