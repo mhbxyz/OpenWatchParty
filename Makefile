@@ -26,6 +26,10 @@ DOCS_DIR        := docs
 JELLYFIN_CTR    := jellyfin-dev
 SERVER_CTR      := openwatchparty-session-server
 
+# User mapping for Docker (avoid root-owned files)
+export UID      := $(shell id -u)
+export GID      := $(shell id -g)
+
 # Colors (disable with NO_COLOR=1)
 ifndef NO_COLOR
   GREEN  := \033[0;32m
@@ -94,6 +98,7 @@ help: ## Show this help
 	@echo "  $(GREEN)clean-docker$(RESET)       Remove Docker images and volumes"
 	@echo "  $(GREEN)reset$(RESET)              Full reset (containers + artifacts)"
 	@echo "  $(GREEN)prune$(RESET)              Remove unused Docker resources"
+	@echo "  $(GREEN)fix-permissions$(RESET)    Fix ownership of Docker-created files"
 	@echo ""
 	@echo "$(BOLD)$(CYAN)Utilities:$(RESET)"
 	@echo "  $(GREEN)info$(RESET)               Show project information"
@@ -194,6 +199,8 @@ sync-refs: ## Sync Jellyfin DLL references from container
 	@echo "$(GREEN)✓ DLLs synced$(RESET)"
 
 start-deps: ## Start dependencies needed for build
+	@# Create directories BEFORE Docker to ensure correct ownership
+	@mkdir -p $(PLUGIN_DIR)/dist $(PLUGIN_DIR)/obj $(PLUGIN_DIR)/bin
 	@if ! docker ps --format '{{.Names}}' | grep -q $(JELLYFIN_CTR); then \
 		echo "$(CYAN)▶ Starting dependencies...$(RESET)"; \
 		$(COMPOSE) up -d session-server jellyfin-dev; \
@@ -305,7 +312,7 @@ check: ## Run cargo check (fast compile check)
 # ----------------------------------------------------------------------------
 # Cleanup
 # ----------------------------------------------------------------------------
-.PHONY: clean clean-plugin clean-server clean-docker reset prune
+.PHONY: clean clean-plugin clean-server clean-docker reset prune fix-permissions
 
 clean: clean-plugin clean-server ## Clean all build artifacts
 	@rm -rf dist $(PROJECT_NAME)-release.zip
@@ -313,9 +320,23 @@ clean: clean-plugin clean-server ## Clean all build artifacts
 
 clean-plugin: ## Clean plugin build artifacts
 	@echo "$(YELLOW)▶ Cleaning plugin artifacts...$(RESET)"
-	@rm -rf $(PLUGIN_DIR)/dist $(PLUGIN_DIR)/bin $(PLUGIN_DIR)/obj
+	@rm -rf $(PLUGIN_DIR)/dist $(PLUGIN_DIR)/bin $(PLUGIN_DIR)/obj 2>/dev/null || \
+		(echo "$(YELLOW)⚠ Some files owned by root, using sudo...$(RESET)" && \
+		 sudo rm -rf $(PLUGIN_DIR)/dist $(PLUGIN_DIR)/bin $(PLUGIN_DIR)/obj)
 	@rm -rf $(PLUGIN_DIR)/refs
 	@rm -f $(PLUGIN_DIR)/Web/plugin.js $(PLUGIN_DIR)/Web/owp-*.js
+
+fix-permissions: ## Fix ownership of Docker-created files
+	@echo "$(YELLOW)▶ Fixing file permissions...$(RESET)"
+	@if [ -d "$(PLUGIN_DIR)/dist" ] && [ "$$(stat -c '%u' $(PLUGIN_DIR)/dist 2>/dev/null)" != "$(UID)" ]; then \
+		echo "  Fixing $(PLUGIN_DIR)/dist..."; \
+		sudo chown -R $(UID):$(GID) $(PLUGIN_DIR)/dist; \
+	fi
+	@if [ -d "$(PLUGIN_DIR)/obj" ] && [ "$$(stat -c '%u' $(PLUGIN_DIR)/obj 2>/dev/null)" != "$(UID)" ]; then \
+		echo "  Fixing $(PLUGIN_DIR)/obj..."; \
+		sudo chown -R $(UID):$(GID) $(PLUGIN_DIR)/obj; \
+	fi
+	@echo "$(GREEN)✓ Permissions fixed$(RESET)"
 
 clean-server: ## Clean server build artifacts
 	@echo "$(YELLOW)▶ Cleaning server artifacts...$(RESET)"

@@ -51,12 +51,15 @@ services:
     image: mcr.microsoft.com/dotnet/sdk:9.0
     working_dir: /src
     network_mode: host
+    user: "${UID:-1000}:${GID:-1000}"
     profiles:
       - tools
     volumes:
       - ../../plugins/jellyfin/OpenWatchParty:/src
-      - ../../plugins/jellyfin/OpenWatchParty/dist:/out
-    command: dotnet publish -c Release -o /out OpenWatchPartyPlugin.csproj /p:UseLocalJellyfinRefs=true
+    environment:
+      - HOME=/tmp
+      - DOTNET_CLI_HOME=/tmp/.dotnet
+    command: dotnet publish -c Release -o /src/dist OpenWatchPartyPlugin.csproj /p:UseLocalJellyfinRefs=true
 
 volumes:
   jellyfin-cache:
