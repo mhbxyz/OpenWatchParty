@@ -126,7 +126,7 @@ let ws_route = warp::path("ws")
 ---
 
 ### S4 - JwtSecret vide par défaut
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P1` | **Effort**: `S`
 - **Fichiers**: `plugins/jellyfin/OpenSyncParty/Configuration/PluginConfiguration.cs`
 
@@ -151,7 +151,7 @@ Ou générer au premier lancement et persister.
 ---
 
 ### S5 - Pas de rate limiting
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P1` | **Effort**: `M`
 - **Fichiers**: `session-server-rust/src/ws.rs`
 
@@ -189,7 +189,7 @@ impl RateLimiter {
 ---
 
 ### S6 - Pas de limite de rooms/clients
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P1` | **Effort**: `S`
 - **Fichiers**: `session-server-rust/src/ws.rs`
 
@@ -387,7 +387,7 @@ await loadScript('osp-app.js');
 ---
 
 ### P2 - Intervalles multiples sans coordination
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P1` | **Effort**: `M`
 - **Fichiers**: `clients/web-plugin/osp-app.js`
 
@@ -502,7 +502,7 @@ const renderHomeWatchParties = () => {
 ---
 
 ### P4 - Fuites mémoire (event listeners)
-- [ ] **À corriger**
+- [x] **Corrigé** (2026-01-08)
 - **Priorité**: `P1` | **Effort**: `M`
 - **Fichiers**: `clients/web-plugin/osp-playback.js`
 
@@ -812,13 +812,13 @@ tokio::spawn(async move {
 4. [x] S1 - Authentification JWT
 
 ### Phase 2 - Élevées
-5. [ ] S4 - JwtSecret
-6. [ ] S6 - Limites rooms/clients
-7. [ ] P4 - Fuites mémoire
-8. [ ] P2 - Intervalles
+5. [x] S4 - JwtSecret (warning au démarrage)
+6. [x] S5 - Rate limiting (30 msg/sec)
+7. [x] S6 - Limites rooms/clients (3 rooms/user, 20 clients/room)
+8. [x] P2 - Intervalles (optimisés et conditionnels)
+9. [x] P4 - Fuites mémoire (cleanup listeners)
 
 ### Phase 3 - Moyennes
-9. [ ] S5 - Rate limiting
 10. [ ] S7 - Validation payloads
 11. [ ] P1 - Bundle JS
 12. [ ] P8 - Logs
@@ -846,3 +846,9 @@ tokio::spawn(async move {
 - **S2 corrigé** : Ajout de `escapeHtml()` dans `osp-utils.js`, utilisé dans `osp-ui.js` pour échapper `room.name`, `room.id`, `room.media_id`, et `state.roomName`
 - **S3 corrigé** : Ajout de validation Origin pour WebSocket et CORS pour `/health`. Variable d'environnement `ALLOWED_ORIGINS` (défaut: `localhost:8096`)
 - **P6 corrigé** : Migration de `std::sync::Mutex` vers `tokio::sync::RwLock`. Toutes les fonctions utilisant les locks sont maintenant async avec `.read().await` / `.write().await`
+- **S1 corrigé** : Authentification JWT complète - génération token côté plugin C#, validation côté serveur Rust, transmission via query param WebSocket
+- **S4 corrigé** : Warning au démarrage du plugin si JwtSecret non configuré ou trop court (< 32 chars)
+- **S5 corrigé** : Rate limiting 30 messages/seconde par client avec compteur glissant
+- **S6 corrigé** : Limite 3 rooms par utilisateur, 20 clients par room
+- **P2 corrigé** : Intervalles optimisés (ping 10s, home refresh 5s, sync 500ms). Exécution conditionnelle (sync loop seulement si en room et non-host)
+- **P4 corrigé** : Tracking des listeners vidéo pour cleanup. Nettoyage automatique quand l'élément vidéo change. Fonction `cleanup()` exportée

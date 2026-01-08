@@ -15,6 +15,14 @@ const MIN_STATE_UPDATE_INTERVAL_MS: u64 = 500;
 const POSITION_JITTER_THRESHOLD: f64 = 0.5;
 const COMMAND_COOLDOWN_MS: u64 = 2000;
 
+// Rate limiting constants
+const RATE_LIMIT_MESSAGES: u32 = 30;  // Max messages per window
+const RATE_LIMIT_WINDOW_MS: u64 = 1000;  // Window size in ms
+
+// Resource limits
+const MAX_ROOMS_PER_USER: usize = 3;  // Max rooms a user can host
+const MAX_CLIENTS_PER_ROOM: usize = 20;  // Max clients in a room
+
 pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms, claims: Claims) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
     let (client_sender, client_rcv) = mpsc::unbounded_channel();
@@ -31,6 +39,8 @@ pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms:
         room_id: None,
         user_id: claims.sub,
         user_name: claims.name,
+        message_count: 0,
+        last_reset: now_ms(),
     });
 
     {
@@ -114,7 +124,31 @@ fn schedule_pending_play(room_id: String, created_at: u64, rooms: crate::types::
     });
 }
 
+/// Returns true if the client is rate limited (should drop the message)
+async fn check_rate_limit(client_id: &str, clients: &Clients) -> bool {
+    let mut locked_clients = clients.write().await;
+    if let Some(client) = locked_clients.get_mut(client_id) {
+        let now = now_ms();
+        // Reset counter if window has passed
+        if now - client.last_reset > RATE_LIMIT_WINDOW_MS {
+            client.message_count = 0;
+            client.last_reset = now;
+        }
+        client.message_count += 1;
+        if client.message_count > RATE_LIMIT_MESSAGES {
+            return true; // Rate limited
+        }
+    }
+    false
+}
+
 async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, rooms: &crate::types::Rooms) {
+    // Rate limiting check
+    if check_rate_limit(client_id, clients).await {
+        eprintln!("[server] Rate limited client: {}", client_id);
+        return;
+    }
+
     let msg_str = if let Ok(s) = msg.to_str() { s } else { return };
     println!("[server] Received from {}: {}", client_id, msg_str);
 
@@ -132,6 +166,26 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
         },
         "create_room" => {
             if let Some(payload) = &parsed.payload {
+                // Check if user already hosts too many rooms
+                {
+                    let locked_rooms = rooms.read().await;
+                    let rooms_hosted = locked_rooms.values()
+                        .filter(|r| r.host_id == client_id)
+                        .count();
+                    if rooms_hosted >= MAX_ROOMS_PER_USER {
+                        let locked_clients = clients.read().await;
+                        send_to_client(client_id, &locked_clients, &WsMessage {
+                            msg_type: "error".to_string(),
+                            room: None,
+                            client: Some(client_id.to_string()),
+                            payload: Some(serde_json::json!({ "message": "Maximum rooms limit reached" })),
+                            ts: now_ms(),
+                            server_ts: Some(now_ms()),
+                        });
+                        return;
+                    }
+                }
+
                 let room_name = payload.get("name").and_then(|v| v.as_str()).unwrap_or("New Room").to_string();
                 let room_id = uuid::Uuid::new_v4().to_string();
                 let start_pos = payload.get("start_pos").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -180,6 +234,19 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 let mut locked_clients = clients.write().await;
 
                 if let Some(room) = locked_rooms.get_mut(room_id) {
+                    // Check room capacity before joining
+                    if !room.clients.contains(&client_id.to_string()) && room.clients.len() >= MAX_CLIENTS_PER_ROOM {
+                        send_to_client(client_id, &locked_clients, &WsMessage {
+                            msg_type: "error".to_string(),
+                            room: Some(room_id.clone()),
+                            client: Some(client_id.to_string()),
+                            payload: Some(serde_json::json!({ "message": "Room is full" })),
+                            ts: now_ms(),
+                            server_ts: Some(now_ms()),
+                        });
+                        return;
+                    }
+
                     println!("[server] Client {} joining room {}", client_id, room_id);
                     if !room.clients.contains(&client_id.to_string()) {
                         room.clients.push(client_id.to_string());

@@ -90,19 +90,17 @@
 
   const bindVideo = () => {
     const video = utils.getVideo();
-    if (!video || state.bound) return;
-    state.bound = true;
+    if (!video) return;
 
-    // Track buffering state to distinguish from user pauses
-    video.addEventListener('waiting', () => {
-      state.isBuffering = true;
-    });
-    video.addEventListener('canplay', () => {
-      state.isBuffering = false;
-    });
-    video.addEventListener('playing', () => {
-      state.isBuffering = false;
-    });
+    // If we're already bound to a different video, clean up first
+    if (state.bound && state.currentVideoElement !== video) {
+      cleanupVideoListeners();
+      state.bound = false;
+    }
+
+    if (state.bound) return;
+    state.bound = true;
+    state.currentVideoElement = video;
 
     const sendStateUpdate = () => {
       const actions = OSP.actions;
@@ -151,12 +149,50 @@
       }
     };
 
-    video.addEventListener('play', () => onEvent('play'));
-    video.addEventListener('pause', () => onEvent('pause'));
-    video.addEventListener('seeked', () => onEvent('seek'));
-    setInterval(() => {
-      sendStateUpdate();
+    // Create named listeners for cleanup
+    const listeners = {
+      waiting: () => { state.isBuffering = true; },
+      canplay: () => { state.isBuffering = false; },
+      playing: () => { state.isBuffering = false; },
+      play: () => onEvent('play'),
+      pause: () => onEvent('pause'),
+      seeked: () => onEvent('seek')
+    };
+    state.videoListeners = listeners;
+
+    video.addEventListener('waiting', listeners.waiting);
+    video.addEventListener('canplay', listeners.canplay);
+    video.addEventListener('playing', listeners.playing);
+    video.addEventListener('play', listeners.play);
+    video.addEventListener('pause', listeners.pause);
+    video.addEventListener('seeked', listeners.seeked);
+
+    // State update interval (tracked for cleanup)
+    if (state.intervals.stateUpdate) {
+      clearInterval(state.intervals.stateUpdate);
+    }
+    state.intervals.stateUpdate = setInterval(() => {
+      if (state.isHost) sendStateUpdate();
     }, STATE_UPDATE_MS);
+  };
+
+  const cleanupVideoListeners = () => {
+    if (state.currentVideoElement && state.videoListeners) {
+      const video = state.currentVideoElement;
+      const listeners = state.videoListeners;
+      video.removeEventListener('waiting', listeners.waiting);
+      video.removeEventListener('canplay', listeners.canplay);
+      video.removeEventListener('playing', listeners.playing);
+      video.removeEventListener('play', listeners.play);
+      video.removeEventListener('pause', listeners.pause);
+      video.removeEventListener('seeked', listeners.seeked);
+    }
+    if (state.intervals.stateUpdate) {
+      clearInterval(state.intervals.stateUpdate);
+      state.intervals.stateUpdate = null;
+    }
+    state.videoListeners = null;
+    state.currentVideoElement = null;
   };
 
   const syncLoop = () => {
@@ -206,6 +242,7 @@
     ensurePlayback,
     bindVideo,
     syncLoop,
-    watchReady
+    watchReady,
+    cleanupVideoListeners
   };
 })();

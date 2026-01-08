@@ -12,6 +12,8 @@ pub struct Client {
     pub room_id: Option<String>,
     pub user_id: String,
     pub user_name: String,
+    pub message_count: u32,
+    pub last_reset: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]

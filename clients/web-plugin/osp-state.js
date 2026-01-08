@@ -15,13 +15,18 @@
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
     SUPPRESS_MS: 2000,
     SEEK_THRESHOLD: 2.5,
-    STATE_UPDATE_MS: 1000,
+    STATE_UPDATE_MS: 2000,        // Increased from 1000ms - less aggressive state updates
     SYNC_LEAD_MS: 300,            // Compensates processing + initial HLS buffer
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 8.0,      // Only seek beyond 8s drift
     PLAYBACK_RATE_MIN: 0.90,      // Allow slowdown if ahead
     PLAYBACK_RATE_MAX: 1.20,      // More aggressive catch-up (imperceptible with pitch correction)
-    DRIFT_GAIN: 0.15              // For sqrt curve: 0.15 * sqrt(2s) ≈ 0.21 → 1.21x
+    DRIFT_GAIN: 0.15,             // For sqrt curve: 0.15 * sqrt(2s) ≈ 0.21 → 1.21x
+    // Interval timings (P2 optimization)
+    UI_CHECK_MS: 2000,            // UI button injection check
+    PING_MS: 10000,               // Ping interval (increased from 3s)
+    HOME_REFRESH_MS: 5000,        // Home watch parties refresh (increased from 2s)
+    SYNC_LOOP_MS: 500             // Sync loop for playback rate correction
   };
 
   OSP.state = {
@@ -58,6 +63,17 @@
     authToken: null,
     authEnabled: false,
     userId: '',
-    userName: ''
+    userName: '',
+    // Interval tracking (P4 - memory leak prevention)
+    intervals: {
+      ui: null,
+      ping: null,
+      home: null,
+      sync: null,
+      stateUpdate: null
+    },
+    // Video event listener cleanup
+    videoListeners: null,
+    currentVideoElement: null
   };
 })();
