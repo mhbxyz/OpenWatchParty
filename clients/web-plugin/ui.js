@@ -2,7 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   if (OWP.ui) return;
 
-  const { PANEL_ID, BTN_ID, STYLE_ID, HOME_SECTION_ID, DEFAULT_WS_URL, QUALITY_PRESETS } = OWP.constants;
+  const { PANEL_ID, BTN_ID, STYLE_ID, HOME_SECTION_ID, DEFAULT_WS_URL } = OWP.constants;
   const state = OWP.state;
   const utils = OWP.utils;
 
@@ -51,7 +51,6 @@
         display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: #aaa;
       }
       .owp-checkbox-row input { accent-color: #388e3c; }
-      .owp-quality-section { margin-top: 12px; padding-top: 12px; border-top: 1px solid #333; }
       /* UX-P3: Sync status indicator styles */
       .owp-sync-status { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 8px; padding: 6px 8px; border-radius: 4px; background: rgba(255,255,255,0.05); }
       .owp-sync-dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -265,55 +264,6 @@
     `;
   };
 
-  /**
-   * Build quality selector HTML (host only)
-   */
-  const buildQualitySelector = () => {
-    if (!state.isHost || !state.quality.allowHostControl) return '';
-
-    const currentPreset = state.quality.currentPreset || 'auto';
-    const directPlayChecked = state.quality.preferDirectPlay ? 'checked' : '';
-
-    let options = '';
-    for (const [key, preset] of Object.entries(QUALITY_PRESETS)) {
-      const selected = key === currentPreset ? 'selected' : '';
-      options += `<option value="${key}" ${selected}>${preset.label}</option>`;
-    }
-
-    return `
-      <div class="owp-quality-section">
-        <div class="owp-label">Quality Control</div>
-        <select class="owp-select" id="owp-quality-select">${options}</select>
-        <label class="owp-checkbox-row">
-          <input type="checkbox" id="owp-direct-play" ${directPlayChecked} />
-          Prefer Direct Play (no transcoding)
-        </label>
-      </div>
-    `;
-  };
-
-  /**
-   * Build quality display for guests (read-only)
-   */
-  const buildQualityDisplay = () => {
-    if (state.isHost) return '';
-
-    const quality = state.roomQuality || state.quality;
-    const preset = quality.preset || 'auto';
-    const presetInfo = QUALITY_PRESETS[preset] || QUALITY_PRESETS.auto;
-    const directPlay = quality.preferDirectPlay ? 'Yes' : 'No';
-
-    return `
-      <div class="owp-quality-section">
-        <div class="owp-label">Quality (set by host)</div>
-        <div style="font-size:12px;color:#aaa;">
-          <div>Bitrate: ${presetInfo.label}</div>
-          <div>Direct Play: ${directPlay}</div>
-        </div>
-      </div>
-    `;
-  };
-
   // Prevent video player from capturing keyboard events in our inputs
   const stopPlayerCapture = (input) => {
     const stopPropagation = (e) => e.stopPropagation();
@@ -357,7 +307,6 @@
       if (btn) btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
       updateRoomListUI();
     } else {
-      const qualitySection = state.isHost ? buildQualitySelector() : buildQualityDisplay();
       const syncIndicator = buildSyncStatusIndicator();  // UX-P3
       panel.innerHTML = `
         <div class="owp-header">
@@ -370,7 +319,6 @@
           <div id="owp-participants-list" style="font-size:13px;">Online: ${state.participantCount || 1}</div>
           ${syncIndicator}
         </div>
-        ${qualitySection}
         <div class="owp-meta" style="font-size:10px; color:#666; display:flex; justify-content:space-between;">
             <span>RTT: <span class="owp-latency">-</span></span>
             <span>ID: ${state.clientId.split('-')[1] || '...'}</span>
@@ -378,30 +326,6 @@
       `;
       const leaveBtn = panel.querySelector('#owp-btn-leave');
       if (leaveBtn) leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
-
-      // Setup quality control event handlers (host only)
-      if (state.isHost && state.quality.allowHostControl) {
-        const qualitySelect = panel.querySelector('#owp-quality-select');
-        const directPlayCheck = panel.querySelector('#owp-direct-play');
-
-        if (qualitySelect) {
-          stopPlayerCapture(qualitySelect);
-          qualitySelect.onchange = () => {
-            if (OWP.playback && OWP.playback.setQualityPreset) {
-              OWP.playback.setQualityPreset(qualitySelect.value);
-            }
-          };
-        }
-
-        if (directPlayCheck) {
-          stopPlayerCapture(directPlayCheck);
-          directPlayCheck.onchange = () => {
-            if (OWP.playback && OWP.playback.toggleDirectPlay) {
-              OWP.playback.toggleDirectPlay(directPlayCheck.checked);
-            }
-          };
-        }
-      }
     }
     updateStatusIndicator();
     renderHomeWatchParties();
@@ -409,20 +333,29 @@
 
   const injectOsdButton = () => {
     if (document.getElementById(BTN_ID)) return;
-    const buttonsContainer = document.querySelector('.videoOsdBottom .buttons');
-    if (!buttonsContainer) return;
+
+    const videoOsd = document.querySelector('.videoOsdBottom .buttons');
+    if (!videoOsd) return;
+
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
-    btn.style.cssText = 'color: #fff !important; opacity: 1 !important; z-index: 9999;';
+    btn.title = 'Watch Party';
     btn.innerHTML = '<span class="material-icons groups" aria-hidden="true"></span>';
     btn.onclick = (e) => {
       e.stopPropagation(); e.preventDefault();
       const panel = document.getElementById(PANEL_ID);
       panel.classList.toggle('hide');
-      if (!panel.classList.contains('hide')) render(true); // Force full render on first open
+      if (!panel.classList.contains('hide')) render(true);
     };
-    buttonsContainer.insertBefore(btn, buttonsContainer.firstChild);
+
+    // Insert before "Add to favorites" button
+    const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
+    if (favBtn) {
+      favBtn.insertAdjacentElement('beforebegin', btn);
+    } else {
+      videoOsd.appendChild(btn);
+    }
   };
 
   const showToast = (message) => {

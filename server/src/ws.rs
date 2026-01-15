@@ -264,12 +264,21 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 close_room(&room_id, clients, rooms).await;
             }
 
-            // Get username from client for room name
-            let host_name = {
-                let locked_clients = clients.read().await;
-                locked_clients.get(client_id)
-                    .map(|c| c.user_name.clone())
-                    .unwrap_or_else(|| "Unknown".to_string())
+            // Debug: log the payload
+            info!("create_room payload: {:?}", parsed.payload);
+
+            // Get username from payload first, fall back to client state
+            let host_name = match parsed.payload.as_ref()
+                .and_then(|p| p.get("user_name"))
+                .and_then(|v| v.as_str())
+            {
+                Some(name) if !name.is_empty() => name.to_string(),
+                _ => {
+                    let locked_clients = clients.read().await;
+                    locked_clients.get(client_id)
+                        .map(|c| c.user_name.clone())
+                        .unwrap_or_else(|| "Anonymous".to_string())
+                }
             };
             let room_name = format!("Room de {}", host_name);
 

@@ -22,7 +22,15 @@
   const createRoom = () => {
     const v = utils.getVideo();
     const mediaId = utils.getCurrentItemId();
-    send('create_room', { start_pos: v ? v.currentTime : 0, media_id: mediaId });
+    // Get username: prefer state, fallback to ApiClient._currentUser
+    const userName = state.userName
+      || window.ApiClient?._currentUser?.Name
+      || 'Anonymous';
+    send('create_room', {
+      start_pos: v ? v.currentTime : 0,
+      media_id: mediaId,
+      user_name: userName
+    });
   };
 
   const joinRoom = (id) => {
@@ -38,18 +46,48 @@
     ui.render();
   };
 
+  /**
+   * Try to get the current username from Jellyfin's stored credentials
+   */
+  const getJellyfinUsername = () => {
+    try {
+      // Try ApiClient methods first
+      const apiClient = window.ApiClient;
+      if (apiClient) {
+        // Try getCurrentUser if available
+        if (apiClient._currentUser?.Name) return apiClient._currentUser.Name;
+        if (apiClient.currentUser?.()?.Name) return apiClient.currentUser().Name;
+      }
+      // Try credentials from localStorage/sessionStorage
+      const creds = localStorage.getItem('jellyfin_credentials') || sessionStorage.getItem('jellyfin_credentials');
+      if (creds) {
+        const parsed = JSON.parse(creds);
+        const server = parsed?.Servers?.[0];
+        if (server?.Users?.[0]?.Name) return server.Users[0].Name;
+      }
+      // Try server credentials
+      const serverCreds = JSON.parse(localStorage.getItem('_deviceId2') || '{}');
+      if (serverCreds?.Servers?.[0]?.Users?.[0]?.Name) return serverCreds.Servers[0].Users[0].Name;
+    } catch (e) {
+      console.warn('[OpenWatchParty] Could not get username from Jellyfin:', e);
+    }
+    return '';
+  };
+
   const fetchAuthToken = async () => {
     try {
       // Get the Jellyfin API client
       const apiClient = window.ApiClient;
       if (!apiClient || typeof apiClient.accessToken !== 'function') {
         console.warn('[OpenWatchParty] ApiClient not available, auth disabled');
+        state.userName = getJellyfinUsername();
         return null;
       }
 
       const accessToken = apiClient.accessToken();
       if (!accessToken) {
         console.warn('[OpenWatchParty] No access token available, user may not be logged in');
+        state.userName = getJellyfinUsername();
         return null;
       }
 
@@ -66,13 +104,14 @@
 
       if (!response.ok) {
         console.warn('[OpenWatchParty] Failed to fetch auth token:', response.status);
+        state.userName = getJellyfinUsername();
         return null;
       }
 
       const data = await response.json();
       state.authEnabled = data.auth_enabled || false;
       state.userId = data.user_id || '';
-      state.userName = data.user_name || '';
+      state.userName = data.user_name || getJellyfinUsername() || '';
 
       // Store quality settings from server config
       if (data.quality) {
@@ -92,6 +131,7 @@
       return null;
     } catch (err) {
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
+      state.userName = getJellyfinUsername();
       return null;
     }
   };
