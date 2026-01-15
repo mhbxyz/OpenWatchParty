@@ -97,11 +97,17 @@
     }, delay);
   };
 
+  // P-JS03 fix: Use static entity map instead of DOM creation for HTML escaping
+  const HTML_ENTITIES = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  };
   const escapeHtml = (str) => {
     if (typeof str !== 'string') return '';
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+    return str.replace(/[&<>"']/g, c => HTML_ENTITIES[c]);
   };
 
   /**

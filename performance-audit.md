@@ -3,7 +3,7 @@
 > **Date**: 2026-01-15
 > **Version auditée**: main @ db12107
 > **Auditeur**: Claude Code
-> **Statut**: 3 problèmes critiques + 3 problèmes haute priorité corrigés
+> **Statut**: 3 critiques + 3 haute priorité + 2 moyenne priorité corrigés
 
 ---
 
@@ -87,12 +87,23 @@ Pour une room de 20 clients, cela représente 20 allocations par message.
 
 | ID | Issue | Impact | Fichier |
 |----|-------|--------|---------|
-| P-RS04 | O(n) scan pour trouver la room d'un host | Lent avec beaucoup de rooms | `ws.rs:288-297` |
-| P-RS05 | HashMap unbounded sans cleanup | Fuite mémoire lente | `main.rs:52` |
-| P-RS06 | Task spawn pour chaque pending play | Overhead tokio | `ws.rs:124-157` |
-| P-RS07 | String allocations pour msg_type | GC pressure | `ws.rs:81-87` |
-| P-RS08 | Double JSON serialization room list | Allocations inutiles | `messaging.rs:5-22` |
-| P-RS09 | Zombie cleanup O(n) scan | CPU toutes les 30s | `main.rs:64-72` |
+| P-RS04 | O(n) scan pour trouver la room d'un host | Faible - hors hot path | `ws.rs:257-262` |
+| P-RS05 | HashMap unbounded sans cleanup | Géré par zombie cleanup | `main.rs:52` |
+| P-RS06 | Task spawn pour chaque pending play | Code supprimé | `ws.rs` |
+| P-RS07 | String allocations pour msg_type | Micro-optimisation | `ws.rs:81-87` |
+| P-RS08 | Double JSON serialization room list | ✅ Résolu | `messaging.rs:24-59` |
+| P-RS09 | Zombie cleanup O(n) scan | Acceptable (toutes les 30s) | `main.rs:64-72` |
+
+#### P-RS08 - Double JSON serialization room list ✅ RÉSOLU
+
+**Fichier**: `server/src/messaging.rs`
+
+**Problème**: `broadcast_room_list()` appelait `send_room_list()` pour chaque client, sérialisant le JSON N fois.
+
+**Solution appliquée**:
+- La liste des rooms est maintenant sérialisée une seule fois
+- Le message pré-sérialisé est envoyé à tous les clients
+- Réduction de N sérialisations à 1 seule
 
 ---
 
@@ -115,7 +126,8 @@ Pour une room de 20 clients, cela représente 20 allocations par message.
 |----------|-------|---------|--------|
 | **HAUTE** | Event listeners non nettoyés | `app.js` | ✅ Résolu |
 | **MOYENNE** | DOM queries répétées dans syncLoop | `playback.js` | ✅ Résolu |
-| **MOYENNE** | Double envoi de messages | `playback.js` | En attente |
+| **MOYENNE** | Création DOM pour échapper HTML | `utils.js` | ✅ Résolu |
+| **MOYENNE** | Double envoi de messages | `playback.js` | Intentionnel |
 
 #### P-JS01 - Fuite mémoire des event listeners
 
@@ -150,21 +162,16 @@ panel.addEventListener('mousedown', ...)
 
 ---
 
-#### P-JS03 - Création DOM pour échapper HTML
+#### P-JS03 - Création DOM pour échapper HTML ✅ RÉSOLU
 
-**Fichier**: `clients/web-plugin/utils.js:100-105`
+**Fichier**: `clients/web-plugin/utils.js`
 
-```javascript
-const escapeHtml = (str) => {
-  const div = document.createElement('div'); // Allocation inutile
-  div.textContent = str;
-  return div.innerHTML;
-};
-```
+**Problème**: Création d'un élément DOM à chaque appel de `escapeHtml()` pour échapper le HTML.
 
-**Impact**: Allocation DOM à chaque escape (appelé fréquemment dans renderHomeWatchParties).
-
-**Solution**: Utiliser une map d'entités HTML statique ou regex.
+**Solution appliquée**:
+- Remplacement par une map d'entités HTML statique + regex
+- Plus de création DOM, simple remplacement de chaîne
+- Réduction estimée de ~90% des allocations pour l'échappement HTML
 
 ---
 
@@ -184,13 +191,15 @@ const escapeHtml = (str) => {
 
 | ID | Issue | Sévérité | Fichier |
 |----|-------|----------|---------|
-| P-JS04 | Double message sends (player_event + state_update) | Moyenne | `playback.js:237-244` |
+| P-JS04 | Double message sends (player_event + state_update) | Intentionnel | `playback.js:237-244` |
 | P-JS05 | Log buffer unbounded | Basse | `state.js:91-92` |
 | P-JS06 | String concatenation in loops | Basse | `ui.js:210-214` |
 | P-JS07 | Pending action timer not cleared | Basse | `utils.js:82-98` |
 | P-JS08 | No requestAnimationFrame for sync | Moyenne | `playback.js:317-373` |
 | P-JS09 | Quality settings not cached | Basse | `playback.js:34-55` |
 | P-JS10 | Redundant state calculations | Basse | `utils.js:75` |
+
+> **Note P-JS04**: Le double envoi de messages (player_event + state_update) est **intentionnel** pour assurer la fiabilité de la synchronisation. Le state_update immédiat garantit que les clients reçoivent l'état play/pause du host rapidement.
 
 ---
 
@@ -344,6 +353,8 @@ const escapeHtml = (str) => {
 |------|---------|--------|-------------|
 | 2026-01-15 | 1.0 | Claude Code | Création initiale |
 | 2026-01-15 | 1.1 | Claude Code | Résolution de P-RS01 (lock contention), P-RS03 (bounded channels), P-CS01 (rate limit cleanup) |
+| 2026-01-15 | 1.2 | Claude Code | Résolution de P-CS02 (JWT caching), P-JS01 (event listener cleanup), P-JS02 (video element caching) |
+| 2026-01-15 | 1.3 | Claude Code | Résolution de P-RS08 (room list serialization), P-JS03 (escapeHtml regex). Notes sur P-JS04 (intentionnel) |
 
 ---
 
