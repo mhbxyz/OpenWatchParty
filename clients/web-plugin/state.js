@@ -56,13 +56,17 @@
     DRIFT_DEADZONE_SEC: 0.04,
     DRIFT_SOFT_MAX_SEC: 2.0,      // Seek to correct if drift > 2s
     PLAYBACK_RATE_MIN: 0.85,      // Allow slowdown if ahead
-    PLAYBACK_RATE_MAX: 1.50,      // Aggressive catch-up (pitch correction helps)
-    DRIFT_GAIN: 0.20,             // For sqrt curve: 0.20 * sqrt(1s) = 0.20 → 1.20x at 1s drift
+    PLAYBACK_RATE_MAX: 2.0,       // Aggressive catch-up (browser pitch correction preserves audio)
+    DRIFT_GAIN: 0.50,             // For sqrt curve: 0.50 * sqrt(1s) = 0.50 → 1.50x at 1s drift
     // Interval timings (P2 optimization)
     UI_CHECK_MS: 2000,            // UI button injection check
     PING_MS: 10000,               // Ping interval (increased from 3s)
     HOME_REFRESH_MS: 5000,        // Home watch parties refresh (increased from 2s)
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
+    INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
+    INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
+    INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
+    INITIAL_SYNC_MAX_DRIFT: 10,   // Max drift (seconds) before forcing HARD_SEEK during initial sync
     // Quality presets (bitrate in bps)
     QUALITY_PRESETS: {
       auto: { bitrate: 0, label: 'Auto' },
@@ -110,6 +114,9 @@
     wantsToPlay: false,
     isSyncing: false,
     syncCooldownUntil: 0,  // Timestamp until which position updates are ignored (after resume)
+    isInitialSync: false,  // True during initial catch-up after joining (disables HARD_SEEK)
+    initialSyncUntil: 0,   // Timestamp when initial sync phase ends (max duration)
+    initialSyncTargetPos: 0, // Target position when joining - used to detect/fix Jellyfin resume jumps
     syncStatus: 'synced',  // 'synced' | 'syncing' | 'pending_play' - for UX indicator (UX-P3)
     pendingPlayUntil: 0,   // Timestamp when pending play ends (for spinner) (UX-P3)
     // Authentication

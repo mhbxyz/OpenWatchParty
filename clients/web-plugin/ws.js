@@ -43,6 +43,11 @@
     state.inRoom = false;
     state.roomId = '';
     state.readyRoomId = '';
+    // Clear sync state
+    state.isInitialSync = false;
+    state.initialSyncUntil = 0;
+    state.initialSyncTargetPos = 0;
+    state.syncCooldownUntil = 0;
     // Hide the panel instead of showing lobby
     const panel = document.getElementById(OWP.constants.PANEL_ID);
     if (panel) panel.classList.add('hide');
@@ -264,6 +269,7 @@
         if (video && !state.isHost && msg.payload && msg.payload.state) {
           const basePos = msg.payload.state.position || 0;
           const targetPos = utils.adjustedPosition(basePos, msg.server_ts);
+          const hostPlaying = msg.payload.state.play_state === 'playing';
           utils.log('CLIENT', {
             type: 'room_state',
             msg_pos: basePos,
@@ -273,6 +279,20 @@
             play_state: msg.payload.state.play_state
           });
           utils.startSyncing();
+
+          // If host is playing, set initial sync phase - disables HARD_SEEK
+          // and lets playback rate adjustment catch up gradually
+          if (hostPlaying) {
+            const { INITIAL_SYNC_COOLDOWN_MS, INITIAL_SYNC_MAX_MS } = OWP.constants;
+            const now = utils.nowMs();
+            state.isInitialSync = true;
+            state.initialSyncUntil = now + INITIAL_SYNC_MAX_MS;
+            state.syncCooldownUntil = now + INITIAL_SYNC_COOLDOWN_MS;
+            // Store target position to detect/fix Jellyfin resume jumps
+            state.initialSyncTargetPos = targetPos;
+            utils.log('CLIENT', { type: 'initial_sync_started', cooldown: INITIAL_SYNC_COOLDOWN_MS, max: INITIAL_SYNC_MAX_MS, targetPos });
+          }
+
           if (Math.abs(video.currentTime - targetPos) > SEEK_THRESHOLD) {
             video.currentTime = targetPos;
             // Update sync state to match our seek target - prevents drift chase
@@ -280,7 +300,7 @@
             state.lastSyncServerTs = utils.getServerNow();
             state.lastSyncPosition = targetPos;
           }
-          if (msg.payload.state.play_state === 'playing') {
+          if (hostPlaying) {
             video.play().catch(() => {});
           } else if (msg.payload.state.play_state === 'paused') {
             video.pause();
@@ -376,6 +396,9 @@
           } else if (msg.payload.action === 'pause') {
             state.lastSyncPlayState = 'paused';
             state.syncCooldownUntil = 0;  // Clear cooldown on pause
+            state.isInitialSync = false;  // Clear initial sync on pause (no need to catch up)
+            state.initialSyncUntil = 0;
+            state.initialSyncTargetPos = 0;
             state.syncStatus = 'synced';  // UX-P3: Mark as synced on pause
             state.pendingPlayUntil = 0;
             // Pause immediately, no scheduling delay
@@ -422,6 +445,9 @@
         } else if (msg.payload.play_state === 'paused' && !video.paused) {
           utils.startSyncing();
           state.syncCooldownUntil = 0;  // Clear cooldown on pause
+          state.isInitialSync = false;  // Clear initial sync on pause
+          state.initialSyncUntil = 0;
+          state.initialSyncTargetPos = 0;
           video.pause();
         }
         // Don't update position sync state while buffering - this prevents the seek loop

@@ -11,7 +11,9 @@
     DRIFT_SOFT_MAX_SEC,
     PLAYBACK_RATE_MIN,
     PLAYBACK_RATE_MAX,
-    DRIFT_GAIN
+    DRIFT_GAIN,
+    INITIAL_SYNC_DRIFT_THRESHOLD,
+    INITIAL_SYNC_MAX_DRIFT
   } = OWP.constants;
 
   /**
@@ -339,6 +341,39 @@
     const expected = state.lastSyncPosition + elapsed;
     const drift = expected - video.currentTime;
     const abs = Math.abs(drift);
+    // Check for initial sync phase exit conditions
+    if (state.isInitialSync) {
+      const now = utils.nowMs();
+
+      // If drift is too large (>10s in either direction), do immediate HARD_SEEK
+      // This catches both Jellyfin resume jumps (ahead) and HLS segment issues (behind)
+      // Trying to catch up 10+ seconds at 2x would take too long
+      if (abs > INITIAL_SYNC_MAX_DRIFT) {
+        utils.log('SYNC', { type: 'initial_sync_large_drift', drift, videoPos: video.currentTime, expected });
+        // Seek to expected position
+        video.currentTime = expected;
+        state.lastSyncServerTs = serverNow;
+        state.lastSyncPosition = expected;
+        state.initialSyncTargetPos = 0;
+        return;
+      }
+
+      // Exit initial sync if drift is small enough (caught up!)
+      if (abs < INITIAL_SYNC_DRIFT_THRESHOLD) {
+        state.isInitialSync = false;
+        state.initialSyncUntil = 0;
+        state.initialSyncTargetPos = 0;
+        utils.log('SYNC', { type: 'initial_sync_complete', drift, reason: 'drift_threshold' });
+      }
+      // Exit initial sync if max time exceeded
+      else if (state.initialSyncUntil && now >= state.initialSyncUntil) {
+        state.isInitialSync = false;
+        state.initialSyncUntil = 0;
+        state.initialSyncTargetPos = 0;
+        utils.log('SYNC', { type: 'initial_sync_timeout', drift });
+      }
+    }
+
     if (abs < DRIFT_DEADZONE_SEC) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       // UX-P3: Mark as synced when drift is within acceptable range
@@ -349,11 +384,15 @@
       return;
     }
     if (abs >= DRIFT_SOFT_MAX_SEC) {
-      // During cooldown, skip HARD_SEEK - let rate adjustment catch up gradually
-      // This prevents seek loops after resume when CLIENT is behind HOST
+      // During initial sync or cooldown, skip HARD_SEEK - let rate adjustment catch up gradually
+      // This prevents seek loops when CLIENT is catching up after joining or resuming
       const now = utils.nowMs();
-      if (state.syncCooldownUntil && now < state.syncCooldownUntil) {
+      const inCooldown = state.syncCooldownUntil && now < state.syncCooldownUntil;
+      if (state.isInitialSync || inCooldown) {
         // Fall through to rate adjustment below
+        if (abs > 5) {
+          utils.log('SYNC', { type: 'skip_hard_seek', drift, reason: state.isInitialSync ? 'initial_sync' : 'cooldown' });
+        }
       } else {
         utils.log('SYNC', { type: 'HARD_SEEK', expected, actual: video.currentTime, drift });
         utils.suppress();

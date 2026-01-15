@@ -185,16 +185,17 @@ function syncLoop() {
 
 ```
 rate = 1 + sign(drift) * sqrt(|drift|) * DRIFT_GAIN
-     = 1 + sign(drift) * sqrt(|drift|) * 0.20
+     = 1 + sign(drift) * sqrt(|drift|) * 0.50
 
 Examples:
-- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.20 = 1.10x
-- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.20 = 1.20x
-- drift = +2.0s  → rate = 1 + sqrt(2.0) * 0.20 = 1.28x
-- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.20 = 0.86x
+- drift = +0.25s → rate = 1 + sqrt(0.25) * 0.50 = 1.25x
+- drift = +1.0s  → rate = 1 + sqrt(1.0) * 0.50 = 1.50x
+- drift = +2.0s  → rate = 1 + sqrt(2.0) * 0.50 = 1.71x
+- drift = +4.0s  → rate = 1 + sqrt(4.0) * 0.50 = 2.00x (capped)
+- drift = -0.5s  → rate = 1 - sqrt(0.5) * 0.50 = 0.65x (clamped to 0.85x)
 ```
 
-The sqrt curve provides stronger correction for larger drifts while staying smooth.
+The sqrt curve provides stronger correction for larger drifts while staying smooth. Browser pitch correction (`preservesPitch`) keeps audio natural even at 2.0x.
 
 ## 5. HLS Handling and Feedback Loop Prevention
 
@@ -385,8 +386,11 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 | `DRIFT_DEADZONE_SEC` | 0.04s | Client | No-correction zone |
 | `DRIFT_SOFT_MAX_SEC` | 2.0s | Client | Forced seek threshold |
 | `PLAYBACK_RATE_MIN` | 0.85 | Client | Min catchup speed |
-| `PLAYBACK_RATE_MAX` | 1.50 | Client | Max catchup speed |
-| `DRIFT_GAIN` | 0.20 | Client | Proportional gain (sqrt curve) |
+| `PLAYBACK_RATE_MAX` | 2.0 | Client | Max catchup speed |
+| `DRIFT_GAIN` | 0.50 | Client | Proportional gain (sqrt curve) |
+| `INITIAL_SYNC_COOLDOWN_MS` | 8000ms | Client | Cooldown after join (no HARD_SEEK) |
+| `INITIAL_SYNC_MAX_MS` | 30000ms | Client | Max initial sync phase duration |
+| `INITIAL_SYNC_DRIFT_THRESHOLD` | 0.5s | Client | Exit initial sync when caught up |
 | `SYNC_LOOP_MS` | 500ms | Client | Sync loop interval |
 | `PLAY_SCHEDULE_MS` | 1000ms | Server | Delay before play |
 | `CONTROL_SCHEDULE_MS` | 300ms | Server | Delay before pause/seek |
