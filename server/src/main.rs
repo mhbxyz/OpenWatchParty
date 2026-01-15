@@ -26,7 +26,8 @@ fn get_allowed_origins() -> Vec<String> {
         .collect()
 }
 
-fn is_origin_allowed(origin: &str, allowed: &[String]) -> bool {
+// P-RS10 fix: Accept Arc<Vec<String>> to avoid cloning on each request
+fn is_origin_allowed(origin: &str, allowed: &Arc<Vec<String>>) -> bool {
     if allowed.iter().any(|o| o == "*") {
         // Security warning: wildcard allows all origins
         warn!("SECURITY: Wildcard origin (*) configured - ALL origins allowed. This disables CORS protection!");
@@ -43,7 +44,8 @@ async fn main() {
     ).init();
 
     let jwt_config = Arc::new(JwtConfig::from_env());
-    let allowed_origins = get_allowed_origins();
+    // P-RS10 fix: Wrap in Arc to avoid cloning on each request
+    let allowed_origins = Arc::new(get_allowed_origins());
 
     info!("Allowed origins: {:?}", allowed_origins);
     info!("JWT authentication: {}", if jwt_config.enabled { "ENABLED" } else { "DISABLED" });
@@ -87,6 +89,7 @@ async fn main() {
         warp::any().map(move || config.clone())
     };
 
+    // P-RS10 fix: Clone Arc (cheap) instead of Vec (expensive) on each request
     let allowed_origins_filter = {
         let origins = allowed_origins.clone();
         warp::any().map(move || origins.clone())
@@ -95,7 +98,7 @@ async fn main() {
     // Origin validation filter
     let origin_check = warp::header::optional::<String>("origin")
         .and(allowed_origins_filter.clone())
-        .and_then(|origin: Option<String>, allowed: Vec<String>| async move {
+        .and_then(|origin: Option<String>, allowed: Arc<Vec<String>>| async move {
             match origin {
                 Some(ref o) if is_origin_allowed(o, &allowed) => Ok(()),
                 Some(o) => {

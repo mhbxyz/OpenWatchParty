@@ -86,6 +86,11 @@
 
   const cleanup = () => {
     clearAllIntervals();
+    // P-JS07 fix: Clear pending action timer to prevent memory leak
+    if (state.pendingActionTimer) {
+      clearTimeout(state.pendingActionTimer);
+      state.pendingActionTimer = null;
+    }
     if (state.ws) {
       state.ws.close();
       state.ws = null;

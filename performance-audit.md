@@ -3,7 +3,7 @@
 > **Date**: 2026-01-15
 > **Version auditée**: main @ db12107
 > **Auditeur**: Claude Code
-> **Statut**: 3 critiques + 3 haute priorité + 2 moyenne priorité corrigés
+> **Statut**: 3 critiques + 3 haute + 2 moyenne + 2 basse priorité corrigés
 
 ---
 
@@ -109,12 +109,22 @@ Pour une room de 20 clients, cela représente 20 allocations par message.
 
 ### 1.3 Problèmes Bas
 
-| ID | Issue | Fichier |
-|----|-------|---------|
-| P-RS10 | Origins vector cloné par requête | `main.rs:90-93` |
-| P-RS11 | serde_json parsing dans async context | `ws.rs:214` |
-| P-RS12 | Nested lock acquisition risk | `ws.rs:335-352` |
-| P-RS13 | No room-level rate limiting | `ws.rs:20-22` |
+| ID | Issue | Fichier | Statut |
+|----|-------|---------|--------|
+| P-RS10 | Origins vector cloné par requête | `main.rs:92-96` | ✅ Résolu |
+| P-RS11 | serde_json parsing dans async context | `ws.rs:182` | Acceptable |
+| P-RS12 | Nested lock acquisition risk | `ws.rs` | Structure OK |
+| P-RS13 | No room-level rate limiting | `ws.rs:22-24` | Feature future |
+
+#### P-RS10 - Origins vector cloning ✅ RÉSOLU
+
+**Fichier**: `server/src/main.rs`
+
+**Problème**: Le vecteur des origines autorisées était cloné à chaque requête HTTP.
+
+**Solution appliquée**:
+- Encapsulation dans `Arc<Vec<String>>` au démarrage
+- Clone d'Arc (cheap pointer copy) au lieu de Vec (allocation)
 
 ---
 
@@ -189,17 +199,27 @@ panel.addEventListener('mousedown', ...)
 
 ### 2.3 Autres Problèmes
 
-| ID | Issue | Sévérité | Fichier |
-|----|-------|----------|---------|
-| P-JS04 | Double message sends (player_event + state_update) | Intentionnel | `playback.js:237-244` |
-| P-JS05 | Log buffer unbounded | Basse | `state.js:91-92` |
-| P-JS06 | String concatenation in loops | Basse | `ui.js:210-214` |
-| P-JS07 | Pending action timer not cleared | Basse | `utils.js:82-98` |
-| P-JS08 | No requestAnimationFrame for sync | Moyenne | `playback.js:317-373` |
-| P-JS09 | Quality settings not cached | Basse | `playback.js:34-55` |
-| P-JS10 | Redundant state calculations | Basse | `utils.js:75` |
+| ID | Issue | Sévérité | Statut |
+|----|-------|----------|--------|
+| P-JS04 | Double message sends (player_event + state_update) | Intentionnel | Design OK |
+| P-JS05 | Log buffer unbounded | Basse | Déjà borné (100) |
+| P-JS06 | String concatenation in loops | Basse | Minimal (5 itérations) |
+| P-JS07 | Pending action timer not cleared | Basse | ✅ Résolu |
+| P-JS08 | No requestAnimationFrame for sync | Moyenne | Acceptable |
+| P-JS09 | Quality settings not cached | Basse | Accès state direct |
+| P-JS10 | Redundant state calculations | Basse | Minimal impact |
 
-> **Note P-JS04**: Le double envoi de messages (player_event + state_update) est **intentionnel** pour assurer la fiabilité de la synchronisation. Le state_update immédiat garantit que les clients reçoivent l'état play/pause du host rapidement.
+#### P-JS07 - Pending action timer cleanup ✅ RÉSOLU
+
+**Fichier**: `clients/web-plugin/app.js`
+
+**Problème**: Le timer `pendingActionTimer` n'était pas nettoyé dans `cleanup()`.
+
+**Solution appliquée**: Ajout de `clearTimeout(state.pendingActionTimer)` dans `cleanup()`.
+
+> **Note P-JS04**: Le double envoi de messages (player_event + state_update) est **intentionnel** pour assurer la fiabilité de la synchronisation.
+
+> **Note P-JS05**: Le buffer de logs est déjà borné à 100 entrées via `logBufferMax` (state.js:92, utils.js:181).
 
 ---
 
@@ -355,6 +375,7 @@ panel.addEventListener('mousedown', ...)
 | 2026-01-15 | 1.1 | Claude Code | Résolution de P-RS01 (lock contention), P-RS03 (bounded channels), P-CS01 (rate limit cleanup) |
 | 2026-01-15 | 1.2 | Claude Code | Résolution de P-CS02 (JWT caching), P-JS01 (event listener cleanup), P-JS02 (video element caching) |
 | 2026-01-15 | 1.3 | Claude Code | Résolution de P-RS08 (room list serialization), P-JS03 (escapeHtml regex). Notes sur P-JS04 (intentionnel) |
+| 2026-01-15 | 1.4 | Claude Code | Résolution de P-RS10 (Arc pour origins), P-JS07 (pending timer cleanup). Analyse des issues basse priorité restantes |
 
 ---
 
