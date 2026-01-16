@@ -63,6 +63,8 @@
     PING_MS: 10000,               // Ping interval (increased from 3s)
     HOME_REFRESH_MS: 5000,        // Home watch parties refresh (increased from 2s)
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
+    RECONNECT_BASE_MS: 1000,      // Base reconnect delay (1s)
+    RECONNECT_MAX_MS: 30000,      // Max reconnect delay (30s)
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
     INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
     INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
@@ -90,6 +92,7 @@
     bound: false,
     autoReconnect: true,
     isConnecting: false,
+    reconnectAttempts: 0,        // For exponential backoff
     initialized: false,
     // Log buffering (for logs sent before WS connected)
     logBuffer: [],
@@ -124,6 +127,8 @@
     authEnabled: false,
     userId: '',
     userName: '',
+    tokenExpiresAt: 0,           // Timestamp when token expires
+    tokenRefreshTimer: null,     // Timer for token refresh
     // Interval tracking (P4 - memory leak prevention)
     intervals: {
       ui: null,

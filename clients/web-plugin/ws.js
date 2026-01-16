@@ -2,7 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   if (OWP.actions) return;
 
-  const { DEFAULT_WS_URL, SEEK_THRESHOLD } = OWP.constants;
+  const { DEFAULT_WS_URL, SEEK_THRESHOLD, RECONNECT_BASE_MS, RECONNECT_MAX_MS } = OWP.constants;
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
@@ -130,7 +130,11 @@
 
       if (data.auth_enabled && data.token) {
         state.authToken = data.token;
-        console.log('[OpenWatchParty] Auth token obtained for user:', state.userName);
+        // Track token expiry and schedule refresh (refresh 5 min before expiry)
+        const expiresIn = data.expires_in || 3600;  // Default 1 hour
+        state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
+        scheduleTokenRefresh(expiresIn);
+        console.log('[OpenWatchParty] Auth token obtained for user:', state.userName, 'expires in', expiresIn, 's');
         return data.token;
       }
 
@@ -140,6 +144,40 @@
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
       state.userName = getJellyfinUsername();
       return null;
+    }
+  };
+
+  /**
+   * Schedule token refresh before expiry
+   * Refreshes 5 minutes before expiry, or at 80% of TTL for short-lived tokens
+   */
+  const scheduleTokenRefresh = (expiresInSec) => {
+    // Clear any existing refresh timer
+    if (state.tokenRefreshTimer) {
+      clearTimeout(state.tokenRefreshTimer);
+      state.tokenRefreshTimer = null;
+    }
+
+    // Calculate refresh time: 5 min before expiry, or 80% of TTL (whichever is sooner)
+    const refreshBeforeMs = Math.min(5 * 60 * 1000, expiresInSec * 1000 * 0.2);
+    const refreshInMs = Math.max(0, (expiresInSec * 1000) - refreshBeforeMs);
+
+    if (refreshInMs > 0) {
+      console.log('[OpenWatchParty] Token refresh scheduled in', Math.round(refreshInMs / 1000), 's');
+      state.tokenRefreshTimer = setTimeout(async () => {
+        console.log('[OpenWatchParty] Refreshing auth token...');
+        state.authToken = null;  // Clear old token to force refresh
+        const newToken = await fetchAuthToken();
+        if (newToken && state.ws && state.ws.readyState === WebSocket.OPEN) {
+          // Re-authenticate with new token
+          state.ws.send(JSON.stringify({
+            type: 'auth',
+            payload: { token: newToken, user_name: state.userName, user_id: state.userId },
+            ts: utils.nowMs()
+          }));
+          console.log('[OpenWatchParty] Token refreshed and re-authenticated');
+        }
+      }, refreshInMs);
     }
   };
 
@@ -193,6 +231,7 @@
     state.ws.onopen = () => {
       console.log('[OpenWatchParty] WebSocket connected');
       state.isConnecting = false;
+      state.reconnectAttempts = 0;  // Reset backoff on successful connection
       // Flush any buffered logs now that we're connected
       if (utils.flushLogBuffer) utils.flushLogBuffer();
       // Send auth/identity message after connection
@@ -204,6 +243,8 @@
       if (Object.keys(authPayload).length > 0) {
         state.ws.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
       }
+      // Send immediate ping for faster clock sync (fixes 5.6)
+      state.ws.send(JSON.stringify({ type: 'ping', payload: { client_ts: utils.nowMs() }, ts: utils.nowMs() }));
       ui.render();
     };
     state.ws.onerror = (err) => {
@@ -216,7 +257,14 @@
       ui.render();
       // Only auto-reconnect if flag is set and not already connecting
       if (state.autoReconnect && !state.isConnecting) {
-        setTimeout(connect, 3000);
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s (capped)
+        const delay = Math.min(
+          RECONNECT_BASE_MS * Math.pow(2, state.reconnectAttempts),
+          RECONNECT_MAX_MS
+        );
+        state.reconnectAttempts++;
+        console.log(`[OpenWatchParty] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`);
+        setTimeout(connect, delay);
       }
     };
     state.ws.onmessage = (e) => {
@@ -225,7 +273,9 @@
         if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
           handleMessage(msg);
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error('[OpenWatchParty] Failed to parse message:', err.message, 'Data:', e.data?.substring?.(0, 100));
+      }
     };
   };
 
@@ -262,7 +312,10 @@
         }
         if (msg.payload && msg.payload.state) {
           state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
-          state.lastSyncPosition = msg.payload.state.position || 0;
+          // Fix: Use typeof check to handle position 0 correctly
+          state.lastSyncPosition = typeof msg.payload.state.position === 'number'
+            ? msg.payload.state.position
+            : 0;
           state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
         }
         ui.render();
@@ -462,7 +515,10 @@
         // Update position sync state only when video is ready and playing
         if (msg.payload) {
           state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
-          state.lastSyncPosition = msg.payload.position || state.lastSyncPosition;
+          // Fix: Use typeof check instead of || to handle position 0 correctly
+          state.lastSyncPosition = typeof msg.payload.position === 'number'
+            ? msg.payload.position
+            : state.lastSyncPosition;
         }
         break;
 

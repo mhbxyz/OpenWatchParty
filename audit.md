@@ -45,9 +45,9 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 | Métrique | Valeur |
 |----------|--------|
 | Problèmes critiques | 5 (2 corrigés) |
-| Problèmes haute priorité | 12 (3 doc + 2 Rust + 2 C# corrigés) |
-| Problèmes moyenne priorité | 15 (3 doc + 2 Rust + 1 C# corrigés) |
-| Problèmes basse priorité | 10 (3 doc + 1 C# corrigés) |
+| Problèmes haute priorité | 12 (3 doc + 2 Rust + 2 C# + 4 JS corrigés) |
+| Problèmes moyenne priorité | 15 (3 doc + 2 Rust + 1 C# + 1 JS corrigés) |
+| Problèmes basse priorité | 10 (3 doc + 1 C# + 1 JS corrigés) |
 | Tests unitaires | **27** (Rust) + **31** (C#) = **58** |
 | Couverture CI/CD | **0%** |
 
@@ -560,7 +560,10 @@ clients/web-plugin/
 #### 5.4.1 Erreurs JSON Silencieuses
 
 **Sévérité :** Haute
-**Localisation :** `ws.js` ligne 228
+**Localisation :** `ws.js`
+**Statut :** CORRIGÉ
+
+~~**Problème :** Aucun logging dans le catch block.~~
 
 ```javascript
 state.ws.onmessage = (e) => {
@@ -571,31 +574,40 @@ state.ws.onmessage = (e) => {
 };
 ```
 
-**Impact :** Impossible de debugger problèmes de protocole.
-
-**Action :** Ajouter logging des erreurs de parse.
+**Corrections appliquées :**
+- Ajout de `console.error()` avec message d'erreur et extrait des données
+- Logging du contenu tronqué (100 premiers caractères) pour debug
 
 #### 5.4.2 Token Jamais Rafraîchi
 
 **Sévérité :** Haute
-**Localisation :** `ws.js` lignes 84-144
+**Localisation :** `ws.js`
+**Statut :** CORRIGÉ
 
-**Problème :** Le token est récupéré une fois au démarrage mais jamais rafraîchi. Sessions longues risquent expiration.
+~~**Problème :** Le token est récupéré une fois au démarrage mais jamais rafraîchi.~~
 
-**Action :** Implémenter refresh token toutes les 30 min ou sur erreur 401.
+**Corrections appliquées :**
+- Tracking de l'expiration du token (`tokenExpiresAt` dans state)
+- Fonction `scheduleTokenRefresh()` planifie le refresh automatique
+- Refresh effectué 5 min avant expiration (ou 80% du TTL pour tokens courts)
+- Re-authentification automatique via WebSocket après refresh
 
 #### 5.4.3 Bug Position 0
 
 **Sévérité :** Haute
-**Localisation :** `ws.js` ligne 465
+**Localisation :** `ws.js`
+**Statut :** CORRIGÉ
+
+~~**Problème :** Si le host seek à 0 secondes, `position || previous` garde l'ancienne valeur car `0` est falsy.~~
 
 ```javascript
+// Avant (bug)
 state.lastSyncPosition = msg.payload.position || state.lastSyncPosition;
 ```
 
-**Problème :** Si le host seek à 0 secondes, `position || previous` garde l'ancienne valeur car `0` est falsy.
-
-**Fix :**
+**Corrections appliquées :**
+- Utilisation de `typeof` pour vérifier si position est un nombre
+- Corrigé dans `state_update` handler et `room_state` handler
 ```javascript
 state.lastSyncPosition = typeof msg.payload.position === 'number'
   ? msg.payload.position
@@ -605,7 +617,10 @@ state.lastSyncPosition = typeof msg.payload.position === 'number'
 #### 5.4.4 Playback Init Sans Feedback
 
 **Sévérité :** Haute
-**Localisation :** `playback.js` lignes 114-131
+**Localisation :** `playback.js`
+**Statut :** CORRIGÉ
+
+~~**Problème :** Si toutes les méthodes de lecture échouent, l'utilisateur n'a aucun feedback.~~
 
 ```javascript
 try {
@@ -614,9 +629,11 @@ try {
 } catch (err) { }  // Aucun logging, aucun feedback
 ```
 
-**Impact :** Si toutes les méthodes de lecture échouent, l'utilisateur n'a aucun feedback.
-
-**Action :** Logger quelle méthode a réussi/échoué, afficher message d'erreur.
+**Corrections appliquées :**
+- Collecte des erreurs de chaque méthode tentée
+- Logging de la méthode qui réussit (`console.log`)
+- Logging détaillé des échecs (`console.error`) avec tableau des erreurs
+- Toast notification à l'utilisateur si toutes les méthodes échouent
 
 ### 5.5 Problèmes Moyenne Priorité
 
@@ -641,15 +658,21 @@ return video && video.readyState >= 3;  // HAVE_FUTURE_DATA
 
 #### 5.5.3 Reconnection Sans Backoff
 
-**Localisation :** `ws.js` ligne 219
+**Localisation :** `ws.js`
+**Statut :** CORRIGÉ
+
+~~**Problème :** Délai fixe de 3s peut surcharger le serveur en cas de panne prolongée.~~
 
 ```javascript
 setTimeout(() => connect(), 3000);  // Fixe 3s
 ```
 
-**Problème :** Peut surcharger le serveur en cas de panne prolongée.
-
-**Recommandation :** Backoff exponentiel (3s → 6s → 12s → max 30s).
+**Corrections appliquées :**
+- Ajout de constantes `RECONNECT_BASE_MS` (1s) et `RECONNECT_MAX_MS` (30s) dans state.js
+- Compteur `reconnectAttempts` dans state
+- Backoff exponentiel : 1s → 2s → 4s → 8s → 16s → 30s (plafonné)
+- Reset du compteur sur connexion réussie
+- Logging du délai et du numéro de tentative
 
 #### 5.5.4 État Global Sprawling
 
@@ -665,7 +688,7 @@ setTimeout(() => connect(), 3000);  // Fixe 3s
 - Toast messages avec timeout fixe (4s) quelle que soit l'importance
 - Pas d'indication quand seeking au-delà du buffer
 - Pas d'indicateur de qualité actuelle dans l'UI
-- Clock sync devrait faire ping immédiatement après connexion
+- ~~Clock sync devrait faire ping immédiatement après connexion~~ **CORRIGÉ** : Ping immédiat envoyé dans `onopen` handler
 
 ### 5.7 Compatibilité Navigateurs
 

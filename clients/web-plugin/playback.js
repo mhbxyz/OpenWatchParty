@@ -102,33 +102,55 @@
 
   const playItem = (item) => {
     const pm = utils.getPlaybackManager();
-    if (!pm) return false;
+    if (!pm) {
+      console.warn('[OpenWatchParty] Playback failed: PlaybackManager not available');
+      return false;
+    }
 
     // Build options with quality settings
     const qualityOptions = buildPlaybackOptions({ startPositionTicks: 0 });
+    const errors = [];
 
     if (typeof pm.play === 'function') {
       try {
         pm.play({ items: [item], ...qualityOptions });
+        console.log('[OpenWatchParty] Playback started via pm.play({ items })');
         return true;
-      } catch (err) { }
+      } catch (err) {
+        errors.push({ method: 'play({ items })', error: err.message });
+      }
       try {
         pm.play({ item: item, ...qualityOptions });
+        console.log('[OpenWatchParty] Playback started via pm.play({ item })');
         return true;
-      } catch (err) { }
+      } catch (err) {
+        errors.push({ method: 'play({ item })', error: err.message });
+      }
       const itemId = item?.Id || item?.id;
       if (itemId) {
         try {
           pm.play({ ids: [itemId], ...qualityOptions });
+          console.log('[OpenWatchParty] Playback started via pm.play({ ids })');
           return true;
-        } catch (err) { }
+        } catch (err) {
+          errors.push({ method: 'play({ ids })', error: err.message });
+        }
       }
     }
     if (typeof pm.playItems === 'function') {
       try {
         pm.playItems([item], 0);
+        console.log('[OpenWatchParty] Playback started via pm.playItems()');
         return true;
-      } catch (err) { }
+      } catch (err) {
+        errors.push({ method: 'playItems()', error: err.message });
+      }
+    }
+
+    // All methods failed - log errors for debugging
+    console.error('[OpenWatchParty] All playback methods failed:', errors);
+    if (OWP.ui && OWP.ui.showToast) {
+      OWP.ui.showToast('Failed to start playback. Try refreshing the page.');
     }
     return false;
   };
