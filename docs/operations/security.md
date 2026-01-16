@@ -230,6 +230,47 @@ Security warnings logged:
 | No persistent sessions | Planned |
 | Single secret for all users | By design |
 
+## What JWT Authentication Does NOT Protect
+
+It's important to understand the scope of JWT authentication. While it verifies user identity, it has limitations:
+
+### Not Protected by JWT
+
+| Scenario | Current Behavior | Mitigation |
+|----------|------------------|------------|
+| **Room creation** | Any authenticated user can create rooms | By design - all Jellyfin users are trusted |
+| **Room joining** | Any authenticated user can join any room | Planned: room passwords |
+| **Room enumeration** | All users see all active rooms | By design - rooms are public within your Jellyfin instance |
+| **Token revocation** | Tokens valid until expiration | Rotate JWT secret to invalidate all tokens |
+| **Per-user permissions** | All users have equal permissions | Planned: user roles |
+
+### Token Lifecycle
+
+- **Tokens cannot be individually revoked** - Once issued, a token is valid until it expires
+- **Secret rotation invalidates ALL tokens** - Changing the JWT secret requires all users to re-authenticate
+- **No refresh tokens** - Users get a new token on each session, not a refresh mechanism
+
+### Trust Model
+
+JWT authentication operates on a **trust boundary at the Jellyfin level**:
+
+```
+Internet → [Jellyfin Auth] → Trusted Zone → [OpenWatchParty]
+                ↑                               ↑
+           Auth boundary              All users equally trusted
+```
+
+**Implications:**
+- If a user can log into Jellyfin, they can use OpenWatchParty
+- There's no additional access control layer within OpenWatchParty
+- Restrict Jellyfin access to control who can use watch parties
+
+### Recommendations
+
+1. **For private instances** - JWT provides sufficient protection
+2. **For shared/public instances** - Wait for room passwords feature or restrict Jellyfin user creation
+3. **For sensitive content** - Use Jellyfin's library permissions to control media access
+
 ## Incident Response
 
 ### If Secret is Compromised

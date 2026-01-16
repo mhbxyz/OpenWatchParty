@@ -45,7 +45,7 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 | Métrique | Valeur |
 |----------|--------|
 | Problèmes critiques | 5 (2 corrigés) |
-| Problèmes haute priorité | 12 |
+| Problèmes haute priorité | 12 (3 doc corrigés) |
 | Problèmes moyenne priorité | 15 |
 | Problèmes basse priorité | 10 |
 | Tests unitaires | **0** |
@@ -105,30 +105,45 @@ Le fichier `CHANGELOG.md` est référencé mais n'existe pas :
 
 **Sévérité :** Haute
 **Localisation :** `docs/product/features.md`, `docs/product/user-guide.md`
+**Statut :** CORRIGÉ
 
 La fonctionnalité "Home section - Watch parties shown on Jellyfin homepage" est mentionnée mais :
 - Aucune documentation d'utilisation
 - Pas de screenshots
 - Non expliquée dans le guide utilisateur
 
-**Action :** Ajouter section dans user-guide.md avec captures d'écran.
+**Action :** ~~Ajouter section dans user-guide.md avec captures d'écran.~~
+
+**Correction appliquée :** Section "From the Homepage" dans user-guide.md entièrement réécrite avec :
+- Explication détaillée du fonctionnement
+- Description des éléments affichés sur les cartes
+- Options de join (clic carte vs bouton play)
+- Notes sur le comportement (refresh, authentification)
 
 #### 2.3.2 Limitations JWT Non Documentées
 
 **Sévérité :** Haute
 **Localisation :** `docs/operations/security.md`
+**Statut :** CORRIGÉ
 
 Manque une section "Ce que l'authentification JWT ne protège PAS" :
 - N'empêche pas la création de rooms par utilisateurs non authentifiés
 - N'empêche pas le join de rooms sans mot de passe
 - Pas de révocation de tokens possible
 
-**Action :** Ajouter section sur les limitations de sécurité.
+**Action :** ~~Ajouter section sur les limitations de sécurité.~~
+
+**Correction appliquée :** Nouvelle section "What JWT Authentication Does NOT Protect" ajoutée avec :
+- Tableau des scénarios non protégés et mitigations
+- Documentation du cycle de vie des tokens
+- Diagramme du modèle de confiance
+- Recommandations selon le type d'instance
 
 #### 2.3.3 Compatibilité Navigateurs Incomplète
 
 **Sévérité :** Haute
 **Localisation :** `docs/product/features.md` lignes 47-54
+**Statut :** CORRIGÉ
 
 | Navigateur | Statut Documenté | Problème |
 |------------|------------------|----------|
@@ -136,7 +151,13 @@ Manque une section "Ce que l'authentification JWT ne protège PAS" :
 | Mobile | "Partial" | Aucune explication de ce qui fonctionne/ne fonctionne pas |
 | Tous | - | Aucune version minimum spécifiée |
 
-**Action :** Détailler les versions supportées et limitations connues.
+**Action :** ~~Détailler les versions supportées et limitations connues.~~
+
+**Correction appliquée :** Section navigateurs entièrement réécrite avec :
+- Versions minimum pour chaque navigateur (Chrome 80+, Firefox 75+, Safari 14+, etc.)
+- Section "Safari Known Issues" détaillant les problèmes HLS et workarounds
+- Section "Mobile Browser Limitations" avec tableau comparatif desktop/mobile
+- Notes spécifiques iOS Safari, Android Chrome, data saver modes
 
 ### 2.4 Problèmes Moyenne Priorité
 

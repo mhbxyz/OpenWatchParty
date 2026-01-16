@@ -26,9 +26,33 @@ As the host, you control playback for everyone. When you play, pause, or seek, a
 4. **Click "Join"** - You'll automatically sync to the host's position
 
 ### From the Homepage
-1. **Go to Jellyfin home** - Active watch parties appear in a dedicated section
-2. **Click a party card** - Shows the media cover and participant count
-3. **Automatic loading** - The correct media loads and you join the room
+
+The Jellyfin homepage displays active watch parties in a dedicated "Watch Parties" section, making it easy to discover and join ongoing sessions.
+
+**How it works:**
+
+1. **Go to Jellyfin home** - Active watch parties appear in a dedicated section below your media libraries
+2. **Browse party cards** - Each card shows:
+   - Media cover image (movie poster or episode thumbnail)
+   - Room name (set by the host)
+   - Participant count (e.g., "2 watching")
+   - Play button overlay for quick join
+3. **Join options:**
+   - **Click the card** - Navigates to the video player and joins the room
+   - **Click the play button** - Starts playback immediately and auto-joins
+
+**What happens when you click:**
+
+1. The correct media automatically loads in the video player
+2. You join the watch party room
+3. Your playback syncs to the host's current position
+4. You'll see a brief catch-up period as your video aligns with others
+
+**Notes:**
+- The Watch Parties section only appears when there are active rooms
+- Cards refresh automatically every 5 seconds
+- If a room closes while you're viewing the homepage, the card disappears
+- You must be logged into Jellyfin to see and join watch parties
 
 ## Host Controls
 
@@ -52,7 +76,7 @@ As a participant:
 | Host pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
 | Host leaves | "Room closed" notification |
-| Drift detected | Playback speed adjusts slightly (0.95x-1.05x) |
+| Drift detected | Playback speed adjusts (0.85x-2.0x) to catch up |
 
 ## The Panel Interface
 
