@@ -45,10 +45,10 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 | Métrique | Valeur |
 |----------|--------|
 | Problèmes critiques | 5 (2 corrigés) |
-| Problèmes haute priorité | 12 (3 doc + 2 Rust corrigés) |
-| Problèmes moyenne priorité | 15 (3 doc + 2 Rust corrigés) |
-| Problèmes basse priorité | 10 (3 doc corrigés) |
-| Tests unitaires | **27** (Rust) |
+| Problèmes haute priorité | 12 (3 doc + 2 Rust + 2 C# corrigés) |
+| Problèmes moyenne priorité | 15 (3 doc + 2 Rust + 1 C# corrigés) |
+| Problèmes basse priorité | 10 (3 doc + 1 C# corrigés) |
+| Tests unitaires | **27** (Rust) + **31** (C#) = **58** |
 | Couverture CI/CD | **0%** |
 
 ---
@@ -387,6 +387,7 @@ info!("Client {} authenticated as {}", client_id, claims.name);
 - Lignes de code : ~300
 - Framework : .NET 9.0
 - Jellyfin : 10.11.3
+- Tests : **31** (PluginTests, PluginConfigurationTests)
 
 ### 4.2 Architecture
 
@@ -427,33 +428,51 @@ plugins/jellyfin/OpenWatchParty/
 
 **Sévérité :** Haute
 **Localisation :** `Web/configPage.html`
+**Statut :** CORRIGÉ
 
-Champs définis dans `PluginConfiguration.cs` mais non exposés dans l'UI :
-- `SessionServerUrl`
-- `DefaultMaxBitrate`
-- `PreferDirectPlay`
-- `AllowHostQualityControl`
+~~Champs définis dans `PluginConfiguration.cs` mais non exposés dans l'UI :~~
+- ~~`SessionServerUrl`~~
+- ~~`DefaultMaxBitrate`~~
+- ~~`PreferDirectPlay`~~
+- ~~`AllowHostQualityControl`~~
 
-**Impact :** Utilisateurs ne peuvent pas configurer ces paramètres via l'interface.
-
-**Action :** Ajouter les champs manquants à configPage.html.
+**Corrections appliquées :**
+- Page de configuration entièrement réécrite avec 3 sections : Authentication, Session Server, Quality Control
+- Ajout de tous les champs manquants avec descriptions et validations appropriées
+- `DefaultMaxBitrate` : dropdown avec options prédéfinies (Auto, 4K, 1080p, 720p, 480p, 360p)
+- `SessionServerUrl` : champ texte avec placeholder "Auto-detect"
+- Checkboxes pour `PreferDirectPlay` et `AllowHostQualityControl`
+- Ajout de `TokenTtlSeconds` avec min/max HTML5
 
 #### 4.4.2 Aucun Test Unitaire
 
 **Sévérité :** Haute
+**Statut :** CORRIGÉ
 
-Tests nécessaires :
-- Génération JWT avec différents claims
-- Logique rate limiting
-- Validation configuration
-- Caching script
+~~Tests nécessaires :~~
+- ~~Génération JWT avec différents claims~~
+- ~~Logique rate limiting~~
+- ~~Validation configuration~~
+- ~~Caching script~~
+
+**Corrections appliquées :**
+- 31 tests unitaires ajoutés dans `OpenWatchParty.Tests/`
+- `PluginTests.cs` : 4 tests pour validation constantes (GUID format, valeur, version)
+- `PluginConfigurationTests.cs` : 27 tests couvrant :
+  - Valeurs par défaut de chaque champ
+  - Validation et clamping des TTL (TokenTtlSeconds, InviteTtlSeconds)
+  - Clamping DefaultMaxBitrate (valeurs négatives → 0)
+  - Comportement null → empty pour JwtSecret
+  - Valeurs par défaut booléens (PreferDirectPlay, AllowHostQualityControl)
 
 ### 4.5 Problèmes Moyenne Priorité
 
 #### 4.5.1 Race Condition Cache Statique
 
-**Localisation :** `OpenWatchPartyController.cs` lignes 64-72
+**Localisation :** `OpenWatchPartyController.cs`
+**Statut :** CORRIGÉ
 
+~~**Problème :**~~
 ```csharp
 if (_cachedScript == null) {
     // Multiple threads peuvent entrer ici simultanément
@@ -461,7 +480,11 @@ if (_cachedScript == null) {
 }
 ```
 
-**Recommandation :** Utiliser `Lazy<T>` ou double-checked locking.
+**Corrections appliquées :**
+- Utilisation de `Lazy<T>` avec `LazyThreadSafetyMode.ExecutionAndPublication`
+- Méthode `LoadScriptFromResource()` charge le script depuis embedded resource
+- Génération ETag SHA256 au chargement
+- Initialisation thread-safe garantie
 
 #### 4.5.2 Changement Secret JWT
 
@@ -474,10 +497,15 @@ if (_cachedScript == null) {
 #### 4.6.1 GUID Plugin en Dur
 
 **Localisation :** `Plugin.cs`, `configPage.html`
+**Statut :** CORRIGÉ
 
-Le GUID apparaît à deux endroits - risque de désynchronisation.
+~~Le GUID apparaît à deux endroits - risque de désynchronisation.~~
 
-**Recommandation :** Utiliser une constante partagée.
+**Corrections appliquées :**
+- `Plugin.cs` : Constante `public const string PluginGuid` définit la valeur unique
+- `OpenWatchPartyController.cs` : Nouvel endpoint `GET /OpenWatchParty/Info` retourne l'ID du plugin
+- `configPage.html` : Récupère le GUID dynamiquement via API au lieu de hardcoder
+- Fallback vers GUID hardcodé si l'API échoue (graceful degradation)
 
 #### 4.6.2 Valeurs Hardcodées
 

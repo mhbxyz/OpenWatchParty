@@ -10,6 +10,12 @@ namespace OpenWatchParty.Plugin;
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
     /// <summary>
+    /// The plugin's unique identifier (GUID).
+    /// This constant is used both in Plugin.Id and should match configPage.html.
+    /// </summary>
+    public const string PluginGuid = "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d";
+
+    /// <summary>
     /// Singleton instance - standard Jellyfin plugin pattern.
     /// Thread-safe: set once during plugin initialization by Jellyfin's plugin loader.
     /// </summary>
@@ -40,7 +46,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 
     public override string Name => "OpenWatchParty";
 
-    public override Guid Id => new("0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d");
+    public override Guid Id => new(PluginGuid);
 
     /// <summary>
     /// Gets the plugin description.

@@ -26,9 +26,8 @@ public class OpenWatchPartyController : ControllerBase
     private static DateTime _lastRateLimitCleanup = DateTime.UtcNow;
     private static readonly TimeSpan RateLimitCleanupInterval = TimeSpan.FromMinutes(5);
 
-    // Cache for embedded script content (read once at startup)
-    private static string? _cachedScript;
-    private static string? _cachedScriptETag;
+    // Cache for embedded script content using Lazy<T> for thread-safe initialization (fixes audit 4.5.1)
+    private static readonly Lazy<(string Content, string ETag)> _scriptCache = new(LoadScriptFromResource, LazyThreadSafetyMode.ExecutionAndPublication);
 
     // P-CS02 fix: Cache JWT signing credentials and handler to avoid repeated allocations
     private static SigningCredentials? _cachedSigningCredentials;
@@ -45,38 +44,65 @@ public class OpenWatchPartyController : ControllerBase
     }
 
     /// <summary>
+    /// Loads the client script from embedded resources (thread-safe, called once via Lazy).
+    /// </summary>
+    private static (string Content, string ETag) LoadScriptFromResource()
+    {
+        var assembly = typeof(OpenWatchPartyController).Assembly;
+        var resourceName = "OpenWatchParty.Plugin.Web.plugin.js";
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            throw new InvalidOperationException($"Embedded resource '{resourceName}' not found");
+        }
+        using var reader = new StreamReader(stream);
+        var content = reader.ReadToEnd();
+        var hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        var etag = $"\"{Convert.ToBase64String(hash)[..16]}\"";
+        return (content, etag);
+    }
+
+    /// <summary>
     /// Returns the OpenWatchParty client JavaScript.
     /// Supports ETag caching for efficient client-side caching.
     /// </summary>
     /// <returns>The JavaScript client script.</returns>
     [HttpGet("ClientScript")]
     [Produces("text/javascript")]
-    public async Task<ActionResult> GetClientScript()
+    public ActionResult GetClientScript()
     {
+        // Get cached script (thread-safe via Lazy<T>)
+        var (content, etag) = _scriptCache.Value;
+
         // Check If-None-Match header for cache validation
         var requestETag = Request.Headers["If-None-Match"].FirstOrDefault();
-        if (!string.IsNullOrEmpty(requestETag) && requestETag == _cachedScriptETag)
+        if (!string.IsNullOrEmpty(requestETag) && requestETag == etag)
         {
             return StatusCode(304); // Not Modified
         }
 
-        // Load script from embedded resource (cached after first load)
-        if (_cachedScript == null)
-        {
-            var assembly = typeof(OpenWatchPartyController).Assembly;
-            var resourceName = "OpenWatchParty.Plugin.Web.plugin.js";
-            using var stream = assembly.GetManifestResourceStream(resourceName);
-            if (stream == null) return NotFound();
-            using var reader = new StreamReader(stream);
-            _cachedScript = await reader.ReadToEndAsync();
-            _cachedScriptETag = $"\"{Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(_cachedScript)))[..16]}\"";
-        }
-
         // Set cache headers
         Response.Headers["Cache-Control"] = "public, max-age=3600";
-        Response.Headers["ETag"] = _cachedScriptETag;
+        Response.Headers["ETag"] = etag;
 
-        return Content(_cachedScript, "text/javascript");
+        return Content(content, "text/javascript");
+    }
+
+    /// <summary>
+    /// Returns plugin information including the plugin ID.
+    /// Useful for configuration pages to dynamically get the plugin GUID.
+    /// </summary>
+    /// <returns>Plugin info including ID, name, and version.</returns>
+    [HttpGet("Info")]
+    [Produces("application/json")]
+    public ActionResult GetPluginInfo()
+    {
+        return Ok(new
+        {
+            id = Plugin.PluginGuid,
+            name = Plugin.Instance?.Name ?? "OpenWatchParty",
+            version = Plugin.PluginVersion
+        });
     }
 
     /// <summary>

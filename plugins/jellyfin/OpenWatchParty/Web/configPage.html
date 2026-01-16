@@ -4,22 +4,74 @@
     <title>OpenWatchParty Configuration</title>
 </head>
 <body>
-    <div data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+    <div data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
         <div data-role="content">
             <div class="content-primary">
                 <form class="openwatchpartyConfigurationForm">
-                    <div class="inputContainer">
-                        <input is="emby-input" type="password" id="JwtSecret" label="JWT Secret" autocomplete="new-password" />
-                        <div class="fieldDescription">Secret used to sign and verify session tokens. Leave empty to keep current value.</div>
+                    <!-- Authentication Settings -->
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Authentication</h2>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="password" id="JwtSecret" label="JWT Secret" autocomplete="new-password" />
+                            <div class="fieldDescription">Secret used to sign and verify session tokens (min 32 characters). Leave empty to keep current value. If not configured, authentication is disabled.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
+                            <div class="fieldDescription">Audience claim for JWT tokens. Must match the session server configuration.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="JwtIssuer" label="JWT Issuer" />
+                            <div class="fieldDescription">Issuer claim for JWT tokens. Must match the session server configuration.</div>
+                        </div>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="number" id="TokenTtlSeconds" label="Token TTL (seconds)" min="60" max="86400" step="60" />
+                            <div class="fieldDescription">How long tokens remain valid (60-86400 seconds). Default: 3600 (1 hour).</div>
+                        </div>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
+
+                    <!-- Server Settings -->
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Session Server</h2>
+                        <div class="inputContainer">
+                            <input is="emby-input" type="text" id="SessionServerUrl" label="Session Server URL" placeholder="Auto-detect (same host, port 3000)" />
+                            <div class="fieldDescription">WebSocket server URL (e.g., wss://party.example.com/ws). Leave empty for auto-detection.</div>
+                        </div>
                     </div>
-                    <div class="inputContainer">
-                        <input is="emby-input" type="text" id="JwtIssuer" label="JWT Issuer" />
+
+                    <!-- Quality Settings -->
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Quality Control</h2>
+                        <div class="inputContainer">
+                            <select is="emby-select" id="DefaultMaxBitrate" label="Default Max Bitrate">
+                                <option value="0">Auto (no limit)</option>
+                                <option value="120000000">4K - 120 Mbps</option>
+                                <option value="80000000">4K - 80 Mbps</option>
+                                <option value="20000000">1080p - 20 Mbps</option>
+                                <option value="8000000">1080p - 8 Mbps</option>
+                                <option value="4000000">720p - 4 Mbps</option>
+                                <option value="1500000">480p - 1.5 Mbps</option>
+                                <option value="420000">360p - 420 Kbps</option>
+                            </select>
+                            <div class="fieldDescription">Maximum streaming bitrate for watch parties. Lower values reduce bandwidth but decrease quality.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="PreferDirectPlay" />
+                                <span>Prefer Direct Play</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">When enabled, attempts to play media without transcoding if the client supports the format.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="AllowHostQualityControl" />
+                                <span>Allow Host Quality Control</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">When enabled, the host can change quality settings during a watch party.</div>
+                        </div>
                     </div>
+
                     <div>
-                        <button is="emby-button" type="submit" class="raised button-confirm block">
+                        <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>Save</span>
                         </button>
                     </div>
@@ -29,19 +81,48 @@
 
         <script type="text/javascript">
             var OpenWatchPartyConfigurationPage = {
-                pluginId: "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
+                // Fallback GUID (should match Plugin.PluginGuid constant)
+                pluginId: "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d",
+
+                // Fetch plugin ID from API (preferred) to avoid GUID desync
+                init: function() {
+                    var self = this;
+                    return fetch(ApiClient.getUrl('OpenWatchParty/Info'))
+                        .then(function(response) { return response.json(); })
+                        .then(function(info) {
+                            self.pluginId = info.id;
+                        })
+                        .catch(function() {
+                            // Fallback to hardcoded GUID if API fails
+                            console.warn('OpenWatchParty: Could not fetch plugin info, using fallback GUID');
+                        });
+                }
             };
 
             $('.pluginConfigurationPage').on('pageshow', function () {
                 var page = this;
                 Dashboard.showLoadingMsg();
 
-                ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
+                // Initialize plugin ID then load configuration
+                OpenWatchPartyConfigurationPage.init().then(function() {
+                    return ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId);
+                }).then(function (config) {
+                    // Authentication settings
                     // Don't expose secret - show placeholder if configured
                     $('#JwtSecret', page).val('');
                     $('#JwtSecret', page).attr('placeholder', config.JwtSecret ? '••••••••' : 'Not configured');
                     $('#JwtAudience', page).val(config.JwtAudience || 'OpenWatchParty');
                     $('#JwtIssuer', page).val(config.JwtIssuer || 'Jellyfin');
+                    $('#TokenTtlSeconds', page).val(config.TokenTtlSeconds || 3600);
+
+                    // Server settings
+                    $('#SessionServerUrl', page).val(config.SessionServerUrl || '');
+
+                    // Quality settings
+                    $('#DefaultMaxBitrate', page).val(config.DefaultMaxBitrate || 0);
+                    $('#PreferDirectPlay', page).prop('checked', config.PreferDirectPlay !== false);
+                    $('#AllowHostQualityControl', page).prop('checked', config.AllowHostQualityControl !== false);
+
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {
                     Dashboard.hideLoadingMsg();
@@ -55,6 +136,7 @@
                 var page = $(this).parents('.pluginConfigurationPage')[0];
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
+                    // Authentication settings
                     // Only update secret if a new value is provided
                     var newSecret = $('#JwtSecret', page).val();
                     if (newSecret) {
@@ -62,6 +144,15 @@
                     }
                     config.JwtAudience = $('#JwtAudience', page).val();
                     config.JwtIssuer = $('#JwtIssuer', page).val();
+                    config.TokenTtlSeconds = parseInt($('#TokenTtlSeconds', page).val(), 10) || 3600;
+
+                    // Server settings
+                    config.SessionServerUrl = $('#SessionServerUrl', page).val();
+
+                    // Quality settings
+                    config.DefaultMaxBitrate = parseInt($('#DefaultMaxBitrate', page).val(), 10) || 0;
+                    config.PreferDirectPlay = $('#PreferDirectPlay', page).prop('checked');
+                    config.AllowHostQualityControl = $('#AllowHostQualityControl', page).prop('checked');
 
                     return ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config);
                 }).then(function () {
