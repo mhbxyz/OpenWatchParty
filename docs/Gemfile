@@ -1,9 +1,8 @@
 source "https://rubygems.org"
 
-gem "jekyll", "~> 4.3"
+# GitHub Pages compatible setup
+gem "github-pages", group: :jekyll_plugins
+
+# For local development with the theme
 gem "just-the-docs"
 gem "webrick" # Required for Ruby 3.0+
-
-gem "erb"
-gem "base64"
-gem "bigdecimal"
