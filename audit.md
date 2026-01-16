@@ -46,7 +46,7 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 |----------|--------|
 | Problèmes critiques | 5 (2 corrigés) |
 | Problèmes haute priorité | 12 (3 doc corrigés) |
-| Problèmes moyenne priorité | 15 |
+| Problèmes moyenne priorité | 15 (3 doc corrigés) |
 | Problèmes basse priorité | 10 |
 | Tests unitaires | **0** |
 | Couverture CI/CD | **0%** |
@@ -164,14 +164,21 @@ Manque une section "Ce que l'authentification JWT ne protège PAS" :
 #### 2.4.1 API Configuration Incomplète
 
 **Localisation :** `docs/technical/api.md` lignes 192-223
+**Statut :** CORRIGÉ
 
 - Champs de configuration sans explication
 - `InviteTtlSeconds` documenté mais apparemment inutilisé
 - Comportement de `SessionServerUrl` vide non clarifié
 
+**Correction appliquée :** Section "Configuration Fields Reference" ajoutée avec :
+- Tableau complet des 10 champs de configuration avec types, valeurs par défaut et descriptions
+- `InviteTtlSeconds` marqué comme "Reserved for future use"
+- Section "SessionServerUrl Behavior" expliquant le comportement auto-detect vs URL explicite
+
 #### 2.4.2 Cas Limites Non Documentés
 
 **Localisation :** Documentation générale
+**Statut :** CORRIGÉ
 
 Scénarios non documentés :
 - Comportement quand plusieurs clients rejoignent rapidement
@@ -180,12 +187,27 @@ Scénarios non documentés :
 - Taille de room maximale recommandée
 - Dégradation de performance à N connexions
 
+**Correction appliquée :** Sections ajoutées à `docs/technical/architecture.md` :
+- "Operational Limits" avec tableaux des contraintes et performances
+- "Edge Cases and Behavior" documentant :
+  - Multiple Clients Joining Rapidly
+  - Host Network Disconnect (avec diagramme)
+  - Clock Skew Tolerance (tableau par niveau)
+  - Buffering and HLS Edge Cases
+  - Room Capacity and Scaling (avec projections)
+  - Reconnection Behavior
+
 #### 2.4.3 Glossaire Manquant
+
+**Statut :** CORRIGÉ
 
 Termes techniques utilisés sans définition :
 - HLS (HTTP Live Streaming)
 - RTT (Round-Trip Time)
 - EMA (Exponential Moving Average)
+
+**Correction appliquée :** Section "Glossary" ajoutée à `docs/README.md` avec définitions de :
+- HLS, RTT, EMA, JWT, CORS, WebSocket, Drift, Host
 
 ### 2.5 Problèmes Basse Priorité
 
