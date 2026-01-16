@@ -1,7 +1,7 @@
 use crate::auth::JwtConfig;
 use crate::messaging::{broadcast_room_list, broadcast_to_room, send_room_list, send_to_client};
 use crate::room::{handle_leave, close_room};
-use crate::types::{Clients, PlaybackState, Room, WsMessage};
+use crate::types::{Clients, ClientMessageType, IncomingMessage, PlaybackState, Room, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
 use log::{debug, info, warn};
@@ -29,6 +29,7 @@ const MAX_CLIENTS_PER_ROOM: usize = 20;  // Max clients in a room
 // Payload validation
 const MAX_POSITION_SECONDS: f64 = 86400.0;  // 24 hours max
 const MAX_MESSAGE_SIZE: usize = 64 * 1024;  // 64 KB max message size
+const MAX_NAME_LENGTH: usize = 100;  // Max length for user/room names
 
 /// Validates a playback position value.
 /// Returns false for NaN, Infinity, negative values, or values exceeding 24 hours (fixes L12).
@@ -43,6 +44,33 @@ fn is_valid_play_state(state: &str) -> bool {
 fn is_valid_media_id(id: &str) -> bool {
     // Jellyfin item IDs are 32 hex characters
     id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Validates a name (username or room name).
+/// Returns true if the name is valid (non-empty, within length limit, no control characters).
+#[allow(dead_code)]  // Used in tests, kept as validation companion to sanitize_name
+fn is_valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= MAX_NAME_LENGTH
+        && !name.chars().any(|c| c.is_control())
+}
+
+/// Sanitizes a name by trimming whitespace and truncating to max length.
+/// Returns None if the result would be empty.
+fn sanitize_name(name: &str) -> Option<String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Truncate to max length (at char boundary)
+    let sanitized: String = trimmed.chars().take(MAX_NAME_LENGTH).collect();
+    // Remove control characters
+    let clean: String = sanitized.chars().filter(|c| !c.is_control()).collect();
+    if clean.is_empty() {
+        None
+    } else {
+        Some(clean)
+    }
 }
 
 pub async fn client_connection(ws: warp::ws::WebSocket, clients: Clients, rooms: crate::types::Rooms, jwt_config: Arc<JwtConfig>) {
@@ -179,7 +207,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
 
     let msg_str = if let Ok(s) = msg.to_str() { s } else { return };
 
-    let mut parsed: WsMessage = match serde_json::from_str(msg_str) {
+    let mut parsed: IncomingMessage = match serde_json::from_str(msg_str) {
         Ok(v) => v,
         Err(e) => {
             warn!("JSON parse error from {}: {}", client_id, e);
@@ -189,10 +217,10 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
     };
 
     // Log message type only (not full payload for privacy)
-    debug!("Message from {}: {}", client_id, parsed.msg_type);
+    debug!("Message from {}: {:?}", client_id, parsed.msg_type);
 
-    match parsed.msg_type.as_str() {
-        "auth" => {
+    match parsed.msg_type {
+        ClientMessageType::Auth => {
             // Handle authentication via message (security: token not in URL)
             if let Some(payload) = &parsed.payload {
                 // Try JWT token first
@@ -228,12 +256,14 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 // If no token but user_name provided, accept identity (auth disabled mode)
                 // This allows clients to identify themselves when JWT is not required
                 if !jwt_config.enabled {
-                    let user_name = payload.get("user_name").and_then(|v| v.as_str());
+                    let user_name = payload.get("user_name")
+                        .and_then(|v| v.as_str())
+                        .and_then(sanitize_name);
                     let user_id = payload.get("user_id").and_then(|v| v.as_str());
                     if let Some(name) = user_name {
                         let mut locked = clients.write().await;
                         if let Some(client) = locked.get_mut(client_id) {
-                            client.user_name = name.to_string();
+                            client.user_name = name.clone();
                             if let Some(uid) = user_id {
                                 client.user_id = uid.to_string();
                             }
@@ -243,10 +273,10 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 }
             }
         },
-        "list_rooms" => {
+        ClientMessageType::ListRooms => {
             send_room_list(client_id, clients, rooms).await;
         },
-        "create_room" => {
+        ClientMessageType::CreateRoom => {
             // Require authentication for room operations
             if !is_authenticated(client_id, clients).await {
                 send_error(client_id, clients, "Authentication required").await;
@@ -268,12 +298,13 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
             info!("create_room payload: {:?}", parsed.payload);
 
             // Get username from payload first, fall back to client state
-            let host_name = match parsed.payload.as_ref()
+            let payload_name = parsed.payload.as_ref()
                 .and_then(|p| p.get("user_name"))
                 .and_then(|v| v.as_str())
-            {
-                Some(name) if !name.is_empty() => name.to_string(),
-                _ => {
+                .and_then(sanitize_name);
+            let host_name = match payload_name {
+                Some(name) => name,
+                None => {
                     let locked_clients = clients.read().await;
                     locked_clients.get(client_id)
                         .map(|c| c.user_name.clone())
@@ -330,7 +361,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
 
             broadcast_room_list(clients, rooms).await;
         },
-        "join_room" => {
+        ClientMessageType::JoinRoom => {
             // Require authentication for room operations
             if !is_authenticated(client_id, clients).await {
                 send_error(client_id, clients, "Authentication required").await;
@@ -383,7 +414,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 }
             }
         },
-        "ready" => {
+        ClientMessageType::Ready => {
             if let Some(ref room_id) = parsed.room {
                 let mut locked_rooms = rooms.write().await;
                 if let Some(room) = locked_rooms.get_mut(room_id) {
@@ -397,7 +428,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 }
             }
         },
-        "leave_room" => {
+        ClientMessageType::LeaveRoom => {
             info!("Client {} leaving room", client_id);
             {
                 let mut locked_clients = clients.write().await;
@@ -406,7 +437,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
             }
             broadcast_room_list(clients, rooms).await;
         },
-        "player_event" | "state_update" => {
+        ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
             if let Some(ref room_id) = parsed.room {
                 // P-RS01 fix: Collect senders while holding lock, then send after releasing
                 // This reduces lock contention during broadcasts
@@ -421,7 +452,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                             let current_ts = now_ms();
 
                             // For state_update: filter out updates that are too frequent or have insignificant changes
-                            let should_process = if parsed.msg_type == "state_update" {
+                            let should_process = if parsed.msg_type == ClientMessageType::StateUpdate {
                                 if let Some(payload) = &parsed.payload {
                                     let new_pos = payload.get("position").and_then(|v| v.as_f64()).unwrap_or(room.state.position);
                                     let new_play_state = payload.get("play_state").and_then(|v| v.as_str()).unwrap_or(&room.state.play_state);
@@ -464,7 +495,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                                             room.state.play_state = st.to_string();
                                         }
                                     }
-                                    if parsed.msg_type == "player_event" {
+                                    if parsed.msg_type == ClientMessageType::PlayerEvent {
                                         if let Some(action) = payload.get("action").and_then(|v| v.as_str()) {
                                             if action == "play" { room.state.play_state = "playing".to_string(); }
                                             if action == "pause" { room.state.play_state = "paused".to_string(); }
@@ -474,7 +505,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
 
                                 room.last_state_ts = current_ts;
 
-                                if parsed.msg_type == "player_event" {
+                                if parsed.msg_type == ClientMessageType::PlayerEvent {
                                     room.last_command_ts = current_ts;
                                     let target_server_ts = now_ms() + CONTROL_SCHEDULE_MS;
                                     if let Some(payload) = parsed.payload.as_mut() {
@@ -517,7 +548,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 }
             }
         },
-        "ping" => {
+        ClientMessageType::Ping => {
             let locked_clients = clients.read().await;
             send_to_client(client_id, &locked_clients, &WsMessage {
                 msg_type: "pong".to_string(),
@@ -528,7 +559,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 server_ts: Some(now_ms()),
             });
         },
-        "client_log" => {
+        ClientMessageType::ClientLog => {
             // Forward client logs to server stdout for debugging
             if let Some(payload) = &parsed.payload {
                 let category = payload.get("category").and_then(|v| v.as_str()).unwrap_or("LOG");
@@ -537,7 +568,7 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 info!("[CLIENT:{}:{}] {}", short_id, category, message);
             }
         },
-        "quality_update" => {
+        ClientMessageType::QualityUpdate => {
             // Host broadcasts quality settings to all clients in the room
             if let Some(ref room_id) = parsed.room {
                 // P-RS01 fix: Collect senders while holding lock, then send after releasing
@@ -591,8 +622,104 @@ async fn client_msg(client_id: &str, msg: warp::ws::Message, clients: &Clients, 
                 }
             }
         },
-        other => {
-            debug!("Unknown message type '{}' from {}", other, client_id);
+        ClientMessageType::Unknown => {
+            warn!("Unknown message type from client {}", client_id);
+            send_error(client_id, clients, "Unknown message type").await;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Position validation tests
+    #[test]
+    fn test_is_valid_position_normal() {
+        assert!(is_valid_position(0.0));
+        assert!(is_valid_position(100.5));
+        assert!(is_valid_position(3600.0));  // 1 hour
+        assert!(is_valid_position(86400.0)); // 24 hours (max)
+    }
+
+    #[test]
+    fn test_is_valid_position_invalid() {
+        assert!(!is_valid_position(-1.0));           // Negative
+        assert!(!is_valid_position(-0.001));         // Slightly negative
+        assert!(!is_valid_position(86400.1));        // Over max
+        assert!(!is_valid_position(f64::NAN));       // NaN
+        assert!(!is_valid_position(f64::INFINITY));  // Infinity
+        assert!(!is_valid_position(f64::NEG_INFINITY));
+    }
+
+    // Play state validation tests
+    #[test]
+    fn test_is_valid_play_state() {
+        assert!(is_valid_play_state("playing"));
+        assert!(is_valid_play_state("paused"));
+        assert!(!is_valid_play_state("stopped"));
+        assert!(!is_valid_play_state(""));
+        assert!(!is_valid_play_state("PLAYING"));
+        assert!(!is_valid_play_state("buffering"));
+    }
+
+    // Media ID validation tests
+    #[test]
+    fn test_is_valid_media_id() {
+        // Valid Jellyfin IDs (32 hex characters)
+        assert!(is_valid_media_id("550e8400e29b41d4a716446655440000"));
+        assert!(is_valid_media_id("abcdef0123456789abcdef0123456789"));
+        assert!(is_valid_media_id("ABCDEF0123456789ABCDEF0123456789"));
+    }
+
+    #[test]
+    fn test_is_valid_media_id_invalid() {
+        assert!(!is_valid_media_id(""));                                 // Empty
+        assert!(!is_valid_media_id("550e8400e29b41d4a71644665544000"));  // Too short (31)
+        assert!(!is_valid_media_id("550e8400e29b41d4a7164466554400000")); // Too long (33)
+        assert!(!is_valid_media_id("550e8400e29b41d4a716446655440xyz")); // Invalid chars
+        assert!(!is_valid_media_id("not-a-valid-jellyfin-media-id!!"));  // Invalid format
+    }
+
+    // Name validation tests
+    #[test]
+    fn test_is_valid_name() {
+        assert!(is_valid_name("Alice"));
+        assert!(is_valid_name("Bob123"));
+        assert!(is_valid_name("用户名"));  // Unicode
+        assert!(is_valid_name("a")); // Single char
+    }
+
+    #[test]
+    fn test_is_valid_name_invalid() {
+        assert!(!is_valid_name(""));  // Empty
+        assert!(!is_valid_name("a\x00b"));  // Control character (null)
+        assert!(!is_valid_name("test\n"));  // Newline
+        // Very long name
+        let long_name: String = "a".repeat(MAX_NAME_LENGTH + 1);
+        assert!(!is_valid_name(&long_name));
+    }
+
+    // Name sanitization tests
+    #[test]
+    fn test_sanitize_name() {
+        assert_eq!(sanitize_name("Alice"), Some("Alice".to_string()));
+        assert_eq!(sanitize_name("  Bob  "), Some("Bob".to_string())); // Trim whitespace
+        assert_eq!(sanitize_name(""), None); // Empty
+        assert_eq!(sanitize_name("   "), None); // Only whitespace
+    }
+
+    #[test]
+    fn test_sanitize_name_control_chars() {
+        assert_eq!(sanitize_name("test\x00name"), Some("testname".to_string()));
+        assert_eq!(sanitize_name("hello\nworld"), Some("helloworld".to_string()));
+    }
+
+    #[test]
+    fn test_sanitize_name_truncation() {
+        let long_name: String = "a".repeat(MAX_NAME_LENGTH + 50);
+        let result = sanitize_name(&long_name);
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().len(), MAX_NAME_LENGTH);
     }
 }

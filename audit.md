@@ -45,10 +45,10 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 | Métrique | Valeur |
 |----------|--------|
 | Problèmes critiques | 5 (2 corrigés) |
-| Problèmes haute priorité | 12 (3 doc corrigés) |
-| Problèmes moyenne priorité | 15 (3 doc corrigés) |
+| Problèmes haute priorité | 12 (3 doc + 2 Rust corrigés) |
+| Problèmes moyenne priorité | 15 (3 doc + 2 Rust corrigés) |
 | Problèmes basse priorité | 10 (3 doc corrigés) |
-| Tests unitaires | **0** |
+| Tests unitaires | **27** (Rust) |
 | Couverture CI/CD | **0%** |
 
 ---
@@ -240,9 +240,9 @@ Termes techniques utilisés sans définition :
 **Qualité : Bonne** - Code propre et bien structuré, prêt pour la production.
 
 **Statistiques :**
-- Lignes de code : ~1136 (7 modules)
+- Lignes de code : ~1200 (7 modules)
 - Compilation : Clean (aucun warning Clippy)
-- Tests : **0**
+- Tests : **27** (utils, auth, types, ws)
 
 ### 3.2 Architecture
 
@@ -280,56 +280,65 @@ Aucun problème critique identifié dans le code.
 #### 3.5.1 Aucun Test Unitaire
 
 **Sévérité :** Haute
-**Impact :** Régressions faciles lors de refactoring
+**Statut :** CORRIGÉ
 
-Tests nécessaires :
-- Logique rate limiting (`check_rate_limit`)
-- Validation position (`is_valid_position`)
-- Cycle de vie room (create, join, leave, close)
-- Flux d'authentification
-- Gestion des types de messages
+~~Tests nécessaires :~~
+- ~~Logique rate limiting (`check_rate_limit`)~~
+- ~~Validation position (`is_valid_position`)~~
+- ~~Cycle de vie room (create, join, leave, close)~~
+- ~~Flux d'authentification~~
+- ~~Gestion des types de messages~~
+
+**Corrections appliquées :**
+- 27 tests unitaires ajoutés couvrant :
+  - `utils.rs` : `now_ms()` valeurs et monotonicité
+  - `auth.rs` : entropie (6 tests), validation JWT (3 tests)
+  - `types.rs` : sérialisation/désérialisation enum (6 tests)
+  - `ws.rs` : validation position, play_state, media_id, noms (12 tests)
 
 #### 3.5.2 Dispatch par String
 
 **Sévérité :** Haute
-**Localisation :** `ws.rs` lignes 194-597
+**Statut :** CORRIGÉ
 
-```rust
-match parsed.msg_type.as_str() {
-    "auth" => { ... },
-    "player_event" => { ... },
-    other => { debug!("Unknown message type...") } // Silencieux
-}
-```
+~~**Problème :** Typos dans les types de messages tombent silencieusement dans le handler par défaut.~~
 
-**Problème :** Typos dans les types de messages tombent silencieusement dans le handler par défaut.
-
-**Recommandation :** Utiliser un enum avec serde pour type-safety à la compilation.
+**Corrections appliquées :**
+- Création de `ClientMessageType` enum avec `#[serde(rename_all = "snake_case")]`
+- Création de `IncomingMessage` struct utilisant l'enum
+- Variante `Unknown` avec `#[serde(other)]` capture les types inconnus
+- Match exhaustif sur l'enum au lieu de strings
+- Les types inconnus génèrent maintenant un warning et une erreur client
 
 ### 3.6 Problèmes Moyenne Priorité
 
 #### 3.6.1 Validation Noms Manquante
 
-**Localisation :** `ws.rs` lignes 325, 370
+**Localisation :** `ws.rs`
+**Statut :** CORRIGÉ
 
-Les noms d'utilisateur et de room ne sont pas validés :
-- Pas de limite de longueur
-- Pas de validation de contenu
+~~Les noms d'utilisateur et de room ne sont pas validés :~~
+- ~~Pas de limite de longueur~~
+- ~~Pas de validation de contenu~~
 
-**Recommandation :** Ajouter `const MAX_NAME_LENGTH: usize = 256;`
+**Corrections appliquées :**
+- Ajout de `const MAX_NAME_LENGTH: usize = 100;`
+- Fonction `is_valid_name()` : vérifie longueur et absence de caractères de contrôle
+- Fonction `sanitize_name()` : trim, tronque, supprime caractères de contrôle
+- Validation appliquée dans handlers `auth` et `create_room`
 
 #### 3.6.2 Vérification Entropie JWT Simpliste
 
-**Localisation :** `auth.rs` lignes 32-39
+**Localisation :** `auth.rs`
+**Statut :** CORRIGÉ
 
-```rust
-// Actuel : compte juste les caractères uniques
-if unique_chars < 10 || secret.len() < 32 { warn!(...) }
-```
+~~**Problème :** "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab" passe le test mais a une entropie terrible.~~
 
-**Problème :** "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab" passe le test mais a une entropie terrible.
-
-**Recommandation :** Utiliser une bibliothèque d'entropie conforme NIST SP 800-63B.
+**Corrections appliquées :**
+- Implémentation de `calculate_entropy()` utilisant l'entropie de Shannon
+- Seuil minimum de 80 bits (inspiré NIST SP 800-63B)
+- Avertissement log avec valeur d'entropie calculée vs recommandée
+- 6 tests unitaires couvrant divers patterns d'entropie
 
 #### 3.6.3 Logs Non Structurés
 
@@ -341,11 +350,13 @@ info!("Client {} authenticated as {}", client_id, claims.name);
 
 **Recommandation :** Migrer vers `tracing` avec logs structurés JSON pour meilleure analyse.
 
+**Note :** Non corrigé - migration vers tracing est un changement plus important qui peut être fait ultérieurement.
+
 ### 3.7 Fonctionnalités Manquantes
 
 | Fonctionnalité | Statut | Priorité |
 |----------------|--------|----------|
-| Tests unitaires | Manquant | Haute |
+| Tests unitaires | **FAIT** (27 tests) | ~~Haute~~ |
 | Métriques Prometheus | Manquant | Moyenne |
 | Mots de passe room | Planifié | Moyenne |
 | Permissions utilisateur | Planifié | Basse |
@@ -839,39 +850,39 @@ CMD ["session-server"]
 
 ### 8.2 Court Terme (Ce Mois)
 
-| # | Action | Priorité | Effort |
-|---|--------|----------|--------|
-| 6 | Créer CI/CD GitHub Actions (tests, lint) | Critique | 4h |
-| 7 | Ajouter tests unitaires Rust | Haute | 8h |
-| 8 | Compléter UI configuration plugin | Haute | 2h |
-| 9 | Implémenter token refresh client | Haute | 2h |
-| 10 | Créer `.env.example` | Haute | 30min |
-| 11 | Ajouter HEALTHCHECK Docker | Haute | 15min |
-| 12 | Documenter Home section | Haute | 1h |
+| # | Action | Priorité | Effort | Statut |
+|---|--------|----------|--------|--------|
+| 6 | Créer CI/CD GitHub Actions (tests, lint) | Critique | 4h | À faire |
+| 7 | Ajouter tests unitaires Rust | Haute | 8h | **FAIT** (27 tests) |
+| 8 | Compléter UI configuration plugin | Haute | 2h | À faire |
+| 9 | Implémenter token refresh client | Haute | 2h | À faire |
+| 10 | Créer `.env.example` | Haute | 30min | À faire |
+| 11 | Ajouter HEALTHCHECK Docker | Haute | 15min | À faire |
+| 12 | Documenter Home section | Haute | 1h | **FAIT** |
 
 ### 8.3 Moyen Terme (Ce Trimestre)
 
-| # | Action | Priorité | Effort |
-|---|--------|----------|--------|
-| 13 | Ajouter métriques Prometheus | Moyenne | 4h |
-| 14 | Implémenter backoff reconnection WS | Moyenne | 1h |
-| 15 | Créer UI quality control | Moyenne | 4h |
-| 16 | Migrer logs structurés (tracing) | Moyenne | 2h |
-| 17 | Ajouter pre-commit hooks | Moyenne | 1h |
-| 18 | Enum message dispatch Rust | Moyenne | 2h |
-| 19 | Tests unitaires plugin C# | Moyenne | 4h |
-| 20 | Documenter limitations sécurité JWT | Moyenne | 1h |
+| # | Action | Priorité | Effort | Statut |
+|---|--------|----------|--------|--------|
+| 13 | Ajouter métriques Prometheus | Moyenne | 4h | À faire |
+| 14 | Implémenter backoff reconnection WS | Moyenne | 1h | À faire |
+| 15 | Créer UI quality control | Moyenne | 4h | À faire |
+| 16 | Migrer logs structurés (tracing) | Moyenne | 2h | À faire |
+| 17 | Ajouter pre-commit hooks | Moyenne | 1h | À faire |
+| 18 | Enum message dispatch Rust | Moyenne | 2h | **FAIT** |
+| 19 | Tests unitaires plugin C# | Moyenne | 4h | À faire |
+| 20 | Documenter limitations sécurité JWT | Moyenne | 1h | **FAIT** |
 
 ### 8.4 Long Terme (Backlog)
 
-| # | Action | Priorité |
-|---|--------|----------|
-| 21 | Tests unitaires client JS | Basse |
-| 22 | Mots de passe room | Basse |
-| 23 | Permissions utilisateur avancées | Basse |
-| 24 | Révocation tokens | Basse |
-| 25 | Glossaire documentation | Basse |
-| 26 | Diagrammes architecture complets | Basse |
+| # | Action | Priorité | Statut |
+|---|--------|----------|--------|
+| 21 | Tests unitaires client JS | Basse | À faire |
+| 22 | Mots de passe room | Basse | À faire |
+| 23 | Permissions utilisateur avancées | Basse | À faire |
+| 24 | Révocation tokens | Basse | À faire |
+| 25 | Glossaire documentation | Basse | **FAIT** |
+| 26 | Diagrammes architecture complets | Basse | **FAIT** |
 
 ---
 
