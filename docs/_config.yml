@@ -52,6 +52,9 @@ callouts:
     title: Tip
     color: green
 
+# Permalinks - pretty URLs without .html
+permalink: pretty
+
 # Exclude files
 exclude:
   - README.md
