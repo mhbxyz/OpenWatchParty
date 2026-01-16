@@ -137,6 +137,43 @@ Host Browser                     Server                   Client Browser
      │                              │                            │
 ```
 
+### Leaving a Room (Normal Disconnect)
+
+```
+Participant                      Server                       Host
+     │                              │                           │
+     ├── leave_room ───────────────►│                           │
+     │                              │                           │
+     │                         [Remove from room]               │
+     │                         [Update room state]              │
+     │                              │                           │
+     │                              ├── participants_update ───►│
+     │                              │   (count decreased)       │
+     │                              │                           │
+     │◄─── room_list ───────────────┤                           │
+     │                              │                           │
+  [Back to lobby]                   │                           │
+```
+
+### Host Disconnect (Room Closure)
+
+```
+Host                            Server                    Participants
+  │                                │                            │
+  X (disconnect/leave)             │                            │
+  │                                │                            │
+                              [Detect disconnect]               │
+                              [Close room]                      │
+                                   │                            │
+                                   ├── room_closed ────────────►│
+                                   │                            │
+                                   ├── room_list ──────────────►│
+                                   │   (room removed)           │
+                                   │                            │
+                                   │                    [Show notification]
+                                   │                    [Return to lobby]
+```
+
 ## Technology Stack
 
 | Component | Technology |

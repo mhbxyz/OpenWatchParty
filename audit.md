@@ -47,7 +47,7 @@ OpenWatchParty est un projet bien architecturé avec une documentation de qualit
 | Problèmes critiques | 5 (2 corrigés) |
 | Problèmes haute priorité | 12 (3 doc corrigés) |
 | Problèmes moyenne priorité | 15 (3 doc corrigés) |
-| Problèmes basse priorité | 10 |
+| Problèmes basse priorité | 10 (3 doc corrigés) |
 | Tests unitaires | **0** |
 | Couverture CI/CD | **0%** |
 
@@ -211,9 +211,25 @@ Termes techniques utilisés sans définition :
 
 ### 2.5 Problèmes Basse Priorité
 
-- Références croisées incohérentes entre fichiers
-- Diagrammes d'architecture incomplets (flux de déconnexion manquant)
-- Guide de troubleshooting incomplet (pas de HLS, rate limiting)
+**Statut :** CORRIGÉ
+
+- ~~Références croisées incohérentes entre fichiers~~
+- ~~Diagrammes d'architecture incomplets (flux de déconnexion manquant)~~
+- ~~Guide de troubleshooting incomplet (pas de HLS, rate limiting)~~
+
+**Corrections appliquées :**
+
+1. **Références croisées ajoutées** à `docs/operations/troubleshooting.md` :
+   - Liens vers Architecture Edge Cases, Security Guide, Configuration
+   - Liens vers sections spécifiques (Host Network Disconnect, Clock Skew Tolerance, Sync Algorithms)
+
+2. **Diagrammes d'architecture** ajoutés à `docs/technical/architecture.md` :
+   - "Leaving a Room (Normal Disconnect)" - flux participant → server → host
+   - "Host Disconnect (Room Closure)" - flux de fermeture de room
+
+3. **Guide de troubleshooting** enrichi avec nouvelles sections :
+   - "HLS Streaming Issues" : symptômes, explication HLS, 5 solutions détaillées, lien vers doc technique
+   - "Rate Limiting Issues" : tableau des limites, 4 solutions avec commandes de debug
 
 ---
 

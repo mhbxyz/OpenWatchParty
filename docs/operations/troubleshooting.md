@@ -9,6 +9,11 @@
 5. [ ] Correct WebSocket URL?
 6. [ ] Firewall allowing port 3000?
 
+**Related documentation:**
+- [Architecture - Edge Cases](../technical/architecture.md#edge-cases-and-behavior) - Expected behavior in various scenarios
+- [Security Guide](security.md) - Authentication and CORS issues
+- [Configuration](configuration.md) - Server and plugin settings
+
 ## Common Issues
 
 ### Watch Party Button Not Visible
@@ -105,6 +110,8 @@
    - Different versions may have different durations
    - Ensure all users can access the media
 
+**Technical details:** See [Architecture - Clock Skew Tolerance](../technical/architecture.md#clock-skew-tolerance) and [Sync Algorithms](../technical/sync.md)
+
 ### Room Closes Unexpectedly
 
 **Symptoms:**
@@ -126,6 +133,8 @@
    - Check host's connection
    - Check server logs for errors
 
+**Technical details:** See [Architecture - Host Network Disconnect](../technical/architecture.md#host-network-disconnect)
+
 ### Authentication Errors
 
 **Symptoms:**
@@ -146,6 +155,109 @@
 3. **Rate limiting**
    - Max 10 token requests per minute
    - Wait and try again
+
+### HLS Streaming Issues
+
+**Symptoms:**
+- Sync works initially but drifts during playback
+- Frequent buffering interrupts sync
+- Position jumps backward unexpectedly
+- "False pauses" trigger unwanted sync events
+
+**Understanding HLS:**
+
+HLS (HTTP Live Streaming) breaks video into small segments (typically 2-10 seconds). This causes:
+- Buffering gaps between segments
+- Position reporting delays
+- `readyState` changes during segment loads
+
+**Solutions:**
+
+1. **Buffering during sync**
+   ```
+   Problem: Video buffers, reports paused state, triggers sync issues
+   Solution: OpenWatchParty filters these "false pauses" automatically
+   If issues persist: reduce video quality to improve buffering
+   ```
+
+2. **Position jumps backward**
+   ```
+   Problem: HLS reports position from previous segment during load
+   Solution: Server ignores small backward jumps (< 2s) automatically
+   If large jumps: check network stability, try different quality
+   ```
+
+3. **Segment loading delays**
+   - Reduce bitrate/quality in Jellyfin playback settings
+   - Use direct play instead of transcoding when possible
+   - Check network bandwidth between client and Jellyfin server
+
+4. **Direct play vs transcoding**
+   ```bash
+   # Check if transcoding is happening
+   # In Jellyfin Dashboard > Playback > Active Devices
+   # Look for "Transcoding" indicator
+
+   # For better sync, prefer:
+   # - Direct Play (no transcoding)
+   # - Direct Stream (container change only)
+   # Avoid if possible:
+   # - Transcoding (full re-encode)
+   ```
+
+5. **Safari-specific HLS issues**
+   - Safari uses native HLS (not hls.js like other browsers)
+   - May report `readyState` differently during buffering
+   - Workaround: Keep Safari tab in focus, or use Chrome/Firefox
+
+**Technical details:** See [Sync Algorithms - HLS Handling](../technical/sync.md#5-hls-handling-and-feedback-loop-prevention)
+
+### Rate Limiting Issues
+
+**Symptoms:**
+- "Rate limit exceeded" error
+- 429 HTTP status code
+- Cannot get new token
+- Messages being dropped
+
+**Types of rate limiting:**
+
+| Limit | Value | Applies To |
+|-------|-------|------------|
+| Token requests | 10/min | Per user, plugin endpoint |
+| WebSocket messages | 30/sec | Per client connection |
+| Message size | 64 KB | Per message |
+
+**Solutions:**
+
+1. **Token rate limit (10/min)**
+   ```
+   Cause: Too many page refreshes or reconnection attempts
+   Solution: Wait 1 minute, then refresh once
+   Prevention: Don't rapidly refresh the page
+   ```
+
+2. **Message rate limit (30/sec)**
+   ```
+   Cause: Rapid playback actions (spam play/pause/seek)
+   Solution: Slow down interactions
+   Note: Normal usage won't hit this limit
+   ```
+
+3. **Debugging rate limits**
+   ```bash
+   # Check server logs for rate limit messages
+   docker logs session-server 2>&1 | grep -i "rate"
+
+   # Look for:
+   # "Rate limit exceeded for client X"
+   # "Message dropped due to rate limit"
+   ```
+
+4. **If rate limited frequently**
+   - Check for browser extensions that might cause extra requests
+   - Check for scripts auto-refreshing the page
+   - Verify you're not running multiple tabs with OpenWatchParty
 
 ### Panel Opens But Empty
 
