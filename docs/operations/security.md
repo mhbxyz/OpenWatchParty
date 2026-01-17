@@ -275,7 +275,7 @@ Security warnings logged:
 |------------|--------|
 | No room passwords | Planned |
 | No user permissions (democratic mode) | Planned |
-| No persistent sessions | Planned |
+| Ephemeral sessions | By design |
 | Single secret for all users | By design |
 | Rate limiting per client, not IP | By design (use reverse proxy) |
 | No token revocation | By design (short TTL, rotate secret) |
@@ -292,7 +292,6 @@ It's important to understand the scope of JWT authentication. While it verifies 
 | **Room joining** | Any authenticated user can join any room | Planned: room passwords |
 | **Room enumeration** | All users see all active rooms | By design - rooms are public within your Jellyfin instance |
 | **Token revocation** | Tokens valid until expiration | Rotate JWT secret to invalidate all tokens |
-| **Per-user permissions** | All users have equal permissions | Planned: user roles |
 
 ### Token Lifecycle
 

@@ -101,11 +101,11 @@ Mobile browsers have reduced functionality due to platform restrictions:
 
 ## Known Limitations
 
-1. **Host-only control** - Only the host can control playback
+1. **Host-only control** - Only the host can control playback (democratic mode planned)
 2. **No chat** - Text chat not yet implemented
-3. **Single media** - One media item per room
-4. **No persistence** - Rooms are lost on server restart
-5. **No mobile apps** - Only works in web browser
+3. **Single media** - One media item per room (by design)
+4. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
+5. **Web only** - Only works in web browsers (no native mobile/TV apps planned)
 
 ## Roadmap
 
@@ -114,18 +114,20 @@ Mobile browsers have reduced functionality due to platform restrictions:
 | Feature | Priority | Status |
 |---------|----------|--------|
 | Text chat | High | Planned |
-| Persistent rooms | Medium | Planned |
 | Democratic mode | Medium | Planned |
-| Shared playlists | Low | Planned |
-| Mobile UI improvements | Low | Planned |
+| Automatic host transfer | Medium | Planned |
+| Room passwords | Low | Planned |
 
-### Future Considerations
+### Feature Descriptions
 
-- **Chat system** - Integrated text chat in the panel
-- **Permissions** - Granular control (host-only vs democratic)
-- **Shared playlists** - Queue management for multiple items
-- **Better mobile support** - Responsive UI for mobile apps
-- **Plugin repository** - Publish to official Jellyfin repository
+- **Text chat** - Integrated text chat in the watch party panel
+- **Democratic mode** - Allow all participants to control playback, not just the host
+- **Automatic host transfer** - When host disconnects, transfer control to another participant instead of closing the room
+- **Room passwords** - Optional password protection for private rooms
+
+### Long-term Goals
+
+- **Official Jellyfin plugin repository** - Publish to the [official Jellyfin plugin repository](https://jellyfin.org/docs/general/server/plugins/#official-plugins) for native discoverability and installation
 
 ## Version History
 

@@ -301,9 +301,9 @@ Playback continues locally (not synced)
 ```
 
 **Notes**:
-- Rooms cannot survive host disconnect (by design - host owns the room)
+- Currently, rooms close when the host disconnects
 - Participants can create a new room to continue
-- No automatic host transfer (planned feature)
+- Automatic host transfer is planned (see roadmap)
 
 ### Clock Skew Tolerance
 
@@ -340,10 +340,10 @@ HLS streaming introduces unique challenges:
 
 ### Room Capacity and Scaling
 
-**Current limits**:
+**Design limits**:
 - 20 clients per room (comfortable for watch parties)
-- All state in-memory (lost on server restart)
-- Single server instance (no clustering)
+- All state in-memory (rooms are ephemeral by design)
+- Single server instance (sufficient for typical use)
 
 **At capacity**:
 ```
