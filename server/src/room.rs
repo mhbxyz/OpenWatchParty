@@ -39,7 +39,9 @@ pub fn handle_leave(
                         msg_type: "client_left".to_string(),
                         room: Some(room_id),
                         client: Some(client_id.to_string()),
-                        payload: Some(serde_json::json!({ "participant_count": room.clients.len() })),
+                        payload: Some(
+                            serde_json::json!({ "participant_count": room.clients.len() }),
+                        ),
                         ts: now_ms(),
                         server_ts: Some(now_ms()),
                     };

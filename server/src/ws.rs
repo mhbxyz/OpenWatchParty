@@ -864,7 +864,10 @@ async fn client_msg(
                     let warp_msg = warp::ws::Message::text(json);
                     for sender in senders {
                         if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
-                            log::warn!("Failed to send chat_message (buffer full or closed): {}", e);
+                            log::warn!(
+                                "Failed to send chat_message (buffer full or closed): {}",
+                                e
+                            );
                         }
                     }
                 }
