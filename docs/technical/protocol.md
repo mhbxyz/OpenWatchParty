@@ -226,6 +226,34 @@ Latency measurement and clock synchronization.
 
 **Response:** `pong`
 
+### `chat_message`
+
+Send a text message to the room.
+
+```json
+{
+  "type": "chat_message",
+  "room": "uuid-room-id",
+  "payload": {
+    "text": "Hello everyone!"
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `text` | string | Message text (max 500 characters) |
+
+**Effects:**
+- Message broadcast to all clients in the room (including sender)
+- Rate limited by existing 30 msg/sec limit
+
+**Error responses:**
+- `"Chat message cannot be empty"` - Empty or whitespace-only text
+- `"Chat message too long (max 500 characters)"` - Text exceeds limit
+- `"Room ID required for chat"` - Missing room ID
+
 ## Server → Client Messages
 
 ### `client_hello`
@@ -395,6 +423,34 @@ Response to ping.
 const rtt = Date.now() - payload.client_ts;
 const serverOffset = server_ts + (rtt / 2) - Date.now();
 ```
+
+### `chat_message`
+
+Chat message broadcast from server.
+
+```json
+{
+  "type": "chat_message",
+  "room": "uuid-room-id",
+  "client": "uuid-sender-id",
+  "payload": {
+    "username": "Alice",
+    "text": "Hello everyone!"
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000050
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `username` | string | Sender's display name |
+| `text` | string | Message text |
+
+**Client processing:**
+1. Add message to local chat history (max 100 messages)
+2. If chat panel not visible, increment unread badge
+3. Render message in chat UI
 
 ### `error`
 

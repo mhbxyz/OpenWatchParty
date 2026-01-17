@@ -35,7 +35,10 @@
 
   const joinRoom = (id) => {
     state.roomId = id;
-    send('join_room', {}, id);
+    const userName = state.userName
+      || window.ApiClient?._currentUser?.Name
+      || 'Anonymous';
+    send('join_room', { user_name: userName }, id);
   };
 
   const leaveRoom = () => {
@@ -48,6 +51,8 @@
     state.initialSyncUntil = 0;
     state.initialSyncTargetPos = 0;
     state.syncCooldownUntil = 0;
+    // Clear chat
+    if (OWP.chat) OWP.chat.clear();
     // Hide the panel instead of showing lobby
     const panel = document.getElementById(OWP.constants.PANEL_ID);
     if (panel) panel.classList.add('hide');
@@ -553,6 +558,13 @@
           };
           console.log('[OpenWatchParty] Quality updated by host:', state.roomQuality);
           ui.render(true);  // Force re-render to update quality display
+        }
+        break;
+
+      case 'chat_message':
+        // Handle incoming chat message
+        if (OWP.chat && msg.payload) {
+          OWP.chat.receive(msg);
         }
         break;
     }

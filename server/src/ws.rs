@@ -30,6 +30,7 @@ const MAX_CLIENTS_PER_ROOM: usize = 20; // Max clients in a room
 const MAX_POSITION_SECONDS: f64 = 86400.0; // 24 hours max
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // 64 KB max message size
 const MAX_NAME_LENGTH: usize = 100; // Max length for user/room names
+const MAX_CHAT_MESSAGE_LENGTH: usize = 500; // Max chat message length
 
 /// Validates a playback position value.
 /// Returns false for NaN, Infinity, negative values, or values exceeding 24 hours (fixes L12).
@@ -345,8 +346,8 @@ async fn client_msg(
                 .and_then(|p| p.get("user_name"))
                 .and_then(|v| v.as_str())
                 .and_then(sanitize_name);
-            let host_name = match payload_name {
-                Some(name) => name,
+            let host_name = match &payload_name {
+                Some(name) => name.clone(),
                 None => {
                     let locked_clients = clients.read().await;
                     locked_clients
@@ -405,6 +406,10 @@ async fn client_msg(
                 locked_rooms.insert(room_id.clone(), room.clone());
                 if let Some(client) = locked_clients.get_mut(client_id) {
                     client.room_id = Some(room_id.clone());
+                    // Update username from payload if provided (for chat messages)
+                    if let Some(ref name) = payload_name {
+                        client.user_name = name.clone();
+                    }
                 }
 
                 send_to_client(
@@ -432,6 +437,14 @@ async fn client_msg(
                 return;
             }
             if let Some(ref room_id) = parsed.room {
+                // Extract username from payload if provided
+                let payload_name = parsed
+                    .payload
+                    .as_ref()
+                    .and_then(|p| p.get("user_name"))
+                    .and_then(|v| v.as_str())
+                    .and_then(sanitize_name);
+
                 let mut locked_rooms = rooms.write().await;
                 let mut locked_clients = clients.write().await;
 
@@ -462,6 +475,10 @@ async fn client_msg(
                     room.ready_clients.remove(client_id);
                     if let Some(client) = locked_clients.get_mut(client_id) {
                         client.room_id = Some(room_id.clone());
+                        // Update username from payload if provided (for chat messages)
+                        if let Some(ref name) = payload_name {
+                            client.user_name = name.clone();
+                        }
                     }
 
                     send_to_client(
@@ -760,6 +777,99 @@ async fn client_msg(
                         }
                     }
                 }
+            }
+        }
+        ClientMessageType::ChatMessage => {
+            // Handle chat messages within a room
+            if let Some(ref room_id) = parsed.room {
+                // Get chat text from payload
+                let chat_text = parsed
+                    .payload
+                    .as_ref()
+                    .and_then(|p| p.get("text"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                // Validate message length
+                if chat_text.is_empty() {
+                    send_error(client_id, clients, "Chat message cannot be empty").await;
+                    return;
+                }
+                if chat_text.len() > MAX_CHAT_MESSAGE_LENGTH {
+                    send_error(
+                        client_id,
+                        clients,
+                        &format!(
+                            "Chat message too long (max {} characters)",
+                            MAX_CHAT_MESSAGE_LENGTH
+                        ),
+                    )
+                    .await;
+                    return;
+                }
+
+                // Get username from client state
+                let username = {
+                    let locked_clients = clients.read().await;
+                    locked_clients
+                        .get(client_id)
+                        .map(|c| c.user_name.clone())
+                        .unwrap_or_else(|| "Anonymous".to_string())
+                };
+
+                // Broadcast chat message to all clients in the room
+                let broadcast_data: Option<(Vec<mpsc::Sender<_>>, String)> = {
+                    let locked_rooms = rooms.read().await;
+                    let locked_clients = clients.read().await;
+
+                    if let Some(room) = locked_rooms.get(room_id) {
+                        // Only allow chat if client is in the room
+                        if !room.clients.contains(&client_id.to_string()) {
+                            None
+                        } else {
+                            let msg = WsMessage {
+                                msg_type: "chat_message".to_string(),
+                                room: Some(room_id.clone()),
+                                client: Some(client_id.to_string()),
+                                payload: Some(serde_json::json!({
+                                    "username": username,
+                                    "text": chat_text
+                                })),
+                                ts: now_ms(),
+                                server_ts: Some(now_ms()),
+                            };
+
+                            // Collect senders for ALL clients in the room (including sender)
+                            let senders: Vec<_> = room
+                                .clients
+                                .iter()
+                                .filter_map(|id| locked_clients.get(id).map(|c| c.sender.clone()))
+                                .collect();
+
+                            match serde_json::to_string(&msg) {
+                                Ok(json) => Some((senders, json)),
+                                Err(e) => {
+                                    log::error!("Failed to serialize chat_message: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                    } else {
+                        None
+                    }
+                };
+
+                // Send messages without holding any locks
+                if let Some((senders, json)) = broadcast_data {
+                    let warp_msg = warp::ws::Message::text(json);
+                    for sender in senders {
+                        if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
+                            log::warn!("Failed to send chat_message (buffer full or closed): {}", e);
+                        }
+                    }
+                }
+            } else {
+                send_error(client_id, clients, "Room ID required for chat").await;
             }
         }
         ClientMessageType::Unknown => {

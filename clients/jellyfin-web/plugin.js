@@ -30,7 +30,7 @@
   });
 
   // Optimized parallel loading based on dependencies:
-  // 1. state (no deps) → 2. utils (state) → 3. ui + playback (parallel) → 4. ws (ui) → 5. app (all)
+  // 1. state (no deps) → 2. utils (state) → 3. ui + playback (parallel) → 4. chat (ui) → 5. ws (ui, chat) → 6. app (all)
   const loadAll = async () => {
     await loadScript('state.js');
     await loadScript('utils.js');
@@ -38,6 +38,7 @@
       loadScript('ui.js'),
       loadScript('playback.js')
     ]);
+    await loadScript('chat.js');
     await loadScript('ws.js');
     await loadScript('app.js');
   };

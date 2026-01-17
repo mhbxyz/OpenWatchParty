@@ -62,6 +62,7 @@ pub enum ClientMessageType {
     Ping,
     ClientLog,
     QualityUpdate,
+    ChatMessage,
     #[serde(other)]
     Unknown,
 }
@@ -83,6 +84,7 @@ pub enum ServerMessageType {
     ClientLeft,
     RoomClosed,
     QualityUpdate,
+    ChatMessage,
 }
 
 /// Incoming WebSocket message from client

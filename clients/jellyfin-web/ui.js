@@ -60,6 +60,21 @@
       @keyframes owp-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
       .owp-sync-spinner { width: 12px; height: 12px; border: 2px solid #444; border-top-color: #ff9800; border-radius: 50%; animation: owp-spin 0.8s linear infinite; }
       @keyframes owp-spin { to { transform: rotate(360deg); } }
+      /* Chat styles */
+      #owp-chat-section { display: flex; flex-direction: column; height: 180px; border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; }
+      #owp-chat-messages { flex: 1; overflow-y: auto; padding: 4px 0; font-size: 12px; }
+      .owp-chat-message { margin-bottom: 8px; padding: 4px 0; }
+      .owp-chat-message.owp-chat-own .owp-chat-username { color: #69f0ae; }
+      .owp-chat-meta { display: flex; gap: 8px; align-items: baseline; margin-bottom: 2px; }
+      .owp-chat-username { font-weight: bold; color: #64b5f6; font-size: 11px; }
+      .owp-chat-time { font-size: 10px; color: #666; }
+      .owp-chat-text { color: #ddd; word-wrap: break-word; line-height: 1.4; }
+      #owp-chat-input-container { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid #333; }
+      #owp-chat-input { flex: 1; padding: 8px 10px; border-radius: 6px; border: 1px solid #444; background: #111; color: #fff; font-size: 12px; }
+      #owp-chat-input:focus { border-color: #1565c0; outline: none; }
+      #owp-chat-send { padding: 8px 12px; border-radius: 6px; border: none; background: #1565c0; color: #fff; cursor: pointer; font-size: 12px; }
+      #owp-chat-send:hover { background: #1976d2; }
+      .owp-chat-badge { display: none; background: #d32f2f; color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 10px; margin-left: 4px; }
     `;
     document.head.appendChild(style);
   };
@@ -395,18 +410,57 @@
           <span style="flex-grow:1; margin-left:8px;">${utils.escapeHtml(state.roomName)}</span>
           <button class="owp-btn danger" id="owp-btn-leave">${state.isHost ? 'Close' : 'Leave'}</button>
         </div>
-        <div class="owp-section">
+        <div class="owp-section" style="flex-shrink:0;">
           <div class="owp-label">Participants</div>
           <div id="owp-participants-list" style="font-size:13px;">Online: ${state.participantCount || 1}</div>
           ${syncIndicator}
         </div>
-        <div class="owp-meta" style="font-size:10px; color:#666; display:flex; justify-content:space-between;">
+        <div id="owp-chat-section">
+          <div class="owp-label">Chat <span id="owp-chat-badge" class="owp-chat-badge"></span></div>
+          <div id="owp-chat-messages"></div>
+          <div id="owp-chat-input-container">
+            <input type="text" id="owp-chat-input" placeholder="Type a message..." maxlength="500">
+            <button id="owp-chat-send">Send</button>
+          </div>
+        </div>
+        <div class="owp-meta" style="font-size:10px; color:#666; display:flex; justify-content:space-between; flex-shrink:0; padding-top:8px;">
             <span>RTT: <span class="owp-latency">-</span></span>
             <span>ID: ${state.clientId.split('-')[1] || '...'}</span>
         </div>
       `;
       const leaveBtn = panel.querySelector('#owp-btn-leave');
       if (leaveBtn) leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+
+      // Setup chat input handlers
+      const chatInput = panel.querySelector('#owp-chat-input');
+      const chatSend = panel.querySelector('#owp-chat-send');
+      if (chatInput && chatSend) {
+        // Prevent video player from capturing keyboard events
+        stopPlayerCapture(chatInput);
+
+        // Send on Enter key
+        chatInput.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (OWP.chat && OWP.chat.send(chatInput.value)) {
+              chatInput.value = '';
+            }
+          }
+        });
+
+        // Send on button click
+        chatSend.addEventListener('click', () => {
+          if (OWP.chat && OWP.chat.send(chatInput.value)) {
+            chatInput.value = '';
+          }
+        });
+
+        // Mark messages as read when chat is visible
+        if (OWP.chat) {
+          OWP.chat.markRead();
+          OWP.chat.renderAllMessages();
+        }
+      }
     }
     updateStatusIndicator();
     renderHomeWatchParties();

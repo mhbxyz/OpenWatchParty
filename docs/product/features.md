@@ -29,6 +29,13 @@ nav_order: 2
 - **Toast notifications** - Join/leave notifications
 - **Connection status** - Online/offline indicator
 
+### Chat
+- **Text chat** - Real-time messaging within watch party rooms
+- **Username display** - Shows sender's Jellyfin username
+- **Timestamps** - Message timestamps for context
+- **Unread badge** - Notification when new messages arrive
+- **XSS protection** - Messages are escaped to prevent injection
+
 ### Networking
 - **WebSocket communication** - Low-latency real-time sync
 - **Auto-reconnect** - Automatic reconnection on disconnect
@@ -102,10 +109,10 @@ Mobile browsers have reduced functionality due to platform restrictions:
 ## Known Limitations
 
 1. **Host-only control** - Only the host can control playback (democratic mode planned)
-2. **No chat** - Text chat not yet implemented
-3. **Single media** - One media item per room (by design)
-4. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
-5. **Web only** - Only works in web browsers (no native mobile/TV apps planned)
+2. **Single media** - One media item per room (by design)
+3. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
+4. **Web only** - Only works in web browsers (no native mobile/TV apps planned)
+5. **No message history** - Chat messages are not persisted; late joiners won't see previous messages
 
 ## Roadmap
 
@@ -113,14 +120,15 @@ Mobile browsers have reduced functionality due to platform restrictions:
 
 | Feature | Priority | Status |
 |---------|----------|--------|
-| Text chat | High | Planned |
+| Text chat | High | Done |
+| Message history for late joiners | Medium | Planned |
 | Democratic mode | Medium | Planned |
 | Automatic host transfer | Medium | Planned |
 | Room passwords | Low | Planned |
 
 ### Feature Descriptions
 
-- **Text chat** - Integrated text chat in the watch party panel
+- **Message history for late joiners** - Send last N messages to clients joining a room
 - **Democratic mode** - Allow all participants to control playback, not just the host
 - **Automatic host transfer** - When host disconnects, transfer control to another participant instead of closing the room
 - **Room passwords** - Optional password protection for private rooms
