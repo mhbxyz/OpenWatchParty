@@ -399,12 +399,20 @@
     if (abs < DRIFT_DEADZONE_SEC) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       // UX-P3: Mark as synced when drift is within acceptable range
-      if (state.syncStatus === 'syncing') {
+      if (state.syncStatus !== 'synced') {
         state.syncStatus = 'synced';
+        state.currentDrift = 0;
         if (OWP.ui && OWP.ui.updateSyncIndicator) OWP.ui.updateSyncIndicator();
       }
       return;
     }
+
+    // UX-P3: Mark as syncing when drift is outside acceptable range
+    if (state.syncStatus !== 'syncing') {
+      state.syncStatus = 'syncing';
+      if (OWP.ui && OWP.ui.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+    }
+    state.currentDrift = drift;  // Store drift for UI display
     if (abs >= DRIFT_SOFT_MAX_SEC) {
       // During initial sync or cooldown, skip HARD_SEEK - let rate adjustment catch up gradually
       // This prevents seek loops when CLIENT is catching up after joining or resuming

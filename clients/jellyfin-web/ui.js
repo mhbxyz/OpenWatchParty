@@ -100,14 +100,14 @@
     if (status === 'pending_play') {
       dotClass = 'pending';
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
-      label = `Syncing playback... ${remaining.toFixed(1)}s`;
+      label = `Waiting for sync... ${remaining.toFixed(1)}s`;
       showSpinner = true;
     } else if (status === 'syncing') {
       dotClass = 'syncing';
-      label = 'Catching up...';
+      label = 'Out of sync';
     } else {
       dotClass = 'synced';
-      label = 'Synced';
+      label = 'In sync';
     }
 
     el.innerHTML = showSpinner
@@ -342,14 +342,14 @@
     if (status === 'pending_play') {
       dotClass = 'pending';
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
-      label = `Syncing playback... ${remaining.toFixed(1)}s`;
+      label = `Waiting for sync... ${remaining.toFixed(1)}s`;
       extra = '<div class="owp-sync-spinner"></div>';
     } else if (status === 'syncing') {
       dotClass = 'syncing';
-      label = 'Catching up...';
+      label = 'Out of sync';
     } else {
       dotClass = 'synced';
-      label = 'Synced';
+      label = 'In sync';
     }
 
     return `

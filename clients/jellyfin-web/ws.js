@@ -384,6 +384,17 @@
         state.lastParticipantCount = state.participantCount;
         break;
 
+      case 'client_left':
+        if (msg.payload?.participant_count !== undefined) {
+          state.participantCount = msg.payload.participant_count;
+          if (state.inRoom) {
+            const el = document.getElementById('owp-participants-list');
+            if (el) el.textContent = `Online: ${state.participantCount}`;
+          }
+          state.lastParticipantCount = state.participantCount;
+        }
+        break;
+
       case 'room_closed':
         state.inRoom = false; state.roomId = '';
         const reason = msg.payload?.reason || 'The room was closed';
@@ -441,13 +452,16 @@
             if (targetTs && targetTs > utils.getServerNow()) {
               state.syncStatus = 'pending_play';
               state.pendingPlayUntil = targetTs;
+              if (ui.updateSyncIndicator) ui.updateSyncIndicator();
               utils.scheduleAt(targetTs, () => {
                 state.syncStatus = 'syncing';
                 state.pendingPlayUntil = 0;
+                if (ui.updateSyncIndicator) ui.updateSyncIndicator();
                 video.play().catch(() => {});
               });
             } else {
               state.syncStatus = 'syncing';
+              if (ui.updateSyncIndicator) ui.updateSyncIndicator();
               video.play().catch(() => {});
             }
 
@@ -459,6 +473,7 @@
             state.initialSyncTargetPos = 0;
             state.syncStatus = 'synced';  // UX-P3: Mark as synced on pause
             state.pendingPlayUntil = 0;
+            if (ui.updateSyncIndicator) ui.updateSyncIndicator();
             // Pause immediately, no scheduling delay
             video.pause();
 
