@@ -390,6 +390,7 @@
           if (state.inRoom) {
             const el = document.getElementById('owp-participants-list');
             if (el) el.textContent = `Online: ${state.participantCount}`;
+            ui.showToast('A participant left the room');
           }
           state.lastParticipantCount = state.participantCount;
         }
@@ -464,6 +465,7 @@
               if (ui.updateSyncIndicator) ui.updateSyncIndicator();
               video.play().catch(() => {});
             }
+            ui.showToast('Host resumed playback');
 
           } else if (msg.payload.action === 'pause') {
             state.lastSyncPlayState = 'paused';
@@ -476,6 +478,7 @@
             if (ui.updateSyncIndicator) ui.updateSyncIndicator();
             // Pause immediately, no scheduling delay
             video.pause();
+            ui.showToast('Host paused playback');
 
           } else if (msg.payload.action === 'seek') {
             // Use play_state from message if available, otherwise assume paused

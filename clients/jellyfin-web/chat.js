@@ -75,10 +75,14 @@
         this.messages.shift();
       }
 
-      // Update unread count if chat is not visible
+      // Update unread count and show toast if chat is not visible
       if (!this.isChatVisible()) {
         this.unreadCount++;
         this.updateBadge();
+        // Show toast for messages from others
+        if (!message.isOwn && OWP.ui && OWP.ui.showChatToast) {
+          OWP.ui.showChatToast(message.username, message.text);
+        }
       }
 
       // Render the new message

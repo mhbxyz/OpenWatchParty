@@ -130,6 +130,26 @@ Participants see a sync status indicator that shows how well their playback is a
 
 The "Out of sync" state is normal for a few seconds after joining or after the host seeks. The system automatically adjusts your playback speed to catch up.
 
+## Notifications
+
+OpenWatchParty displays toast notifications to keep you informed about room activity.
+
+### System Notifications (Center)
+
+These appear briefly in the center of the screen:
+- **"Host resumed playback"** - The host started playing
+- **"Host paused playback"** - The host paused
+- **"A participant joined the room"** - Someone joined
+- **"A participant left the room"** - Someone left
+- **"Room closed"** - The room was closed (host left)
+
+### Chat Notifications (Top-Right)
+
+When the chat panel is closed, incoming messages appear as toasts in the top-right corner:
+- Shows the sender's username and message
+- Stacks up to 5 messages
+- Click to dismiss, or they fade after 5 seconds
+
 ## Tips for Best Experience
 
 ### For Hosts

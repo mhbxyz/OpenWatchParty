@@ -75,6 +75,51 @@
       #owp-chat-send { padding: 8px 12px; border-radius: 6px; border: none; background: #1565c0; color: #fff; cursor: pointer; font-size: 12px; }
       #owp-chat-send:hover { background: #1976d2; }
       .owp-chat-badge { display: none; background: #d32f2f; color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 10px; margin-left: 4px; }
+      /* Toast styles */
+      .owp-toast-container {
+        position: fixed; top: 70px; right: 20px; z-index: 30000;
+        display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+      }
+      .owp-toast {
+        background: rgba(20, 20, 20, 0.95); color: #fff; padding: 10px 14px;
+        border-radius: 8px; font-size: 13px; max-width: 320px;
+        backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5); pointer-events: auto; cursor: pointer;
+        animation: owp-toast-in 0.3s ease-out;
+        transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+      }
+      .owp-toast.owp-toast-out {
+        animation: owp-toast-out 0.3s ease-in forwards;
+      }
+      .owp-toast-username { font-weight: bold; color: #64b5f6; margin-right: 6px; }
+      .owp-toast-text { color: #eee; word-wrap: break-word; }
+      .owp-toast-system {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: rgba(20, 20, 20, 0.95); color: #fff; padding: 12px 20px;
+        border-radius: 8px; font-size: 13px; z-index: 30000;
+        backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.5); cursor: pointer;
+        animation: owp-toast-system-in 0.3s ease-out;
+      }
+      .owp-toast-system.owp-toast-out {
+        animation: owp-toast-system-out 0.3s ease-in forwards;
+      }
+      @keyframes owp-toast-in {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
+      }
+      @keyframes owp-toast-out {
+        from { opacity: 1; transform: translateX(0); }
+        to { opacity: 0; transform: translateX(20px); }
+      }
+      @keyframes owp-toast-system-in {
+        from { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+        to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      }
+      @keyframes owp-toast-system-out {
+        from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        to { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+      }
     `;
     document.head.appendChild(style);
   };
@@ -493,17 +538,69 @@
     }
   };
 
+  /**
+   * Show a system toast (centered on screen)
+   */
   const showToast = (message) => {
-    if (window.Dashboard && typeof Dashboard.showToast === 'function') {
-      Dashboard.showToast(message, 'info');
-      return;
-    }
     const toast = document.createElement('div');
+    toast.className = 'owp-toast-system';
     toast.textContent = message;
-    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#202020;color:#fff;padding:10px 14px;border-radius:6px;z-index:30000;font-size:12px;cursor:pointer;';
-    toast.onclick = () => toast.remove();  // Allow manual dismiss (fixes M-UX02)
+    toast.onclick = () => {
+      toast.classList.add('owp-toast-out');
+      setTimeout(() => toast.remove(), 300);
+    };
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);  // Increased from 2s to 4s (fixes M-UX02)
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.classList.add('owp-toast-out');
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 1500);
+  };
+
+  /**
+   * Get or create the chat toast container
+   */
+  const getToastContainer = () => {
+    let container = document.getElementById('owp-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'owp-toast-container';
+      container.className = 'owp-toast-container';
+      document.body.appendChild(container);
+    }
+    return container;
+  };
+
+  /**
+   * Show a chat message toast (top-right, stacking)
+   */
+  const showChatToast = (username, text) => {
+    const container = getToastContainer();
+    const toast = document.createElement('div');
+    toast.className = 'owp-toast';
+    toast.innerHTML = `<span class="owp-toast-username">${utils.escapeHtml(username)}</span><span class="owp-toast-text">${utils.escapeHtml(text)}</span>`;
+    toast.onclick = () => {
+      toast.classList.add('owp-toast-out');
+      setTimeout(() => toast.remove(), 300);
+    };
+    container.appendChild(toast);
+
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.classList.add('owp-toast-out');
+        setTimeout(() => toast.remove(), 300);
+      }
+    }, 5000);
+
+    // Limit to 5 visible toasts
+    const toasts = container.querySelectorAll('.owp-toast:not(.owp-toast-out)');
+    if (toasts.length > 5) {
+      const oldest = toasts[0];
+      oldest.classList.add('owp-toast-out');
+      setTimeout(() => oldest.remove(), 300);
+    }
   };
 
   OWP.ui = {
@@ -514,6 +611,7 @@
     renderHomeWatchParties,
     render,
     injectOsdButton,
-    showToast
+    showToast,
+    showChatToast
   };
 })();
