@@ -14,8 +14,14 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/mhbxyz/OpenWatchParty/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/mhbxyz/OpenWatchParty/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
   <img src="https://img.shields.io/badge/Jellyfin-10.9%2B-00a4dc?style=flat-square&logo=jellyfin" alt="Jellyfin 10.9+">
+  <img src="https://img.shields.io/badge/Rust-1.83-orange?style=flat-square&logo=rust" alt="Rust 1.83">
+  <img src="https://img.shields.io/badge/.NET-9.0-512bd4?style=flat-square&logo=dotnet" alt=".NET 9.0">
+</p>
+<p align="center">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
+  <a href="https://github.com/pre-commit/pre-commit"><img src="https://img.shields.io/badge/pre--commit-enabled-brightgreen?style=flat-square&logo=pre-commit" alt="pre-commit"></a>
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome">
 </p>
 

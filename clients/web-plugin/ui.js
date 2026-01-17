@@ -22,20 +22,20 @@
       .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
       .owp-section { margin-bottom: 15px; overflow-y: auto; }
       .owp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
-      .owp-room-item { 
+      .owp-room-item {
         background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px;
         display: flex; justify-content: space-between; align-items: center; cursor: pointer;
         border: 1px solid transparent; transition: all 0.2s;
       }
       .owp-room-item:hover { background: rgba(255,255,255,0.1); border-color: #1565c0; }
-      .owp-btn { 
-        border: none; border-radius: 6px; padding: 10px 15px; 
+      .owp-btn {
+        border: none; border-radius: 6px; padding: 10px 15px;
         background: #388e3c; color: #fff; cursor: pointer; font-weight: bold; font-size: 13px;
       }
       .owp-btn.secondary { background: #1565c0; }
       .owp-btn.danger { background: #d32f2f; }
-      .owp-input { 
-        width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; 
+      .owp-input {
+        width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
         background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;
       }
       .owp-footer { font-size: 10px; color: #555; text-align: center; margin-top: auto; padding-top: 10px; }

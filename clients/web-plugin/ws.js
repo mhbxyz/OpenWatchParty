@@ -475,7 +475,7 @@
           }
         }
         break;
-        
+
       case 'state_update':
         if (state.isHost || !video) return;
         // Always update play state
