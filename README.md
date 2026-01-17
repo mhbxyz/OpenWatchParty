@@ -7,10 +7,10 @@
 </p>
 
 <p align="center">
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-features">Features</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#features">Features</a> •
   <a href="https://mhbxyz.github.io/OpenWatchParty/">Documentation</a> •
-  <a href="#-contributing">Contributing</a>
+  <a href="#contributing">Contributing</a>
 </p>
 
 <p align="center">
@@ -33,7 +33,7 @@ OpenWatchParty enables synchronized media playback for [Jellyfin](https://jellyf
 - **Jellyfin Plugin** — Integrates the UI into Jellyfin's web interface
 - **Session Server** — Standalone Rust server that manages rooms and synchronization
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
@@ -44,7 +44,7 @@ OpenWatchParty enables synchronized media playback for [Jellyfin](https://jellyf
 | 🎨 **Native UI** | Integrated into Jellyfin's web interface |
 | 🌐 **HLS Support** | Works with Jellyfin's adaptive streaming |
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -81,7 +81,7 @@ When you play, pause, or seek — everyone follows along.
 
 > **Note:** For production deployment or manual installation, see the [Installation Guide](https://mhbxyz.github.io/OpenWatchParty/operations/installation.html).
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -99,7 +99,7 @@ When you play, pause, or seek — everyone follows along.
 | **Session Server** (Rust) | Manages rooms, relays sync messages via WebSocket |
 | **Web Client** (JavaScript) | UI integration, playback synchronization |
 
-## 📚 Documentation
+## Documentation
 
 Full documentation available at **[mhbxyz.github.io/OpenWatchParty](https://mhbxyz.github.io/OpenWatchParty/)**
 
@@ -111,17 +111,17 @@ Full documentation available at **[mhbxyz.github.io/OpenWatchParty](https://mhbx
 | [Architecture](https://mhbxyz.github.io/OpenWatchParty/technical/architecture.html) | How it works under the hood |
 | [Protocol](https://mhbxyz.github.io/OpenWatchParty/technical/protocol.html) | WebSocket message spec |
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome!
 
-- 🐛 [Report bugs](https://github.com/mhbxyz/OpenWatchParty/issues)
-- 💡 [Suggest features](https://github.com/mhbxyz/OpenWatchParty/issues)
-- 🔧 [Submit pull requests](https://github.com/mhbxyz/OpenWatchParty/pulls)
+- [Report bugs](https://github.com/mhbxyz/OpenWatchParty/issues)
+- [Suggest features](https://github.com/mhbxyz/OpenWatchParty/issues)
+- [Submit pull requests](https://github.com/mhbxyz/OpenWatchParty/pulls)
 
 See the [Contributing Guide](https://mhbxyz.github.io/OpenWatchParty/development/contributing.html) to get started.
 
-## 📄 License
+## License
 
 MIT License — do whatever you want, just keep the license.
 
