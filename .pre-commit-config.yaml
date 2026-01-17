@@ -21,7 +21,7 @@ repos:
     hooks:
       - id: cargo-fmt
         name: cargo fmt
-        entry: bash -c 'cd server && cargo fmt --check'
+        entry: bash -c 'cd server && cargo fmt'
         language: system
         types: [rust]
         pass_filenames: false
