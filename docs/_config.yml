@@ -2,6 +2,9 @@ title: OpenWatchParty
 description: Synchronized watch parties for Jellyfin
 remote_theme: just-the-docs/just-the-docs@v0.10.0
 
+# GitHub repository
+repository: mhbxyz/OpenWatchParty
+
 # For local development only (overridden by GitHub Actions)
 baseurl: "/OpenWatchParty"
 
