@@ -174,7 +174,7 @@ CI copies JavaScript files to the `Web/` directory before building:
 - name: Copy JS files to plugin Web directory
   run: |
     mkdir -p OpenWatchParty/Web
-    cp ../../clients/web-plugin/*.js OpenWatchParty/Web/
+    cp ../../clients/jellyfin-web/*.js OpenWatchParty/Web/
 ```
 
 ## Troubleshooting

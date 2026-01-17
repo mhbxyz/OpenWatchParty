@@ -526,7 +526,7 @@ if (_cachedScript == null) {
 ### 5.2 Architecture
 
 ```
-clients/web-plugin/
+clients/jellyfin-web/
 ├── state.js     # État global, constantes
 ├── utils.js     # Utilitaires (getVideo, escapeHtml, etc.)
 ├── ui.js        # Interface utilisateur, panels
@@ -991,13 +991,13 @@ CMD ["session-server"]
 - plugins/jellyfin/OpenWatchParty/OpenWatchPartyPlugin.csproj
 
 **Client Web :**
-- clients/web-plugin/state.js
-- clients/web-plugin/utils.js
-- clients/web-plugin/ui.js
-- clients/web-plugin/playback.js
-- clients/web-plugin/ws.js
-- clients/web-plugin/app.js
-- clients/web-plugin/plugin.js
+- clients/jellyfin-web/state.js
+- clients/jellyfin-web/utils.js
+- clients/jellyfin-web/ui.js
+- clients/jellyfin-web/playback.js
+- clients/jellyfin-web/ws.js
+- clients/jellyfin-web/app.js
+- clients/jellyfin-web/plugin.js
 
 **Infrastructure :**
 - docker-compose.yml

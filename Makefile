@@ -18,7 +18,7 @@ COMPOSE_TOOLS   := docker compose --profile tools -f $(COMPOSE_FILE)
 
 # Directories
 PLUGIN_DIR      := plugins/jellyfin/OpenWatchParty
-CLIENT_DIR      := clients/web-plugin
+CLIENT_DIR      := clients/jellyfin-web
 SERVER_DIR      := server
 DOCS_DIR        := docs
 

@@ -65,7 +65,7 @@ jobs:
       - name: Copy JS files to plugin Web directory
         run: |
           mkdir -p OpenWatchParty/Web
-          cp ../../clients/web-plugin/*.js OpenWatchParty/Web/
+          cp ../../clients/jellyfin-web/*.js OpenWatchParty/Web/
 
       - name: Restore dependencies
         run: dotnet restore OpenWatchParty.Tests/OpenWatchParty.Tests.csproj
@@ -89,7 +89,7 @@ jobs:
 
       - name: Check JS syntax
         run: |
-          for file in clients/web-plugin/*.js; do
+          for file in clients/jellyfin-web/*.js; do
             echo "Checking $file..."
             node --check "$file"
           done

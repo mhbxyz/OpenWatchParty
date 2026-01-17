@@ -64,7 +64,7 @@ After running `make up`:
 ```
 OpenWatchParty/
 ├── clients/
-│   └── web-plugin/          # JavaScript client modules
+│   └── jellyfin-web/          # JavaScript client modules
 │       ├── plugin.js        # Loader/entry point
 │       ├── state.js     # State management
 │       ├── utils.js     # Utilities
@@ -182,7 +182,7 @@ If a hook fails:
 
 ### JavaScript Client
 
-1. **Edit files** in `clients/web-plugin/`
+1. **Edit files** in `clients/jellyfin-web/`
 2. **Rebuild plugin** (copies JS to plugin directory):
    ```bash
    make build-plugin

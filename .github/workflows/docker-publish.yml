@@ -71,7 +71,7 @@ jobs:
         working-directory: plugins/jellyfin
         run: |
           mkdir -p OpenWatchParty/Web
-          cp ../../clients/web-plugin/*.js OpenWatchParty/Web/
+          cp ../../clients/jellyfin-web/*.js OpenWatchParty/Web/
 
       - name: Build plugin
         working-directory: plugins/jellyfin/OpenWatchParty

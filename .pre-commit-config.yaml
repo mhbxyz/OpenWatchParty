@@ -64,9 +64,9 @@ repos:
     hooks:
       - id: js-syntax
         name: js syntax check
-        entry: bash -c 'for f in clients/web-plugin/*.js; do node --check "$f" || exit 1; done'
+        entry: bash -c 'for f in clients/jellyfin-web/*.js; do node --check "$f" || exit 1; done'
         language: system
-        files: 'clients/web-plugin/.*\.js$'
+        files: 'clients/jellyfin-web/.*\.js$'
         pass_filenames: false
 
   # Dockerfile linting

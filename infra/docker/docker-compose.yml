@@ -32,7 +32,7 @@ services:
       - ./config:/config
       - jellyfin-cache:/cache
       - ${MEDIA_DIR:-${HOME}/Videos/Movies}:/media/Movies:ro
-      - ../../clients/web-plugin:/jellyfin/jellyfin-web/plugins/openwatchparty:ro
+      - ../../clients/jellyfin-web:/jellyfin/jellyfin-web/plugins/openwatchparty:ro
       - ../../plugins/jellyfin/OpenWatchParty/dist:/config/plugins/OpenWatchParty
     restart: unless-stopped
     entrypoint:
