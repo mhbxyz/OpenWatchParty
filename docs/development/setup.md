@@ -11,8 +11,9 @@ nav_order: 1
 - **Docker** and **Docker Compose**
 - **Make**
 - **.NET 9.0 SDK** (for plugin development)
-- **Rust 1.70+** (for server development)
-- **Node.js 18+** (optional, for JS tooling)
+- **Rust 1.83+** (for server development)
+- **Node.js 20+** (optional, for JS tooling)
+- **pre-commit** (for code quality hooks)
 - **mold** (recommended, for faster Rust linking)
 
 ## Quick Start
@@ -21,6 +22,9 @@ nav_order: 1
 # Clone the repository
 git clone https://github.com/mhbxyz/OpenWatchParty.git
 cd OpenWatchParty
+
+# Set up development tools (pre-commit hooks)
+make setup
 
 # Start development environment
 make up
@@ -112,6 +116,67 @@ OpenWatchParty/
 | `make logs-server` | View session server logs |
 | `make restart` | Restart all services |
 | `make clean` | Clean build artifacts |
+| `make setup` | Install pre-commit hooks |
+| `make pre-commit` | Run all pre-commit checks manually |
+| `make lint` | Run linters (clippy, eslint) |
+| `make fmt` | Format Rust code |
+
+## Pre-commit Hooks
+
+The project uses [pre-commit](https://pre-commit.com/) to ensure code quality before commits. Hooks run automatically on `git commit`.
+
+### Installation
+
+```bash
+# Install pre-commit (if not already installed)
+pip install pre-commit
+# or: brew install pre-commit
+
+# Install the hooks
+make setup
+```
+
+### What Gets Checked
+
+| Hook | Runs On | Description |
+|------|---------|-------------|
+| `cargo fmt` | Rust files | Code formatting |
+| `cargo clippy` | Rust files | Linting and warnings |
+| `cargo test` | Push only | Unit tests |
+| `dotnet build` | C# files | Build validation |
+| `dotnet test` | Push only | Unit tests |
+| `node --check` | JS files | Syntax validation |
+| `trailing-whitespace` | All files | Remove trailing spaces |
+| `end-of-file-fixer` | All files | Ensure newline at EOF |
+| `check-yaml` | YAML files | Syntax validation |
+| `check-json` | JSON files | Syntax validation |
+| `detect-private-key` | All files | Prevent accidental key commits |
+| `hadolint` | Dockerfiles | Dockerfile linting |
+
+### Manual Execution
+
+```bash
+# Run all hooks on staged files
+pre-commit run
+
+# Run all hooks on all files
+pre-commit run --all-files
+
+# Run specific hook
+pre-commit run cargo-fmt --all-files
+
+# Skip hooks temporarily (not recommended)
+git commit --no-verify
+```
+
+### Troubleshooting Hooks
+
+If a hook fails:
+
+1. **Formatting issues**: Run `make fmt` and re-stage files
+2. **Clippy warnings**: Fix the warnings or add `#[allow(...)]` if justified
+3. **Build failures**: Check error messages and fix compilation issues
+4. **Whitespace issues**: Hooks auto-fix these; re-stage the files
 
 ## Development Workflow
 

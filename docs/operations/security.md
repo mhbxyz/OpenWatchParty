@@ -336,12 +336,84 @@ Internet → [Jellyfin Auth] → Trusted Zone → [OpenWatchParty]
 3. Review CORS and authentication settings
 4. Update to latest version
 
+## Container Security
+
+### Base Image
+
+The session server uses **Alpine Linux** as its base image for minimal attack surface:
+
+| Image | Size | CVEs |
+|-------|------|------|
+| `debian:bookworm-slim` | ~100MB | 30+ |
+| `alpine:3.21` | ~26MB | ~6 (low severity) |
+
+### Security Scanning
+
+Container images are automatically scanned on every push:
+
+- **Trivy**: Scans for CVEs in OS packages and dependencies
+- **Results**: Uploaded to GitHub Security tab
+- **Severity filter**: CRITICAL and HIGH vulnerabilities are flagged
+
+### Current Security Posture
+
+The Alpine-based image has minimal remaining vulnerabilities:
+
+| CVE | Component | Severity | Impact |
+|-----|-----------|----------|--------|
+| CVE-2024-58251 | BusyBox netstat | Warning | Not used by application |
+| CVE-2025-46394 | BusyBox tar | Note | Not used by application |
+
+These vulnerabilities:
+- Affect tools not used by the application (tar, netstat)
+- Require local access to exploit
+- Are low severity (warning/note, not critical/high)
+
+### Hardening Recommendations
+
+For maximum security in sensitive environments:
+
+```dockerfile
+# Option 1: Distroless (no shell, no package manager)
+FROM gcr.io/distroless/static
+# Requires custom healthcheck binary
+
+# Option 2: Scratch (empty image)
+FROM scratch
+# Requires static binary compilation
+```
+
+### Runtime Security
+
+The container runs with:
+
+- **Non-root user**: `appuser` (UID 1000)
+- **Read-only filesystem**: Mount volumes as needed
+- **Resource limits**: CPU and memory limits in docker-compose
+- **Health checks**: Automatic container restart on failure
+
+```yaml
+# docker-compose.yml security settings
+services:
+  session-server:
+    user: "1000:1000"
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+```
+
 ## Security Updates
 
 Stay informed about security updates:
 - Watch the [GitHub repository](https://github.com/mhbxyz/OpenWatchParty)
 - Check release notes for security fixes
 - Update promptly when security patches are available
+- Monitor the Security tab for vulnerability alerts
 
 ## Reporting Security Issues
 

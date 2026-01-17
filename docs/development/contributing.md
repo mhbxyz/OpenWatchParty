@@ -100,8 +100,9 @@ docs: update installation instructions
 
 ### 1. Before Submitting
 
+- [ ] Pre-commit hooks pass (`pre-commit run --all-files`)
 - [ ] Code follows project style
-- [ ] Tests pass (if applicable)
+- [ ] Tests pass (`make test`)
 - [ ] Documentation updated
 - [ ] Commit messages are clear
 - [ ] Branch is up to date with main
@@ -205,9 +206,62 @@ Before submitting:
 cd server
 cargo test
 
-# C# tests (when available)
-cd plugins/jellyfin/OpenWatchParty
-dotnet test
+# C# tests
+cd plugins/jellyfin
+dotnet test OpenWatchParty.Tests/OpenWatchParty.Tests.csproj
+```
+
+## Continuous Integration
+
+All pull requests are validated by GitHub Actions CI. Your PR must pass all checks before merging.
+
+### CI Jobs
+
+| Job | Description | Runs On |
+|-----|-------------|---------|
+| **Rust Tests** | `cargo fmt --check`, `cargo clippy`, `cargo test` | Every push/PR |
+| **.NET Tests** | `dotnet build`, `dotnet test` | Every push/PR |
+| **JavaScript Lint** | `node --check` syntax validation | Every push/PR |
+| **Build Server** | Docker image build | After Rust tests pass |
+
+### Security Scans
+
+| Scan | Description | Frequency |
+|------|-------------|-----------|
+| **Cargo Audit** | Rust dependency vulnerabilities | Every push/PR + weekly |
+| **Trivy** | Docker image CVE scan | Every push/PR + weekly |
+| **CodeQL** | JavaScript static analysis | Every push/PR + weekly |
+
+### Fixing CI Failures
+
+**Rust formatting:**
+```bash
+cd server && cargo fmt
+```
+
+**Clippy warnings:**
+```bash
+cd server && cargo clippy -- -D warnings
+# Fix the warnings or justify with #[allow(...)]
+```
+
+**Build failures:**
+```bash
+# Check locally before pushing
+make build
+```
+
+### Running CI Checks Locally
+
+```bash
+# Run all pre-commit hooks (mirrors CI)
+pre-commit run --all-files
+
+# Or run individual checks
+make fmt      # Format Rust code
+make lint     # Run linters
+make test     # Run tests
+make build    # Build all components
 ```
 
 ## Code of Conduct
