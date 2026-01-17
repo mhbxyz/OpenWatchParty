@@ -1,0 +1,11 @@
+[
+  {
+    "guid": "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d",
+    "name": "OpenWatchParty",
+    "description": "Watch movies together in sync with friends on Jellyfin",
+    "overview": "Synchronized watch parties for Jellyfin. Create or join rooms to watch content together with friends, perfectly in sync.",
+    "owner": "mhbxyz",
+    "category": "General",
+    "versions": []
+  }
+]

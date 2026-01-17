@@ -179,68 +179,35 @@ docker push registry.example.com/openwatchparty-session-server:0.2.0
 docker push registry.example.com/openwatchparty-session-server:latest
 ```
 
-## Automated Releases (Planned)
+## Automated Releases
 
-### GitHub Actions Workflow
+Releases are automated via GitHub Actions (`.github/workflows/docker-publish.yml`).
 
-```yaml
-# .github/workflows/release.yml
-name: Release
+### What Happens on Release
 
-on:
-  push:
-    tags:
-      - 'v*'
+When you create a GitHub Release:
 
-jobs:
-  build-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+1. **Docker Image**: Built and pushed to GHCR (`ghcr.io/mhbxyz/openwatchparty-session-server`)
+2. **Jellyfin Plugin**: Built, zipped, and attached to the release
+3. **Plugin Repository**: `manifest.json` updated with new version and deployed to GitHub Pages
 
-      - name: Build
-        run: cargo build --release
-        working-directory: server
+### Plugin Distribution
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: session-server-linux
-          path: server/target/release/session-server
+Users can install the plugin in two ways:
 
-  build-plugin:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
+#### Via Jellyfin UI (Recommended)
 
-      - uses: actions/setup-dotnet@v3
-        with:
-          dotnet-version: '9.0'
+1. Go to Dashboard > Plugins > Repositories
+2. Add: `https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json`
+3. Go to Catalog > Find "OpenWatchParty" > Install
+4. Restart Jellyfin
 
-      - name: Build
-        run: dotnet build -c Release
-        working-directory: plugins/jellyfin/OpenWatchParty
+#### Via Direct Download
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: plugin
-          path: plugins/jellyfin/OpenWatchParty/bin/Release/net9.0/OpenWatchParty.dll
-
-  release:
-    needs: [build-rust, build-plugin]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: |
-            session-server-linux/session-server
-            plugin/OpenWatchParty.dll
-```
+1. Go to [Releases](https://github.com/mhbxyz/OpenWatchParty/releases)
+2. Download `OpenWatchParty-vX.Y.Z.zip`
+3. Extract to Jellyfin plugins folder
+4. Restart Jellyfin
 
 ## Hotfix Process
 
