@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" alt="OpenWatchParty" width="400">
+  <img src="docs/logo.png" alt="OpenWatchParty" width="400">
 </p>
 
 <p align="center">

@@ -4,6 +4,10 @@ layout: home
 nav_order: 1
 ---
 
+<p align="center">
+  <img src="logo.png" alt="OpenWatchParty" width="400">
+</p>
+
 # OpenWatchParty Documentation
 
 OpenWatchParty is a Jellyfin plugin that enables synchronized media playback across multiple clients. Watch movies and shows together with friends, no matter where they are.
