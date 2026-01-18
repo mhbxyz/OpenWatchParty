@@ -2,7 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   if (OWP.actions) return;
 
-  const { DEFAULT_WS_URL, SEEK_THRESHOLD, RECONNECT_BASE_MS, RECONNECT_MAX_MS } = OWP.constants;
+  const { DEFAULT_WS_URL, SEEK_THRESHOLD, RECONNECT_BASE_MS, RECONNECT_MAX_MS, TIME_SYNC_MAX_SAMPLES, TIME_SYNC_EMA_ALPHA } = OWP.constants;
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
@@ -259,6 +259,7 @@
     state.ws.onclose = (e) => {
       console.log('[OpenWatchParty] WebSocket closed:', e.code, e.reason);
       state.isConnecting = false;
+      state.timeSyncSamples = [];  // Reset time sync samples on disconnect
       ui.render();
       // Only auto-reconnect if flag is set and not already connecting
       if (state.autoReconnect && !state.isConnecting) {
@@ -553,14 +554,28 @@
           if (latEl) latEl.textContent = `${rtt} ms`;
           if (typeof msg.server_ts === 'number' && rtt > 0) {
             const sampleOffset = msg.server_ts + (rtt / 2) - now;
+
+            // Add sample to circular buffer
+            state.timeSyncSamples.push({ rtt, offset: sampleOffset, ts: now });
+            if (state.timeSyncSamples.length > TIME_SYNC_MAX_SAMPLES) {
+              state.timeSyncSamples.shift();
+            }
+
+            // Select sample with lowest RTT (most accurate)
+            const bestSample = state.timeSyncSamples.reduce((best, s) =>
+              s.rtt < best.rtt ? s : best
+            );
+
+            // Apply EMA on best sample offset
             const prevOffset = state.serverOffsetMs;
             state.serverOffsetMs = state.hasTimeSync
-              ? (state.serverOffsetMs * 0.6 + sampleOffset * 0.4)
-              : sampleOffset;
+              ? state.serverOffsetMs * (1 - TIME_SYNC_EMA_ALPHA) + bestSample.offset * TIME_SYNC_EMA_ALPHA
+              : bestSample.offset;
             state.hasTimeSync = true;
+
             // Log clock sync periodically (every ~10 pings to reduce noise)
             if (Math.random() < 0.1) {
-              utils.log('CLOCK', { rtt, server_offset: state.serverOffsetMs, delta: state.serverOffsetMs - prevOffset });
+              utils.log('CLOCK', { rtt, best_rtt: bestSample.rtt, server_offset: state.serverOffsetMs, delta: state.serverOffsetMs - prevOffset, samples: state.timeSyncSamples.length });
             }
           }
         }

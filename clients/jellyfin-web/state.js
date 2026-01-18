@@ -68,7 +68,10 @@
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
     INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
     INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
-    INITIAL_SYNC_MAX_DRIFT: 10   // Max drift (seconds) before forcing HARD_SEEK during initial sync
+    INITIAL_SYNC_MAX_DRIFT: 10,  // Max drift (seconds) before forcing HARD_SEEK during initial sync
+    // Time sync (hybrid min-delay + EMA)
+    TIME_SYNC_MAX_SAMPLES: 8,    // Number of samples in circular buffer
+    TIME_SYNC_EMA_ALPHA: 0.4     // EMA smoothing coefficient
   };
 
   OWP.state = {
@@ -90,6 +93,7 @@
     logBuffer: [],
     logBufferMax: 100,
     serverOffsetMs: 0,
+    timeSyncSamples: [],         // Circular buffer of { rtt, offset, ts } for hybrid time sync
     lastSeekSentAt: 0,
     lastStateSentAt: 0,
     lastSentPosition: 0,
