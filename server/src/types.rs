@@ -61,7 +61,6 @@ pub enum ClientMessageType {
     StateUpdate,
     Ping,
     ClientLog,
-    QualityUpdate,
     ChatMessage,
     #[serde(other)]
     Unknown,
@@ -83,7 +82,6 @@ pub enum ServerMessageType {
     Pong,
     ClientLeft,
     RoomClosed,
-    QualityUpdate,
     ChatMessage,
 }
 

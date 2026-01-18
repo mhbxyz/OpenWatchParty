@@ -566,19 +566,6 @@
         }
         break;
 
-      case 'quality_update':
-        // Host broadcasts quality settings to guests
-        if (!state.isHost && msg.payload) {
-          state.roomQuality = {
-            maxBitrate: msg.payload.maxBitrate || 0,
-            preferDirectPlay: msg.payload.preferDirectPlay !== false,
-            preset: msg.payload.preset || 'auto'
-          };
-          console.log('[OpenWatchParty] Quality updated by host:', state.roomQuality);
-          ui.render(true);  // Force re-render to update quality display
-        }
-        break;
-
       case 'chat_message':
         // Handle incoming chat message
         if (OWP.chat && msg.payload) {

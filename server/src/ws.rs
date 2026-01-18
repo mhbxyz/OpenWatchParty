@@ -717,68 +717,6 @@ async fn client_msg(
                 info!("[CLIENT:{}:{}] {}", short_id, category, message);
             }
         }
-        ClientMessageType::QualityUpdate => {
-            // Host broadcasts quality settings to all clients in the room
-            if let Some(ref room_id) = parsed.room {
-                // P-RS01 fix: Collect senders while holding lock, then send after releasing
-                let broadcast_data: Option<(Vec<mpsc::Sender<_>>, String)> = {
-                    let locked_rooms = rooms.read().await;
-                    let locked_clients = clients.read().await;
-
-                    if let Some(room) = locked_rooms.get(room_id) {
-                        // Only host can change quality settings
-                        if room.host_id != client_id {
-                            None
-                        } else {
-                            info!(
-                                "Host {} updated quality settings for room {}",
-                                client_id, room_id
-                            );
-
-                            let msg = WsMessage {
-                                msg_type: "quality_update".to_string(),
-                                room: Some(room_id.clone()),
-                                client: Some(client_id.to_string()),
-                                payload: parsed.payload.clone(),
-                                ts: now_ms(),
-                                server_ts: Some(now_ms()),
-                            };
-
-                            // Collect senders for clients in the room (excluding sender)
-                            let senders: Vec<_> = room
-                                .clients
-                                .iter()
-                                .filter(|id| *id != client_id)
-                                .filter_map(|id| locked_clients.get(id).map(|c| c.sender.clone()))
-                                .collect();
-
-                            match serde_json::to_string(&msg) {
-                                Ok(json) => Some((senders, json)),
-                                Err(e) => {
-                                    log::error!("Failed to serialize quality_update: {}", e);
-                                    None
-                                }
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                }; // Locks released here
-
-                // Send messages without holding any locks
-                if let Some((senders, json)) = broadcast_data {
-                    let warp_msg = warp::ws::Message::text(json);
-                    for sender in senders {
-                        if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
-                            log::warn!(
-                                "Failed to send quality_update (buffer full or closed): {}",
-                                e
-                            );
-                        }
-                    }
-                }
-            }
-        }
         ClientMessageType::ChatMessage => {
             // Handle chat messages within a room
             if let Some(ref room_id) = parsed.room {

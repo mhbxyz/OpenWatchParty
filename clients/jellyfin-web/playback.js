@@ -16,90 +16,6 @@
     INITIAL_SYNC_MAX_DRIFT
   } = OWP.constants;
 
-  /**
-   * Get effective quality settings (room quality if in room, otherwise local settings)
-   */
-  const getEffectiveQuality = () => {
-    if (state.inRoom && state.roomQuality) {
-      return state.roomQuality;
-    }
-    return {
-      maxBitrate: state.quality.maxBitrate,
-      preferDirectPlay: state.quality.preferDirectPlay,
-      preset: state.quality.currentPreset
-    };
-  };
-
-  /**
-   * Build playback options with quality settings applied
-   */
-  const buildPlaybackOptions = (baseOptions = {}) => {
-    const quality = getEffectiveQuality();
-    const options = { ...baseOptions };
-
-    // Apply max bitrate if set (0 = auto/no limit)
-    if (quality.maxBitrate > 0) {
-      options.maxStreamingBitrate = quality.maxBitrate;
-      options.maxBitrate = quality.maxBitrate;
-    }
-
-    // Apply direct play preference
-    if (quality.preferDirectPlay) {
-      options.enableDirectPlay = true;
-      options.enableDirectStream = true;
-      // Lower transcoding priority
-      options.enableTranscoding = true;
-      options.allowVideoStreamCopy = true;
-      options.allowAudioStreamCopy = true;
-    }
-
-    return options;
-  };
-
-  /**
-   * Set quality preset by key (auto, 1080p, 720p, 480p, 360p)
-   */
-  const setQualityPreset = (presetKey) => {
-    const presets = OWP.constants.QUALITY_PRESETS;
-    const preset = presets[presetKey];
-    if (!preset) {
-      console.warn('[OpenWatchParty] Unknown quality preset:', presetKey);
-      return false;
-    }
-
-    state.quality.currentPreset = presetKey;
-    state.quality.maxBitrate = preset.bitrate;
-    console.log('[OpenWatchParty] Quality preset set:', presetKey, preset);
-
-    // If host, broadcast quality change to room
-    if (state.isHost && state.inRoom && OWP.actions && OWP.actions.send) {
-      OWP.actions.send('quality_update', {
-        maxBitrate: preset.bitrate,
-        preferDirectPlay: state.quality.preferDirectPlay,
-        preset: presetKey
-      });
-    }
-
-    return true;
-  };
-
-  /**
-   * Toggle direct play preference
-   */
-  const toggleDirectPlay = (enable) => {
-    state.quality.preferDirectPlay = enable;
-    console.log('[OpenWatchParty] Direct play:', enable ? 'enabled' : 'disabled');
-
-    // If host, broadcast quality change to room
-    if (state.isHost && state.inRoom && OWP.actions && OWP.actions.send) {
-      OWP.actions.send('quality_update', {
-        maxBitrate: state.quality.maxBitrate,
-        preferDirectPlay: enable,
-        preset: state.quality.currentPreset
-      });
-    }
-  };
-
   const playItem = (item) => {
     const pm = utils.getPlaybackManager();
     if (!pm) {
@@ -107,20 +23,19 @@
       return false;
     }
 
-    // Build options with quality settings
-    const qualityOptions = buildPlaybackOptions({ startPositionTicks: 0 });
+    const playOptions = { startPositionTicks: 0 };
     const errors = [];
 
     if (typeof pm.play === 'function') {
       try {
-        pm.play({ items: [item], ...qualityOptions });
+        pm.play({ items: [item], ...playOptions });
         console.log('[OpenWatchParty] Playback started via pm.play({ items })');
         return true;
       } catch (err) {
         errors.push({ method: 'play({ items })', error: err.message });
       }
       try {
-        pm.play({ item: item, ...qualityOptions });
+        pm.play({ item: item, ...playOptions });
         console.log('[OpenWatchParty] Playback started via pm.play({ item })');
         return true;
       } catch (err) {
@@ -129,7 +44,7 @@
       const itemId = item?.Id || item?.id;
       if (itemId) {
         try {
-          pm.play({ ids: [itemId], ...qualityOptions });
+          pm.play({ ids: [itemId], ...playOptions });
           console.log('[OpenWatchParty] Playback started via pm.play({ ids })');
           return true;
         } catch (err) {
@@ -453,10 +368,6 @@
     bindVideo,
     syncLoop,
     watchReady,
-    cleanupVideoListeners,
-    // Quality control
-    getEffectiveQuality,
-    setQualityPreset,
-    toggleDirectPlay
+    cleanupVideoListeners
   };
 })();

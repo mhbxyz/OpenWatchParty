@@ -936,9 +936,9 @@ CMD ["session-server"]
 | # | Action | Effort | Notes |
 |---|--------|--------|-------|
 | 13 | Ajouter métriques Prometheus | 4h | Observabilité production |
-| 15 | Créer UI quality control | 4h | Interface changement qualité |
+| 15 | ~~Créer UI quality control~~ | - | ❌ ANNULÉ - Limitation Jellyfin (qualité non modifiable dynamiquement) |
 | 16 | Migrer logs structurés (tracing) | 2h | Meilleure analyse logs |
-| 17 | Ajouter pre-commit hooks | 1h | Automatisation qualité code |
+| 17 | Ajouter pre-commit hooks | 1h | ✅ FAIT |
 
 ### 8.3 Backlog (Basse Priorité / Features)
 

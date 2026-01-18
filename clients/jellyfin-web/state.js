@@ -68,15 +68,7 @@
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
     INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
     INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
-    INITIAL_SYNC_MAX_DRIFT: 10,   // Max drift (seconds) before forcing HARD_SEEK during initial sync
-    // Quality presets (bitrate in bps)
-    QUALITY_PRESETS: {
-      auto: { bitrate: 0, label: 'Auto' },
-      '1080p': { bitrate: 8000000, label: '1080p (8 Mbps)' },
-      '720p': { bitrate: 4000000, label: '720p (4 Mbps)' },
-      '480p': { bitrate: 1500000, label: '480p (1.5 Mbps)' },
-      '360p': { bitrate: 800000, label: '360p (800 Kbps)' }
-    }
+    INITIAL_SYNC_MAX_DRIFT: 10   // Max drift (seconds) before forcing HARD_SEEK during initial sync
   };
 
   OWP.state = {
@@ -140,15 +132,6 @@
     },
     // Video event listener cleanup
     videoListeners: null,
-    currentVideoElement: null,
-    // Quality control settings
-    quality: {
-      maxBitrate: 0,           // 0 = auto (from server config)
-      preferDirectPlay: true,  // Prefer direct play over transcoding
-      allowHostControl: true,  // Allow host to change quality
-      currentPreset: 'auto'    // Current quality preset key
-    },
-    // Room quality (synced from host)
-    roomQuality: null          // { maxBitrate, preferDirectPlay, preset } - null = use local settings
+    currentVideoElement: null
   };
 })();
