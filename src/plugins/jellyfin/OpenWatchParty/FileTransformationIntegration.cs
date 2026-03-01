@@ -13,7 +13,14 @@ namespace OpenWatchParty.Plugin;
 /// </summary>
 public class FileTransformationIntegration : IScheduledTask
 {
+    private const string ClientScriptPath = "/OpenWatchParty/ClientScript";
+    private const string IndexPattern = "index.html";
+    private const string HomeChunkPattern = @"home-html\..*\.chunk\.js";
+    private const string HomeChunkInjectionGuard = "__owpClientScriptInjected";
+    private const string HomeChunkInjectionSnippet = "\n;(function(){if(window.__owpClientScriptInjected)return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='/OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
+
     private readonly ILogger<FileTransformationIntegration> _logger;
+    private static ILogger<FileTransformationIntegration>? s_logger;
 
     public string Name => "OpenWatchParty File Transformation Registration";
     public string Key => "OpenWatchPartyFileTransformation";
@@ -23,6 +30,7 @@ public class FileTransformationIntegration : IScheduledTask
     public FileTransformationIntegration(ILogger<FileTransformationIntegration> logger)
     {
         _logger = logger;
+        s_logger = logger;
     }
 
     public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
@@ -69,18 +77,10 @@ public class FileTransformationIntegration : IScheduledTask
                 return Task.CompletedTask;
             }
 
-            var payload = new JObject
-            {
-                ["id"] = Plugin.PluginGuid,
-                ["fileNamePattern"] = "index.html",
-                ["callbackAssembly"] = typeof(FileTransformationIntegration).Assembly.FullName,
-                ["callbackClass"] = typeof(FileTransformationIntegration).FullName,
-                ["callbackMethod"] = nameof(TransformIndexHtml)
-            };
+            RegisterTransformation(registerMethod, IndexPattern, nameof(TransformIndexHtml));
+            RegisterTransformation(registerMethod, HomeChunkPattern, nameof(TransformHomeChunkScript));
 
-            registerMethod.Invoke(null, new object?[] { payload });
-
-            _logger.LogInformation("[OpenWatchParty] Registered index.html transformation with File Transformation plugin.");
+            _logger.LogInformation("[OpenWatchParty] Registered automatic client script injection transformations for index and home chunk files.");
         }
         catch (Exception ex)
         {
@@ -92,20 +92,33 @@ public class FileTransformationIntegration : IScheduledTask
         return Task.CompletedTask;
     }
 
+    private void RegisterTransformation(MethodInfo registerMethod, string fileNamePattern, string callbackMethod)
+    {
+        var payload = new JObject
+        {
+            ["id"] = Plugin.PluginGuid,
+            ["fileNamePattern"] = fileNamePattern,
+            ["callbackAssembly"] = typeof(FileTransformationIntegration).Assembly.FullName,
+            ["callbackClass"] = typeof(FileTransformationIntegration).FullName,
+            ["callbackMethod"] = callbackMethod
+        };
+
+        registerMethod.Invoke(null, new object?[] { payload });
+
+        _logger.LogInformation("[OpenWatchParty] Registered File Transformation pattern '{Pattern}' -> callback '{CallbackMethod}'.", fileNamePattern, callbackMethod);
+    }
+
     /// <summary>
     /// Callback invoked by the File Transformation plugin to inject the
     /// OpenWatchParty script tag into index.html.
     /// </summary>
     public static string TransformIndexHtml(object payload)
     {
-        var contents = payload is JObject jobj
-            ? jobj["contents"]?.ToString()
-            : payload?.GetType()
-                .GetProperty("contents")?
-                .GetValue(payload)?
-                .ToString();
+        var (contents, fileName) = GetPayloadData(payload);
 
-        if (string.IsNullOrEmpty(contents) || contents.Contains("/OpenWatchParty/ClientScript"))
+        s_logger?.LogDebug("[OpenWatchParty] TransformIndexHtml invoked for file '{FileName}'.", fileName ?? "unknown");
+
+        if (string.IsNullOrEmpty(contents) || contents.Contains(ClientScriptPath, StringComparison.Ordinal))
         {
             return contents ?? string.Empty;
         }
@@ -113,9 +126,53 @@ public class FileTransformationIntegration : IScheduledTask
         var bodyEndIndex = contents.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
         if (bodyEndIndex >= 0)
         {
+            s_logger?.LogDebug("[OpenWatchParty] Injected client script tag into index payload for file '{FileName}'.", fileName ?? "unknown");
             return contents.Insert(bodyEndIndex, "    <script src=\"/OpenWatchParty/ClientScript\" defer></script>\n");
         }
 
+        s_logger?.LogWarning("[OpenWatchParty] Could not inject into file '{FileName}': '</body>' tag not found.", fileName ?? "unknown");
+
         return contents;
+    }
+
+    /// <summary>
+    /// Callback invoked by the File Transformation plugin to inject a fallback
+    /// loader into Jellyfin home chunk scripts.
+    /// </summary>
+    public static string TransformHomeChunkScript(object payload)
+    {
+        var (contents, fileName) = GetPayloadData(payload);
+
+        s_logger?.LogDebug("[OpenWatchParty] TransformHomeChunkScript invoked for file '{FileName}'.", fileName ?? "unknown");
+
+        if (string.IsNullOrEmpty(contents)
+            || contents.Contains(ClientScriptPath, StringComparison.Ordinal)
+            || contents.Contains(HomeChunkInjectionGuard, StringComparison.Ordinal))
+        {
+            return contents ?? string.Empty;
+        }
+
+        s_logger?.LogDebug("[OpenWatchParty] Appending fallback client script loader for file '{FileName}'.", fileName ?? "unknown");
+        return contents + HomeChunkInjectionSnippet;
+    }
+
+    private static (string? Contents, string? FileName) GetPayloadData(object payload)
+    {
+        if (payload is JObject jobj)
+        {
+            return (jobj["contents"]?.ToString(), jobj["fileName"]?.ToString());
+        }
+
+        var payloadType = payload?.GetType();
+        var contents = payloadType?
+            .GetProperty("contents")?
+            .GetValue(payload)?
+            .ToString();
+        var fileName = payloadType?
+            .GetProperty("fileName")?
+            .GetValue(payload)?
+            .ToString();
+
+        return (contents, fileName);
     }
 }

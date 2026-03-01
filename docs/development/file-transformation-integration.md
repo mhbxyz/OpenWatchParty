@@ -12,11 +12,16 @@ This document describes how to integrate OpenWatchParty with the [jellyfin-plugi
 
 ## How It Works
 
-When Jellyfin loads OpenWatchParty, the plugin detects whether the [file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin is installed. If found, it registers a transformation that automatically injects the client `<script>` tag into `index.html` before `</body>`. If file-transformation is not installed, the admin can still inject the script manually via Dashboard > General > Custom HTML.
+When Jellyfin loads OpenWatchParty, the plugin detects whether the [file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin is installed. If found, it registers transformations that inject the client script automatically:
+
+- `index.html` callback inserts `<script src="/OpenWatchParty/ClientScript" defer></script>` before `</body>`
+- `home-html\..*\.chunk\.js` callback appends a guarded fallback loader for Jellyfin home chunk builds
+
+If file-transformation is not installed, the admin can still inject the script manually via Dashboard > General > Custom HTML.
 
 ## File-Transformation API
 
-### Registration Payload
+### Registration Payloads
 
 ```csharp
 var payload = new {
@@ -25,6 +30,14 @@ var payload = new {
     callbackAssembly = typeof(FileTransformationIntegration).Assembly.FullName,
     callbackClass = typeof(FileTransformationIntegration).FullName,
     callbackMethod = nameof(TransformIndexHtml)
+};
+
+var fallbackPayload = new {
+    id = new Guid(Plugin.PluginGuid),
+    fileNamePattern = @"home-html\..*\.chunk\.js",
+    callbackAssembly = typeof(FileTransformationIntegration).Assembly.FullName,
+    callbackClass = typeof(FileTransformationIntegration).FullName,
+    callbackMethod = nameof(TransformHomeChunkScript)
 };
 ```
 
@@ -42,6 +55,7 @@ if (ftAssembly != null)
     Type? pluginInterface = ftAssembly.GetType("Jellyfin.Plugin.FileTransformation.PluginInterface");
     MethodInfo? registerMethod = pluginInterface?.GetMethod("RegisterTransformation");
     registerMethod?.Invoke(null, new object?[] { payload });
+    registerMethod?.Invoke(null, new object?[] { fallbackPayload });
 }
 ```
 
@@ -68,6 +82,21 @@ public static string TransformIndexHtml(object payload)
 
     return contents;
 }
+
+public static string TransformHomeChunkScript(object payload)
+{
+    string? contents = payload?.GetType()
+        .GetProperty("contents")?
+        .GetValue(payload)?
+        .ToString();
+
+    if (string.IsNullOrEmpty(contents) || contents.Contains("__owpClientScriptInjected"))
+    {
+        return contents ?? string.Empty;
+    }
+
+    return contents + "\n;(function(){if(window.__owpClientScriptInjected)return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='/OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
+}
 ```
 
 ## Implementation Files
@@ -86,6 +115,27 @@ public static string TransformIndexHtml(object payload)
 | Incompatible version | Log warning, fallback to manual |
 | Exception during registration | Log debug, fallback to manual |
 | Script already present | Return unchanged (idempotent) |
+| Runtime callback without `</body>` in target | Log warning, fallback to chunk loader |
+
+## Runtime Diagnostics
+
+When diagnosing "registered but not injected" issues, verify both registration and callback execution in Jellyfin logs:
+
+- Registration logs:
+  - `Registered File Transformation pattern 'index.html' -> callback 'TransformIndexHtml'`
+  - `Registered File Transformation pattern 'home-html\..*\.chunk\.js' -> callback 'TransformHomeChunkScript'`
+- Runtime callback logs:
+  - `TransformIndexHtml invoked for file ...`
+  - `TransformHomeChunkScript invoked for file ...`
+  - `Could not inject ... '</body>' tag not found` (index payload not HTML)
+
+Also verify endpoint availability:
+
+```bash
+curl -I http://localhost:8096/OpenWatchParty/ClientScript
+```
+
+Expected: `200 OK` and `Content-Type: text/javascript`.
 
 ## Testing
 

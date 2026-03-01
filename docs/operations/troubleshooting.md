@@ -52,6 +52,19 @@ nav_order: 5
    - Dashboard > Plugins should show "OpenWatchParty"
    - Check Jellyfin logs for plugin load errors
 
+5. **Validate automatic injection runtime (File Transformation)**
+   - Registration alone is not sufficient. Confirm callback execution in logs.
+   - Look for OpenWatchParty logs:
+     - `Registered File Transformation pattern 'index.html' -> callback 'TransformIndexHtml'`
+     - `Registered File Transformation pattern 'home-html\..*\.chunk\.js' -> callback 'TransformHomeChunkScript'`
+     - `TransformIndexHtml invoked for file ...`
+     - `TransformHomeChunkScript invoked for file ...`
+   - Validate script endpoint:
+     ```bash
+     curl -I http://localhost:8096/OpenWatchParty/ClientScript
+     ```
+   - If endpoint is reachable but callback logs never appear, keep manual Custom HTML injection enabled until integration is fixed.
+
 ### Cannot Connect to Session Server
 
 **Symptoms:**

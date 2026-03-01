@@ -5,13 +5,15 @@ namespace OpenWatchParty.Plugin.Tests;
 public class FileTransformationIntegrationTests
 {
     private const string ScriptTag = "<script src=\"/OpenWatchParty/ClientScript\" defer></script>";
+    private const string FallbackLoaderGuard = "__owpClientScriptInjected";
 
     private class FakePayload
     {
         public string? contents { get; set; }
+        public string? fileName { get; set; }
     }
 
-    private static object MakePayload(string? contents) => new FakePayload { contents = contents };
+    private static object MakePayload(string? contents, string? fileName = null) => new FakePayload { contents = contents, fileName = fileName };
 
     [Fact]
     public void TransformIndexHtml_InjectsScript_WhenNotPresent()
@@ -37,6 +39,34 @@ public class FileTransformationIntegrationTests
     public void TransformIndexHtml_ReturnsEmpty_WhenContentIsNull()
     {
         var result = FileTransformationIntegration.TransformIndexHtml(MakePayload(null));
+
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
+    public void TransformHomeChunkScript_AppendsFallbackLoader_WhenNotPresent()
+    {
+        var js = "(()=>{console.log('home chunk');})();";
+        var result = FileTransformationIntegration.TransformHomeChunkScript(MakePayload(js, "home-html.a1b2.chunk.js"));
+
+        Assert.Contains(FallbackLoaderGuard, result);
+        Assert.Contains("/OpenWatchParty/ClientScript", result);
+        Assert.StartsWith(js, result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TransformHomeChunkScript_Skips_WhenGuardAlreadyPresent()
+    {
+        var js = "(()=>{window.__owpClientScriptInjected=true;})();";
+        var result = FileTransformationIntegration.TransformHomeChunkScript(MakePayload(js, "home-html.a1b2.chunk.js"));
+
+        Assert.Equal(js, result);
+    }
+
+    [Fact]
+    public void TransformHomeChunkScript_ReturnsEmpty_WhenContentIsNull()
+    {
+        var result = FileTransformationIntegration.TransformHomeChunkScript(MakePayload(null, "home-html.a1b2.chunk.js"));
 
         Assert.Equal(string.Empty, result);
     }
