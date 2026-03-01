@@ -55,9 +55,11 @@ nav_order: 2
 ### Jellyfin Versions
 | Version | Status |
 |---------|--------|
-| 10.9.x | Supported |
-| 10.8.x | Supported |
-| 10.7.x | Not tested |
+| 10.11.x | Supported for source builds |
+| 10.10.x | Supported for plugin repo release `0.1.0` |
+| Others | See compatibility matrix |
+
+Full details: [Compatibility Matrix](../operations/compatibility.md)
 
 ### Browsers
 
@@ -138,4 +140,3 @@ Mobile browsers have reduced functionality due to platform restrictions:
 ### Long-term Goals
 
 - **Official Jellyfin plugin repository** - Publish to the [official Jellyfin plugin repository](https://jellyfin.org/docs/general/server/plugins/#official-plugins) for native discoverability and installation
-

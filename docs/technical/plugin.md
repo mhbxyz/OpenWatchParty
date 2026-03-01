@@ -303,8 +303,9 @@ assembly.GetManifestResourceStream("OpenWatchParty.Plugin.Web.plugin.js");
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Jellyfin.Controller" Version="10.9.0" />
-  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="7.0.0" />
+  <PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
+  <PackageReference Include="Jellyfin.Model" Version="10.11.3" />
+  <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
 </ItemGroup>
 ```
 

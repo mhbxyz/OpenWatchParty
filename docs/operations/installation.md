@@ -8,10 +8,15 @@ nav_order: 1
 
 ## Prerequisites
 
-- **Jellyfin Server** 10.8.x or 10.9.x
+- **Jellyfin Server** version compatible with your OpenWatchParty build (see [Compatibility Matrix](compatibility.md))
 - **Docker** and **Docker Compose** (recommended)
 - **Port 3000** available for the session server
 - Admin access to Jellyfin
+
+### Version Selection
+
+- **Using plugin repository release `0.1.0`**: use Jellyfin `10.10.x`
+- **Using current source build (`1.0.0` in this repository)**: use Jellyfin `10.11.x`
 
 ## Quick Start (Docker)
 

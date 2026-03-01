@@ -43,6 +43,7 @@ See [Development Setup](development/setup) for the full workflow.
 | [Overview](product/overview) | [Installation](operations/installation) | [Architecture](technical/architecture) |
 | [Features](product/features) | [Configuration](operations/configuration) | [Protocol](technical/protocol) |
 | [User Guide](product/user-guide) | [Deployment](operations/deployment) | [Server](technical/server) |
+| | [Compatibility](operations/compatibility) | |
 | [FAQ](product/faq) | [Security](operations/security) | [Client](technical/client) |
 | | [Troubleshooting](operations/troubleshooting) | [Plugin](technical/plugin) |
 | | [Monitoring](operations/monitoring) | [Sync Algorithms](technical/sync) |
