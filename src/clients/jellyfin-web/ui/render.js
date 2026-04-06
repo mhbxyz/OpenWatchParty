@@ -4,6 +4,18 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const { PANEL_ID, BTN_ID, DEFAULT_WS_URL } = OWP.constants;
+  const GLOBAL_BTN_ID = 'owp-global-btn';
+
+  const togglePanel = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+    panel.classList.toggle('hide');
+    if (!panel.classList.contains('hide')) render(true);
+  };
 
   const renderLobby = (panel) => {
     panel.innerHTML = `
@@ -108,12 +120,7 @@
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
     btn.title = 'Watch Party';
     btn.innerHTML = '<span class="material-icons groups" aria-hidden="true"></span>';
-    btn.onclick = (e) => {
-      e.stopPropagation(); e.preventDefault();
-      const panel = document.getElementById(PANEL_ID);
-      panel.classList.toggle('hide');
-      if (!panel.classList.contains('hide')) render(true);
-    };
+    btn.onclick = togglePanel;
     const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
     if (favBtn) {
       favBtn.insertAdjacentElement('beforebegin', btn);
@@ -122,5 +129,22 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton });
+  const injectGlobalButton = () => {
+    if (document.getElementById(GLOBAL_BTN_ID)) return;
+    const headerRight = document.querySelector('.headerRight') || document.querySelector('.skinHeader .headerRight');
+    if (!headerRight) return;
+
+    const btn = document.createElement('button');
+    btn.id = GLOBAL_BTN_ID;
+    btn.className = 'paper-icon-button-light owp-global-btn';
+    btn.type = 'button';
+    btn.title = 'OpenWatchParty';
+    btn.setAttribute('aria-label', 'OpenWatchParty');
+    btn.innerHTML = '<span class="material-icons groups" aria-hidden="true"></span>';
+    btn.onclick = togglePanel;
+
+    headerRight.prepend(btn);
+  };
+
+  Object.assign(ui, { render, injectOsdButton, injectGlobalButton });
 })();

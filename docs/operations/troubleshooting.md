@@ -33,9 +33,9 @@ nav_order: 5
 1. **Check Custom HTML configuration**
    - Go to Dashboard > General > Branding
    - Verify this line is in "Custom HTML body":
-     ```html
-     <script src="/OpenWatchParty/ClientScript"></script>
-     ```
+       ```html
+       <script src="../OpenWatchParty/ClientScript"></script>
+       ```
 
 2. **Hard refresh the browser**
    - Press Ctrl+F5 (Windows/Linux) or Cmd+Shift+R (Mac)

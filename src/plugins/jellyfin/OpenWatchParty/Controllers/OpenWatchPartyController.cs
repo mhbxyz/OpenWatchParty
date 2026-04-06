@@ -28,6 +28,7 @@ public class OpenWatchPartyController : ControllerBase
 
     // Cache for embedded script content using Lazy<T> for thread-safe initialization (fixes audit 4.5.1)
     private static readonly Lazy<(string Content, string ETag)> _scriptCache = new(LoadScriptFromResource, LazyThreadSafetyMode.ExecutionAndPublication);
+    private static readonly ConcurrentDictionary<string, (string Content, string ETag)> _clientModuleCache = new(StringComparer.OrdinalIgnoreCase);
 
     // P-CS02 fix: Cache JWT signing credentials and handler to avoid repeated allocations
     private static SigningCredentials? _cachedSigningCredentials;
@@ -86,6 +87,68 @@ public class OpenWatchPartyController : ControllerBase
         Response.Headers["ETag"] = etag;
 
         return Content(content, "text/javascript");
+    }
+
+    /// <summary>
+    /// Returns an OpenWatchParty client module JavaScript file from embedded resources.
+    /// This avoids relying on Jellyfin's /web/plugins static path.
+    /// </summary>
+    /// <param name="path">Relative module path, e.g. "state.js" or "ui/render.js".</param>
+    /// <returns>The JavaScript module content.</returns>
+    [HttpGet("Client/{*path}")]
+    [Produces("text/javascript")]
+    public ActionResult GetClientModule([FromRoute] string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return NotFound();
+        }
+
+        var normalizedPath = path.Replace('\\', '/').TrimStart('/');
+        if (normalizedPath.Contains("..", StringComparison.Ordinal) || !normalizedPath.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var (content, etag) = _clientModuleCache.GetOrAdd(normalizedPath, LoadClientModuleFromResource);
+
+            var requestETag = Request.Headers["If-None-Match"].FirstOrDefault();
+            if (!string.IsNullOrEmpty(requestETag) && requestETag == etag)
+            {
+                return StatusCode(304);
+            }
+
+            Response.Headers["Cache-Control"] = "public, max-age=3600";
+            Response.Headers["ETag"] = etag;
+
+            return Content(content, "text/javascript");
+        }
+        catch (FileNotFoundException)
+        {
+            return NotFound();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to serve embedded client module '{Path}'", normalizedPath);
+            return StatusCode(500);
+        }
+    }
+
+    private static (string Content, string ETag) LoadClientModuleFromResource(string normalizedPath)
+    {
+        var assembly = typeof(OpenWatchPartyController).Assembly;
+        var resourceName = "OpenWatchParty.Plugin.Web." + normalizedPath.Replace('/', '.');
+
+        using var stream = assembly.GetManifestResourceStream(resourceName)
+            ?? throw new FileNotFoundException($"Embedded resource '{resourceName}' not found");
+
+        using var reader = new StreamReader(stream);
+        var content = reader.ReadToEnd();
+        var hash = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(content));
+        var etag = $"\"{Convert.ToBase64String(hash)[..16]}\"";
+        return (content, etag);
     }
 
     /// <summary>

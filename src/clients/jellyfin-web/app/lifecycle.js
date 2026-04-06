@@ -69,6 +69,10 @@
           }
         }
       }
+
+      // Jellyfin is an SPA; header DOM is frequently replaced during navigation.
+      // Keep a global launcher button present even when no video OSD exists.
+      ui.injectGlobalButton();
     }, UI_CHECK_MS);
     state.intervals.home = setInterval(() => {
       if (document.visibilityState === 'visible' && utils.isHomeView()) {

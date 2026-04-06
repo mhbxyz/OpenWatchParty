@@ -15,12 +15,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="OpenWatchParty.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.3" ExcludeAssets="runtime" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.3" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.6" ExcludeAssets="runtime" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="6.35.0" />
@@ -28,6 +32,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Web\configPage.html" />
-    <EmbeddedResource Include="Web\plugin.js" />
+    <EmbeddedResource Include="Web\**\*.js" />
   </ItemGroup>
 </Project>

@@ -68,6 +68,15 @@
     #owp-chat-send { padding: 8px 12px; border-radius: 6px; border: none; background: #1565c0; color: #fff; cursor: pointer; font-size: 12px; }
     #owp-chat-send:hover { background: #1976d2; }
     .owp-chat-badge { display: none; background: #d32f2f; color: #fff; font-size: 10px; padding: 2px 5px; border-radius: 10px; margin-left: 4px; }
+    .owp-global-btn {
+      margin-right: 10px;
+      color: #fff;
+      opacity: 0.92;
+    }
+    .owp-global-btn:hover {
+      opacity: 1;
+      color: #69f0ae;
+    }
     /* Toast styles */
     .owp-toast-container {
       position: fixed; top: 70px; right: 20px; z-index: 30000;

@@ -47,7 +47,7 @@ Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/je
 3. Scroll to **Custom HTML** (Branding section)
 4. Add this line to the "Custom HTML body" field:
    ```html
-   <script src="/OpenWatchParty/ClientScript"></script>
+   <script src="../OpenWatchParty/ClientScript"></script>
    ```
 5. Click **Save**
 6. Hard refresh your browser (Ctrl+F5)

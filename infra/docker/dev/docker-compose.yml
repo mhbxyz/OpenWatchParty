@@ -31,7 +31,7 @@ services:
       start_period: 5s
 
   jellyfin-dev:
-    image: jellyfin/jellyfin:10.11.3
+    image: jellyfin/jellyfin:10.11.6
     container_name: jellyfin-dev
     environment:
       - PUID=${UID:-1000}

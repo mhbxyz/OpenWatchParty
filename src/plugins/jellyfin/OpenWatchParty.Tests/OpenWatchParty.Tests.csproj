@@ -21,8 +21,8 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <!-- Jellyfin dependencies for testing -->
-    <PackageReference Include="Jellyfin.Model" Version="10.11.5" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Model" Version="10.11.6" />
+    <PackageReference Include="Jellyfin.Controller" Version="10.11.6" />
   </ItemGroup>
 
   <ItemGroup>
