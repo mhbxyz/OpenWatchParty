@@ -51,9 +51,7 @@
     state.rejoinPending = false;
     state.desiredRoomId = '';
     rejectRoomState(failedRoomId);
-    state.inRoom = false;
-    state.roomId = '';
-    state.readyRoomId = '';
+    if (actions.resetRoomState) actions.resetRoomState();
     if (message && ui.showToast) ui.showToast(message);
     ui.render();
   };
@@ -112,13 +110,11 @@
     clearRoomRejoinTimer();
     if (state.inRoom) {
       if (state.isHost) {
-        state.inRoom = false;
-        state.roomId = '';
-        state.readyRoomId = '';
-        state.isHost = false;
         cancelRoomRejoin();
+        if (actions.resetRoomState) actions.resetRoomState();
         if (ui.showToast) ui.showToast('The watch party closed when the host disconnected');
       } else {
+        if (actions.normalizePlaybackRate) actions.normalizePlaybackRate();
         state.desiredRoomId = state.roomId;
         allowRoomState(state.desiredRoomId);
         state.rejoinPending = Boolean(state.desiredRoomId);
@@ -253,10 +249,7 @@
     state.clientId = '';
     state.successfulPings = 0;
     state.timeSyncSamples = [];
-    state.inRoom = false;
-    state.roomId = '';
-    state.readyRoomId = '';
-    state.isHost = false;
+    if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {
       clearInterval(state.intervals.ping);
       state.intervals.ping = null;

@@ -114,6 +114,7 @@
     homeRoomCache: new LRUCache(50),
     lastParticipantCount: 0,
     joiningItemId: '',
+    playbackRequestAttempt: 0,
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',
     participantCount: 0,

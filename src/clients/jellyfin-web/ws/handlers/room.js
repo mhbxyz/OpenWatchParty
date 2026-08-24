@@ -49,8 +49,11 @@
 
   h.handleRoomClosed = (msg) => {
     if (OWP.actions?.cancelRoomRejoin) OWP.actions.cancelRoomRejoin();
-    state.inRoom = false;
-    state.roomId = '';
+    if (OWP.actions?.resetRoomState) OWP.actions.resetRoomState();
+    else {
+      state.inRoom = false;
+      state.roomId = '';
+    }
     const reason = msg.payload?.reason || 'The room was closed';
     ui.showToast(reason);
     ui.render();

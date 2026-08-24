@@ -96,6 +96,7 @@ describe('room reconnection lifecycle', () => {
       authRequestAttempt: 0,
       connectionPhase: 'disconnected',
       roomRejoinTimer: null,
+      currentVideoElement: null,
       successfulPings: 0,
       timeSyncSamples: []
     });
@@ -115,9 +116,16 @@ describe('room reconnection lifecycle', () => {
     await OWP.actions.connect();
     const first = sockets[0];
     first.open();
-    Object.assign(OWP.state, { inRoom: true, roomId: 'room-a', isHost: false });
+    const video = { playbackRate: 2 };
+    Object.assign(OWP.state, {
+      inRoom: true,
+      roomId: 'room-a',
+      isHost: false,
+      currentVideoElement: video
+    });
 
     first.serverClose();
+    assert.equal(video.playbackRate, 1);
     assert.equal(OWP.state.inRoom, false);
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     assert.equal(OWP.state.rejoinPending, true);

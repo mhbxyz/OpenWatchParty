@@ -16,6 +16,46 @@
     state.ws.send(JSON.stringify(message));
   };
 
+  const normalizePlaybackRate = () => {
+    const video = state.currentVideoElement || utils.getVideo?.();
+    if (video && video.playbackRate !== 1) video.playbackRate = 1;
+  };
+
+  const resetRoomState = () => {
+    normalizePlaybackRate();
+    if (state.pendingActionTimer) {
+      clearTimeout(state.pendingActionTimer);
+      state.pendingActionTimer = null;
+    }
+    Object.assign(state, {
+      inRoom: false,
+      roomId: '',
+      roomName: '',
+      participantCount: 0,
+      lastParticipantCount: 0,
+      isHost: false,
+      readyRoomId: '',
+      isBuffering: false,
+      wantsToPlay: false,
+      isSyncing: false,
+      syncCooldownUntil: 0,
+      isInitialSync: false,
+      initialSyncUntil: 0,
+      initialSyncTargetPos: 0,
+      syncStatus: 'synced',
+      currentDrift: 0,
+      pendingPlayUntil: 0,
+      lastSyncServerTs: 0,
+      lastSyncPosition: 0,
+      lastSyncPlayState: '',
+      joiningItemId: '',
+      pendingJoinRoomId: '',
+      suppressUntil: 0
+    });
+    state.playbackRequestAttempt++;
+    if (OWP.chat) OWP.chat.clear();
+  };
+
   const createRoom = () => {
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = '';
@@ -46,24 +86,17 @@
   const leaveRoom = () => {
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     send('leave_room');
-    state.inRoom = false;
-    state.roomId = '';
-    state.readyRoomId = '';
-    state.isInitialSync = false;
-    state.initialSyncUntil = 0;
-    state.initialSyncTargetPos = 0;
-    state.syncCooldownUntil = 0;
-    state.syncStatus = 'synced';
-    state.pendingPlayUntil = 0;
-    state.currentDrift = 0;
-    if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
-      state.pendingActionTimer = null;
-    }
-    if (OWP.chat) OWP.chat.clear();
+    resetRoomState();
     const panel = document.getElementById(OWP.constants.PANEL_ID);
     if (panel) panel.classList.add('hide');
   };
 
-  Object.assign(actions, { send, createRoom, joinRoom, leaveRoom });
+  Object.assign(actions, {
+    send,
+    normalizePlaybackRate,
+    resetRoomState,
+    createRoom,
+    joinRoom,
+    leaveRoom
+  });
 })();
