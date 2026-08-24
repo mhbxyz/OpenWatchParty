@@ -46,9 +46,22 @@
     panel.addEventListener('keypress', panelStopPropagation);
   };
 
+  const retryConnectionAfterLogin = () => {
+    if (!state.authBlocked || state.isConnecting || state.ws?.readyState === WebSocket.OPEN) return false;
+    const accessToken = window.ApiClient?.accessToken?.()
+      || window.ApiClient?._accessToken
+      || window.ApiClient?._serverInfo?.AccessToken;
+    if (!accessToken || !OWP.actions?.connect) return false;
+    state.authBlocked = false;
+    state.authError = '';
+    OWP.actions.connect();
+    return true;
+  };
+
   const startIntervals = () => {
     state.intervals.ui = OWP.timers.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
+      retryConnectionAfterLogin();
       const video = utils.getVideo();
       if (hadVideoElement && !video) {
         hadVideoElement = false;
@@ -111,7 +124,8 @@
     set panelStopPropagation(v) { panelStopPropagation = v; },
     get hadVideoElement() { return hadVideoElement; },
     set hadVideoElement(v) { hadVideoElement = v; },
-    clearAllIntervals
+    clearAllIntervals,
+    retryConnectionAfterLogin
   };
 
   OWP.app = OWP.app || {};

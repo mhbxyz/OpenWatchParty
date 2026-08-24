@@ -44,4 +44,18 @@ describe('application lifecycle initialization', () => {
     assert.equal(OWP.state.initialized, true);
     assert.equal(connectCalls, 1);
   });
+
+  it('retries connection after Jellyfin login becomes available', () => {
+    globalThis.ApiClient = { accessToken: () => 'token' };
+    OWP.state.authBlocked = true;
+    OWP.state.authError = 'not available';
+    OWP.state.isConnecting = false;
+    OWP.state.ws = null;
+    connectCalls = 0;
+
+    assert.equal(OWP._lifecycle.retryConnectionAfterLogin(), true);
+    assert.equal(connectCalls, 1);
+    assert.equal(OWP.state.authBlocked, false);
+    assert.equal(OWP.state.authError, '');
+  });
 });
