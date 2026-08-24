@@ -93,30 +93,15 @@ jobs:
         with:
           dotnet-version: '9.0.317'
 
-      - name: Restore plugin dependencies
-        working-directory: src/plugins/jellyfin/OpenWatchParty
-        run: dotnet restore --locked-mode
-
-      - name: Build plugin
-        working-directory: src/plugins/jellyfin/OpenWatchParty
-        run: dotnet publish -c Release -o dist --no-restore
-
-      - name: Create plugin metadata
-        run: infra/scripts/write-plugin-meta.sh src/plugins/jellyfin/OpenWatchParty/dist/meta.json
-
-      - name: Create plugin zip
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
-          cd src/plugins/jellyfin/OpenWatchParty/dist
-          zip -r "../OpenWatchParty-${RELEASE_TAG}.zip" .
+      - name: Package plugin
+        run: infra/scripts/package-plugin.sh
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: jellyfin-plugin
-          path: src/plugins/jellyfin/OpenWatchParty/OpenWatchParty-*.zip
+          path: dist/OpenWatchParty-v*.zip
+          if-no-files-found: error
 
       - name: Upload canonical release metadata
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

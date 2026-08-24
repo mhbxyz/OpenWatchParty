@@ -110,6 +110,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '9.0.317'
+
       - name: Check release scripts
         run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
 
@@ -127,6 +132,12 @@ jobs:
 
       - name: Verify plugin metadata generation
         run: infra/scripts/tests/write-plugin-meta.test.sh
+
+      - name: Test plugin packaging validation
+        run: infra/scripts/tests/package-plugin.test.sh
+
+      - name: Build and validate plugin package end to end
+        run: infra/scripts/package-plugin.sh
 
   build-server:
     name: Build Server
