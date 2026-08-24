@@ -22,3 +22,7 @@ env_logger = "0.10"
 log = "0.4"
 jsonwebtoken = "9"
 base64 = "0.22"
+ipnet = "2"
+
+[dev-dependencies]
+warp = { version = "0.4", features = ["test", "websocket"] }

@@ -1,5 +1,5 @@
 mod connection;
-mod constants;
+pub(crate) mod constants;
 mod dispatch;
 mod handlers;
 mod pending_play;

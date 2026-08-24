@@ -45,6 +45,10 @@ openssl rand -base64 32
 | `ALLOWED_ORIGINS` | `http://localhost:8096,https://localhost:8096` | CORS allowed origins (comma-separated) |
 | `JWT_SECRET` | required | Secret for validating tokens |
 | `ALLOW_INSECURE_NO_AUTH` | `false` | Explicit development-only override when `JWT_SECRET` is empty |
+| `AUTH_TIMEOUT_SECONDS` | `10` | Time allowed to authenticate a JWT WebSocket connection; disabled in insecure mode |
+| `MAX_CONNECTIONS` | `256` | Maximum concurrent WebSocket connections |
+| `MAX_CONNECTIONS_PER_IP` | `32` | Maximum concurrent WebSocket connections per effective client IP |
+| `TRUSTED_PROXIES` | (empty) | Comma-separated proxy IPs/CIDRs allowed to supply `X-Forwarded-For` |
 | `LOG_LEVEL` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace` |
 
 ### Docker Compose Example
@@ -79,6 +83,16 @@ ALLOWED_ORIGINS=*
 ```
 
 **Warning:** Using `*` for ALLOWED_ORIGINS logs a security warning and is not recommended for production.
+
+### Reverse Proxy Trust
+
+The server ignores `X-Forwarded-For` unless the direct peer address belongs to `TRUSTED_PROXIES`. Configure only reverse proxies you operate, using exact addresses or narrow CIDRs. When trusted, the first valid address in `X-Forwarded-For` is used for the per-IP connection limit; otherwise the direct peer IP is used.
+
+```bash
+TRUSTED_PROXIES=127.0.0.1/32,10.20.0.0/16
+```
+
+WebSocket messages and individual frames are capped at 64 KiB by Warp before message assembly. Connections exceeding either concurrent connection limit receive HTTP `429`; clients exceeding the application message rate or the JWT authentication deadline are closed with WebSocket policy code `1008`.
 
 ## Client Configuration
 

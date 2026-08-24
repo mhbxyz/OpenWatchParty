@@ -28,6 +28,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?,
     );
     let allowed_origins = Arc::new(routes::get_allowed_origins());
+    let ingress_config = routes::IngressConfig::from_env()
+        .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
 
     info!("Allowed origins: {:?}", allowed_origins);
     info!(
@@ -43,8 +45,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tasks::spawn_zombie_cleanup(state.clone());
 
-    let routes = routes::build_ws_route(state, jwt_config.clone(), allowed_origins.clone())
-        .or(routes::build_health_route(jwt_config, allowed_origins));
+    let routes = routes::build_ws_route(
+        state,
+        jwt_config.clone(),
+        allowed_origins.clone(),
+        ingress_config,
+    )
+    .or(routes::build_health_route(jwt_config, allowed_origins))
+    .recover(routes::handle_rejection);
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port: u16 = std::env::var("PORT")

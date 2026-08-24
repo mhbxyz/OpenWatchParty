@@ -16,6 +16,10 @@ services:
       - ALLOW_INSECURE_NO_AUTH=false
       - JWT_AUDIENCE=${JWT_AUDIENCE:-OpenWatchParty}
       - JWT_ISSUER=${JWT_ISSUER:-Jellyfin}
+      - MAX_CONNECTIONS=${MAX_CONNECTIONS:-256}
+      - MAX_CONNECTIONS_PER_IP=${MAX_CONNECTIONS_PER_IP:-32}
+      - TRUSTED_PROXIES=${TRUSTED_PROXIES:-}
+      - AUTH_TIMEOUT_SECONDS=${AUTH_TIMEOUT_SECONDS:-10}
     deploy:
       resources:
         limits:

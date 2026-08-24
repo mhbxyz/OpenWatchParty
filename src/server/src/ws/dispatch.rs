@@ -45,6 +45,32 @@ pub(super) async fn send_error(client_id: &str, state: &SharedState, message: &s
     .await;
 }
 
+pub(super) async fn close_with_policy(
+    client_id: &str,
+    state: &SharedState,
+    reason: &'static str,
+) -> bool {
+    let state = state.read().await;
+    let sender = state
+        .clients
+        .get(client_id)
+        .map(|client| client.sender.clone());
+    drop(state);
+    if let Some(sender) = sender {
+        let close =
+            warp::ws::Message::close_with(super::constants::POLICY_VIOLATION_CLOSE_CODE, reason);
+        return matches!(
+            tokio::time::timeout(
+                std::time::Duration::from_millis(super::constants::CLOSE_ENQUEUE_TIMEOUT_MS),
+                sender.send(Ok(close)),
+            )
+            .await,
+            Ok(Ok(()))
+        );
+    }
+    false
+}
+
 pub(super) async fn is_authenticated(client_id: &str, state: &SharedState) -> bool {
     let state = state.read().await;
     state
@@ -67,11 +93,11 @@ pub(super) async fn client_msg(
     msg: warp::ws::Message,
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
-) {
+) -> bool {
     if check_rate_limit(client_id, state).await {
         warn!("Rate limited client: {}", client_id);
-        send_error(client_id, state, "Rate limit exceeded").await;
-        return;
+        close_with_policy(client_id, state, "Rate limit exceeded").await;
+        return true;
     }
 
     if msg.as_bytes().len() > MAX_MESSAGE_SIZE {
@@ -81,17 +107,21 @@ pub(super) async fn client_msg(
             msg.as_bytes().len()
         );
         send_error(client_id, state, "Message too large").await;
-        return;
+        return false;
     }
 
-    let msg_str = if let Ok(s) = msg.to_str() { s } else { return };
+    let msg_str = if let Ok(s) = msg.to_str() {
+        s
+    } else {
+        return false;
+    };
 
     let parsed: IncomingMessage = match serde_json::from_str(msg_str) {
         Ok(v) => v,
         Err(e) => {
             warn!("JSON parse error from {}: {}", client_id, e);
             send_error(client_id, state, "Invalid message format").await;
-            return;
+            return false;
         }
     };
 
@@ -112,6 +142,7 @@ pub(super) async fn client_msg(
         ClientMessageType::ChatMessage => handle_chat_message(client_id, &parsed, state).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
+    false
 }
 
 #[cfg(test)]
@@ -188,5 +219,55 @@ mod tests {
             test_helpers::recv_msg(&mut rx).unwrap().msg_type,
             "room_list"
         );
+    }
+
+    #[tokio::test]
+    async fn rate_limit_violation_is_terminal() {
+        use super::super::constants::RATE_LIMIT_MESSAGES;
+
+        let state = test_helpers::create_state();
+        let (mut client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        client.message_count = RATE_LIMIT_MESSAGES;
+        state.write().await.clients.insert("c1".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: false,
+        });
+
+        let terminal = client_msg(
+            "c1",
+            warp::ws::Message::text(r#"{"type":"ping","ts":0}"#),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert!(terminal);
+        let close = rx.recv().await.unwrap().unwrap();
+        assert!(close.is_close());
+        assert_eq!(
+            close.close_frame(),
+            Some((
+                super::super::constants::POLICY_VIOLATION_CLOSE_CODE,
+                "Rate limit exceeded"
+            ))
+        );
+    }
+
+    #[tokio::test]
+    async fn full_outbound_queue_makes_policy_close_fail_explicitly() {
+        let state = test_helpers::create_state();
+        let (client, _rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        for _ in 0..100 {
+            client
+                .sender
+                .try_send(Ok(warp::ws::Message::text("queued")))
+                .unwrap();
+        }
+        state.write().await.clients.insert("c1".to_string(), client);
+
+        assert!(!close_with_policy("c1", &state, "Rate limit exceeded").await);
     }
 }
