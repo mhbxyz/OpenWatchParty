@@ -125,7 +125,7 @@ pub fn collect_room_senders(
 
 pub fn send_to_senders(senders: &[ClientSender], msg: &WsMessage, context: &str) {
     let Ok(json) = serde_json::to_string(msg) else {
-        log::error!("Failed to serialize {} message", context);
+        log::error!("Failed to serialize {context} message");
         return;
     };
     send_serialized(senders, json, context);
@@ -135,7 +135,7 @@ pub fn send_serialized(senders: &[ClientSender], json: String, context: &str) {
     let warp_msg = warp::ws::Message::text(json);
     for sender in senders {
         if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
-            log::warn!("Failed to send {} (buffer full or closed): {}", context, e);
+            log::warn!("Failed to send {context} (buffer full or closed): {e}");
         }
     }
 }

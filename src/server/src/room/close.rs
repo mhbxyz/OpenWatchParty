@@ -70,7 +70,7 @@ pub(crate) fn close_room_parts(
     rooms: &mut HashMap<String, crate::types::Room>,
 ) -> Option<Vec<ClientSender>> {
     let room = rooms.remove(room_id)?;
-    info!("Closing room {}", room_id);
+    info!("Closing room {room_id}");
     let mut clients_to_notify = room.clients;
     for (client_id, client) in clients.iter() {
         if client.room_id.as_deref() == Some(room_id) && !clients_to_notify.contains(client_id) {

@@ -167,7 +167,7 @@ impl JwtConfig {
                     Ok(token_data.claims)
                 }
             }
-            Err(e) => Err(format!("Invalid token: {}", e)),
+            Err(e) => Err(format!("Invalid token: {e}")),
         }
     }
 }
@@ -199,8 +199,7 @@ mod tests {
         let entropy = calculate_entropy(b"abababababababababababababababab");
         assert!(
             entropy > 10.0 && entropy < 40.0,
-            "Two char alternating should have low entropy: {}",
-            entropy
+            "Two char alternating should have low entropy: {entropy}"
         );
     }
 
@@ -209,8 +208,7 @@ mod tests {
         let entropy = calculate_entropy(b"aB3$xY9!pQ2@wE5#rT8^uI1&oP4*");
         assert!(
             entropy > MIN_ENTROPY_BITS,
-            "Random-looking string should have high entropy: {}",
-            entropy
+            "Random-looking string should have high entropy: {entropy}"
         );
     }
 
@@ -219,8 +217,7 @@ mod tests {
         let entropy = calculate_entropy(b"550e8400e29b41d4a716446655440000");
         assert!(
             entropy > 60.0,
-            "UUID should have reasonable entropy: {}",
-            entropy
+            "UUID should have reasonable entropy: {entropy}"
         );
     }
 
@@ -229,8 +226,7 @@ mod tests {
         let entropy = calculate_entropy(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb");
         assert!(
             entropy < MIN_ENTROPY_BITS,
-            "Weak pattern should have low entropy: {}",
-            entropy
+            "Weak pattern should have low entropy: {entropy}"
         );
     }
 

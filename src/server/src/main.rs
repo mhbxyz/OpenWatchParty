@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ingress_config = routes::IngressConfig::from_env()
         .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?;
 
-    info!("Allowed origins: {:?}", allowed_origins);
+    info!("Allowed origins: {allowed_origins:?}");
     info!(
         "JWT: {}",
         if jwt_config.enabled {
@@ -63,12 +63,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(3000);
-    let addr: SocketAddr = format!("{}:{}", host, port)
+    let addr: SocketAddr = format!("{host}:{port}")
         .parse()
         .expect("Invalid HOST:PORT combination");
     let shutdown_signal = tasks::shutdown_signal();
 
-    info!("OpenWatchParty server listening on {}", addr);
+    info!("OpenWatchParty server listening on {addr}");
     let cancellation = app_tasks.cancellation_token();
     let server = warp::serve(routes)
         .bind(addr)

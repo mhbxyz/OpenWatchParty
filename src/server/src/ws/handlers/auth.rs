@@ -16,10 +16,7 @@ async fn handle_jwt_auth(
     match jwt_config.validate_token(token) {
         Ok(claims) => {
             let Some(user_name) = sanitize_name(&claims.name) else {
-                warn!(
-                    "Auth failed for {}: JWT name is empty after sanitization",
-                    client_id
-                );
+                warn!("Auth failed for {client_id}: JWT name is empty after sanitization");
                 return false;
             };
             let sender = {
@@ -31,7 +28,7 @@ async fn handle_jwt_auth(
                     client.user_name = user_name.clone();
                     client.session_expires_at = jwt_config.enabled.then_some(claims.exp as u64);
                     client.authentication_version = client.authentication_version.wrapping_add(1);
-                    info!("Client {} authenticated as {}", client_id, user_name);
+                    info!("Client {client_id} authenticated as {user_name}");
                 }
                 sender
             };
@@ -51,7 +48,7 @@ async fn handle_jwt_auth(
             true
         }
         Err(e) => {
-            warn!("Auth failed for {}: {}", client_id, e);
+            warn!("Auth failed for {client_id}: {e}");
             false
         }
     }
@@ -70,7 +67,7 @@ async fn handle_identity(client_id: &str, payload: &serde_json::Value, state: &S
             if let Some(uid) = user_id {
                 client.user_id = uid.to_string();
             }
-            info!("Client {} identified as {}", client_id, name);
+            info!("Client {client_id} identified as {name}");
         }
     }
 }
@@ -98,10 +95,7 @@ pub(in crate::ws) async fn handle_auth(
         if !jwt_config.enabled {
             handle_identity(client_id, payload, state).await;
         } else {
-            warn!(
-                "Client {} sent auth without token but JWT is required",
-                client_id
-            );
+            warn!("Client {client_id} sent auth without token but JWT is required");
             send_error(
                 client_id,
                 state,
@@ -111,10 +105,7 @@ pub(in crate::ws) async fn handle_auth(
             .await;
         }
     } else if jwt_config.enabled {
-        warn!(
-            "Client {} sent auth with no payload but JWT is required",
-            client_id
-        );
+        warn!("Client {client_id} sent auth with no payload but JWT is required");
         send_error(
             client_id,
             state,

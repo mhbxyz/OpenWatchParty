@@ -71,7 +71,7 @@ pub fn handle_leave(
 }
 
 pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
-    info!("Disconnecting client {}", client_id);
+    info!("Disconnecting client {client_id}");
     {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;

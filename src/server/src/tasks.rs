@@ -134,7 +134,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
                 if cancellation.is_cancelled() {
                     return;
                 }
-                warn!("Removing zombie connection: {}", id);
+                warn!("Removing zombie connection: {id}");
                 crate::room::handle_disconnect(&id, &state).await;
             }
         }

@@ -80,7 +80,7 @@ fn format_client_log(client_id: &str, entry: &ClientLogEntry) -> String {
 }
 
 pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) {
-    warn!("Unknown message type from client {}", client_id);
+    warn!("Unknown message type from client {client_id}");
     send_error(
         client_id,
         state,
@@ -172,7 +172,7 @@ pub(in crate::ws) async fn handle_ready(
 }
 
 pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedState) {
-    info!("Client {} leaving room", client_id);
+    info!("Client {client_id} leaving room");
     let left = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;

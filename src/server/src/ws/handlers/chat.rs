@@ -83,7 +83,7 @@ pub(in crate::ws) async fn handle_chat_message(
         let (code, detail) = if chat_text.len() > MAX_CHAT_MESSAGE_LENGTH {
             (
                 ErrorCode::ChatMessageTooLong,
-                format!("{} (max {} characters)", msg, MAX_CHAT_MESSAGE_LENGTH),
+                format!("{msg} (max {MAX_CHAT_MESSAGE_LENGTH} characters)"),
             )
         } else {
             (ErrorCode::ChatMessageEmpty, msg.to_string())

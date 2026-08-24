@@ -164,7 +164,7 @@ pub(super) async fn client_msg(
     tasks: &crate::tasks::AppTasks,
 ) -> bool {
     if check_rate_limit(client_id, state).await {
-        warn!("Rate limited client: {}", client_id);
+        warn!("Rate limited client: {client_id}");
         send_error(
             client_id,
             state,
@@ -193,15 +193,12 @@ pub(super) async fn client_msg(
     }
 
     if msg.is_close() {
-        debug!("Client {} requested WebSocket close", client_id);
+        debug!("Client {client_id} requested WebSocket close");
         return true;
     }
 
     if !msg.is_text() {
-        warn!(
-            "Unsupported WebSocket message format from client {}",
-            client_id
-        );
+        warn!("Unsupported WebSocket message format from client {client_id}");
         send_error(
             client_id,
             state,
@@ -216,7 +213,7 @@ pub(super) async fn client_msg(
     let parsed: IncomingMessage = match serde_json::from_str(msg_str) {
         Ok(v) => v,
         Err(e) => {
-            warn!("JSON parse error from {}: {}", client_id, e);
+            warn!("JSON parse error from {client_id}: {e}");
             send_error(
                 client_id,
                 state,
@@ -231,7 +228,7 @@ pub(super) async fn client_msg(
     debug!("Message from {}: {:?}", client_id, parsed.msg_type);
 
     if parsed.msg_type != ClientMessageType::Auth && has_expired_session(client_id, state).await {
-        warn!("Authenticated session expired for client {}", client_id);
+        warn!("Authenticated session expired for client {client_id}");
         send_error(
             client_id,
             state,

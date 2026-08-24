@@ -152,7 +152,7 @@ pub async fn client_connection(
                 match result {
                     Ok(msg) => {
                         if client_msg(&temp_id, msg, &state, &jwt_config, &tasks).await {
-                            info!("Terminating WebSocket session for client {}", temp_id);
+                            info!("Terminating WebSocket session for client {temp_id}");
                             break;
                         }
                         if authentication_pending && is_authenticated(&temp_id, &state).await {
@@ -169,13 +169,13 @@ pub async fn client_connection(
                         }
                     },
                     Err(_) => {
-                        warn!("WebSocket receive failed for client {}", temp_id);
+                        warn!("WebSocket receive failed for client {temp_id}");
                         break;
                     }
                 }
             }
             _ = &mut authentication_timeout, if authentication_pending => {
-                info!("Authentication timed out for client {}", temp_id);
+                info!("Authentication timed out for client {temp_id}");
                 send_error(
                     &temp_id,
                     &state,
@@ -191,7 +191,7 @@ pub async fn client_connection(
                 if let Some(expiration) = current_expiration.0 {
                     let delay = expiration_delay(expiration, session_clock());
                     if delay.is_zero() {
-                        info!("Authentication expired for client {}", temp_id);
+                        info!("Authentication expired for client {temp_id}");
                         send_error(
                             &temp_id,
                             &state,
@@ -206,7 +206,7 @@ pub async fn client_connection(
             }
             result = disconnect_requested.changed() => {
                 if result.is_err() || *disconnect_requested.borrow() {
-                    info!("Outbound queue failed for client {}", temp_id);
+                    info!("Outbound queue failed for client {temp_id}");
                     close_with_policy(&temp_id, &state, "Client cannot accept messages").await;
                     break;
                 }

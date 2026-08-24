@@ -35,7 +35,7 @@ pub fn create_client_with_rx(
 pub fn create_room(room_id: &str, host_id: &str) -> Room {
     Room {
         room_id: room_id.to_string(),
-        name: format!("Room de {}", host_id),
+        name: format!("Room de {host_id}"),
         host_id: host_id.to_string(),
         media_id: None,
         clients: vec![host_id.to_string()],

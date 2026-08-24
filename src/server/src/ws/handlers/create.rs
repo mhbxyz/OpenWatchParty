@@ -44,12 +44,9 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         .and_then(|v| v.as_str())
         .filter(|id| is_valid_media_id(id))
         .map(|v| v.to_string());
-    let room_name = format!("Room de {}", host_name);
+    let room_name = format!("Room de {host_name}");
 
-    info!(
-        "Creating room '{}' ({}) for {}",
-        room_name, room_id, client_id
-    );
+    info!("Creating room '{room_name}' ({room_id}) for {client_id}");
 
     let state_server_ts = now_ms();
     Room {

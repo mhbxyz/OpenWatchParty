@@ -272,7 +272,7 @@ fn build_ws_route_with_clock(
                 match origin {
                     Some(ref o) if is_origin_allowed(o, &allowed) => Ok(()),
                     Some(o) => {
-                        warn!("Rejected connection from origin: {}", o);
+                        warn!("Rejected connection from origin: {o}");
                         Err(warp::reject::custom(OriginRejected))
                     }
                     None => Ok(()),

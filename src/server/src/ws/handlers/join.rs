@@ -148,7 +148,7 @@ pub(in crate::ws) async fn handle_join_room(
                     None,
                 )
             } else {
-                info!("Client {} joining room {}", client_id, room_id);
+                info!("Client {client_id} joining room {room_id}");
                 let previous_room = state
                     .clients
                     .get(client_id)
