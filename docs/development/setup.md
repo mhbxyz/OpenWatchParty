@@ -10,9 +10,10 @@ nav_order: 1
 
 - **Docker** and **Docker Compose**
 - **[Just](https://just.systems/)** — command runner (`cargo install just` or [other methods](https://just.systems/man/en/packages.html))
-- **.NET 9.0 SDK** (for plugin development)
-- **Rust 1.83+** (for server development)
-- **Node.js 20+** (optional, for JS tooling)
+- **.NET SDK 9.0.317** (for plugin development)
+- **Rust 1.88.0** (for server development)
+- **Node.js 20.20.2** (CI version; the client package also accepts `^20.19.0 || ^22.13.0 || >=24`)
+- **Ruby 3.2.9** (for building the documentation)
 - **mold** (recommended, for faster Rust linking)
 
 ## Quick Start

@@ -10,6 +10,8 @@ nav_order: 5
 
 This document describes how to integrate OpenWatchParty with the [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) to automatically inject the client script into Jellyfin's `index.html`, eliminating the manual Custom HTML configuration step.
 
+The development environment pins File Transformation `2.5.3.0` with archive ABI `10.11.3`.
+
 ## How It Works
 
 When Jellyfin loads OpenWatchParty, the plugin detects whether the [file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) plugin is installed. If found, it registers transformations that inject the client script automatically:

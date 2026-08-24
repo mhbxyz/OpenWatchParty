@@ -15,8 +15,8 @@ nav_order: 1
 
 ### Version Selection
 
-- **Using plugin repository release `0.1.0`**: use Jellyfin `10.10.x`
-- **Using current source build (`1.0.0` in this repository)**: use Jellyfin `10.11.x`
+- **OpenWatchParty `0.2.0`** targets Jellyfin ABI `10.11.0.0`
+- **Validated environment**: Jellyfin packages and image `10.11.3`
 
 ## Quick Start (Docker)
 
@@ -43,7 +43,7 @@ This starts:
 
 #### Option A: Automatic Injection (Recommended)
 
-Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) and restart Jellyfin. OpenWatchParty will automatically register a transformation that injects the client script into `index.html` — no configuration needed.
+Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) version `2.5.3.0` and restart Jellyfin. OpenWatchParty will automatically register a transformation that injects the client script into `index.html` — no configuration needed.
 
 #### Option B: Manual (Custom HTML)
 
@@ -122,7 +122,7 @@ docker run -d \
 #### Option C: Build from Source (Native)
 
 Requirements:
-- Rust 1.83+
+- Rust 1.88.0
 
 ```bash
 cd src/server

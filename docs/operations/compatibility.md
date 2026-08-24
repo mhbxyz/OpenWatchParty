@@ -6,21 +6,20 @@ nav_order: 2
 
 # Compatibility Matrix
 
-This page is the source of truth for OpenWatchParty compatibility across Jellyfin and plugin versions.
+This page summarizes the compatibility encoded by the repository's canonical version files.
 
 ## Official Matrix
 
-| OpenWatchParty plugin | Distribution channel | Jellyfin target ABI | Jellyfin versions | Status |
-|-----------------------|----------------------|---------------------|-------------------|--------|
-| `0.1.0` | Plugin repository release | `10.10.0.0` | `10.10.x` | Supported |
-| `0.1.0` | Plugin repository release | `10.10.0.0` | `10.11.x` | Not officially supported |
-| `1.0.0` (current branch build) | Built from source | `10.11.3.0` | `10.11.x` | Supported for self-hosted builds |
+| OpenWatchParty | Jellyfin packages | Jellyfin target ABI | Jellyfin image | File Transformation | Status |
+|----------------|-------------------|---------------------|-----------------|---------------------|--------|
+| `0.2.0` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
 
 ## Notes
 
-- The currently published repository version is `0.1.0` and targets Jellyfin ABI `10.10.0.0`.
-- The current source branch builds a plugin targeting Jellyfin ABI `10.11.3.0`.
-- If your Jellyfin server is `10.11.x`, prefer a source build until a `10.11`-targeted release is published in the plugin repository.
+- OpenWatchParty is compiled against Jellyfin packages `10.11.3` and declares target ABI `10.11.0.0`.
+- Development and integration testing use the Jellyfin `10.11.3` image.
+- Automatic client injection uses File Transformation `2.5.3.0` (archive ABI `10.11.3`).
+- The target ABI is the plugin compatibility contract; the image version is the environment tested by this repository.
 
 ## How to Verify Locally
 

@@ -88,7 +88,7 @@ Users can then install/update the plugin directly from Jellyfin's plugin interfa
 docker pull ghcr.io/mhbxyz/owp-session-server:latest
 
 # Specific version
-docker pull ghcr.io/mhbxyz/owp-session-server:v0.1.0
+docker pull ghcr.io/mhbxyz/owp-session-server:v0.2.0
 
 # Development (latest from main)
 docker pull ghcr.io/mhbxyz/owp-session-server:beta
@@ -101,7 +101,7 @@ docker pull ghcr.io/mhbxyz/owp-session-server:beta
 The Docker build uses Alpine with musl libc for smaller images:
 
 ```dockerfile
-FROM rust:1.83-alpine AS builder
+FROM rust:1.88-alpine AS builder
 RUN apk add --no-cache musl-dev
 # ... build with musl target
 
@@ -109,15 +109,15 @@ FROM alpine:3.21
 # ~26MB final image
 ```
 
-**Note:** Local development uses glibc (standard Rust). The `.cargo/config.toml` configures the `mold` linker for faster local builds, but this is excluded from Docker builds via `.dockerignore`.
+**Note:** The repository toolchain is pinned to Rust `1.88.0`. Local development uses glibc (standard Rust). The `.cargo/config.toml` configures the `mold` linker for faster local builds, but this is excluded from Docker builds via `.dockerignore`.
 
 ### .NET
 
 The plugin uses NuGet packages from nuget.org:
 
 ```xml
-<PackageReference Include="Jellyfin.Controller" Version="10.11.5" />
-<PackageReference Include="Jellyfin.Model" Version="10.11.5" />
+<PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
+<PackageReference Include="Jellyfin.Model" Version="10.11.3" />
 ```
 
 CI copies JavaScript files (including subdirectories) to the `Web/` directory before building:

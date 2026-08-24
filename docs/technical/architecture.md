@@ -188,7 +188,7 @@ Host                            Server                    Participants
 
 | Component | Technology |
 |-----------|------------|
-| Plugin | C# (.NET 9.0), ASP.NET Core |
+| Plugin | C# (.NET SDK 9.0.317), ASP.NET Core |
 | Session Server | Rust, Warp, Tokio |
 | Web Client | JavaScript (IIFE pattern) |
 | Communication | WebSocket, JSON |
