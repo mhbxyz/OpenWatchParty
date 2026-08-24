@@ -4,9 +4,9 @@
     <RootNamespace>OpenWatchParty.Plugin</RootNamespace>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.0.0</Version>
-    <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <Version>$(OpenWatchPartyVersion)</Version>
+    <AssemblyVersion>$(OpenWatchPartyVersion).0</AssemblyVersion>
+    <FileVersion>$(OpenWatchPartyVersion).0</FileVersion>
     <Authors>mhbxyz</Authors>
     <Description>Watch movies together in sync with friends on Jellyfin</Description>
     <RepositoryUrl>https://github.com/mhbxyz/OpenWatchParty</RepositoryUrl>
@@ -20,8 +20,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.3" ExcludeAssets="runtime" />
-    <PackageReference Include="Jellyfin.Model" Version="10.11.3" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinPackageVersion)" ExcludeAssets="runtime" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinPackageVersion)" ExcludeAssets="runtime" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.35.0" />
     <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="6.35.0" />
@@ -42,6 +42,14 @@
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>OpenWatchParty.Tests</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>OpenWatchPartyVersion</_Parameter1>
+      <_Parameter2>$(OpenWatchPartyVersion)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>JellyfinTargetAbi</_Parameter1>
+      <_Parameter2>$(JellyfinTargetAbi)</_Parameter2>
     </AssemblyAttribute>
   </ItemGroup>
 </Project>

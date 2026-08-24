@@ -1,4 +1,5 @@
 using Xunit;
+using System.Reflection;
 
 namespace OpenWatchParty.Plugin.Tests;
 
@@ -41,5 +42,28 @@ public class PluginTests
         var parts = Plugin.PluginVersion.Split('.');
         Assert.True(parts.Length >= 2, "Version should have at least major.minor parts");
         Assert.All(parts, part => Assert.True(int.TryParse(part, out _), $"Version part '{part}' should be numeric"));
+    }
+
+    [Fact]
+    public void PluginVersion_MatchesCanonicalBuildMetadata()
+    {
+        var metadata = typeof(Plugin).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "OpenWatchPartyVersion");
+
+        Assert.Equal(metadata.Value, Plugin.PluginVersion);
+    }
+
+    [Fact]
+    public void PluginTargetAbi_MatchesCanonicalBuildMetadata()
+    {
+        var pluginAbi = typeof(Plugin).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "JellyfinTargetAbi");
+        var expectedAbi = typeof(PluginTests).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "ExpectedJellyfinTargetAbi");
+
+        Assert.Equal(expectedAbi.Value, pluginAbi.Value);
     }
 }

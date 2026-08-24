@@ -42,4 +42,6 @@ client:
 release:
     @echo -e "{{GREEN}}▶ Running release script tests...{{RESET}}"
     @infra/scripts/tests/update-plugin-manifest.test.sh
+    @infra/scripts/tests/verify-versions.test.sh
+    @infra/scripts/tests/write-plugin-meta.test.sh
     @echo -e "{{GREEN}}✓ Release script tests passed{{RESET}}"

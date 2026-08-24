@@ -16,8 +16,9 @@ export GID := `id -g`
 
 project_name      := "OpenWatchParty"
 compose_file      := "infra/docker/dev/docker-compose.yml"
-compose           := "docker compose -f " + compose_file
-compose_tools     := "docker compose --profile tools -f " + compose_file
+jellyfin_version  := `jq -er .jellyfinImageVersion version.json`
+compose           := "JELLYFIN_VERSION=" + jellyfin_version + " docker compose -f " + compose_file
+compose_tools     := "JELLYFIN_VERSION=" + jellyfin_version + " docker compose --profile tools -f " + compose_file
 compose_prod_file := "infra/docker/prod/docker-compose.yml"
 compose_prod      := "docker compose -f " + compose_prod_file
 

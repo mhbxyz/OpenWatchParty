@@ -104,6 +104,12 @@ jobs:
       - name: Test hostile release metadata
         run: infra/scripts/tests/update-plugin-manifest.test.sh
 
+      - name: Verify version consistency
+        run: infra/scripts/tests/verify-versions.test.sh
+
+      - name: Verify plugin metadata generation
+        run: infra/scripts/tests/write-plugin-meta.test.sh
+
   build-server:
     name: Build Server
     runs-on: ubuntu-latest

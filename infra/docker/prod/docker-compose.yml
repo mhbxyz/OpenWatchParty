@@ -32,13 +32,13 @@ services:
 
   plugin-builder:
     image: mcr.microsoft.com/dotnet/sdk:9.0
-    working_dir: /src
+    working_dir: /workspace/OpenWatchParty
     network_mode: host
     profiles:
       - tools
     volumes:
-      - ../../../src/plugins/jellyfin/OpenWatchParty:/src
+      - ../../../src/plugins/jellyfin:/workspace
     environment:
       - HOME=/tmp
       - DOTNET_CLI_HOME=/tmp/.dotnet
-    command: dotnet publish -c Release -o /src/dist OpenWatchPartyPlugin.csproj
+    command: dotnet publish -c Release -o /workspace/OpenWatchParty/dist OpenWatchPartyPlugin.csproj

@@ -32,7 +32,7 @@ plugin:
     @cp {{client_dir}}/plugin.js {{plugin_dir}}/Web/plugin.js
     @for f in {{client_js_files}}; do mkdir -p "$(dirname {{plugin_dir}}/Web/$f)" && cp {{client_dir}}/$f {{plugin_dir}}/Web/$f; done
     @{{compose_tools}} run --rm --user "$(id -u):$(id -g)" plugin-builder
-    @printf '{"category":"","changelog":"","description":"Watch movies together in sync with friends","guid":"0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d","name":"OpenWatchParty","overview":"","owner":"","targetAbi":"{{ft_abi}}.0","timestamp":"0001-01-01T00:00:00.0000000Z","version":"1.0.0.0","status":"Active","autoUpdate":false,"assemblies":[]}' > {{plugin_dir}}/dist/meta.json
+    @infra/scripts/write-plugin-meta.sh {{plugin_dir}}/dist/meta.json
     @echo -e "{{GREEN}}✓ Plugin built: {{plugin_dir}}/dist/{{RESET}}"
 
 [doc('Build the session server locally (Rust)')]

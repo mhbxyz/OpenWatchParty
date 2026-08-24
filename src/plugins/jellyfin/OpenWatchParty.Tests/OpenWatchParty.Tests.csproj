@@ -23,12 +23,19 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <!-- Jellyfin dependencies for testing -->
-    <PackageReference Include="Jellyfin.Model" Version="10.11.5" />
-    <PackageReference Include="Jellyfin.Controller" Version="10.11.5" />
+    <PackageReference Include="Jellyfin.Model" Version="$(JellyfinPackageVersion)" />
+    <PackageReference Include="Jellyfin.Controller" Version="$(JellyfinPackageVersion)" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpenWatchParty\OpenWatchPartyPlugin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>ExpectedJellyfinTargetAbi</_Parameter1>
+      <_Parameter2>$(JellyfinTargetAbi)</_Parameter2>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>

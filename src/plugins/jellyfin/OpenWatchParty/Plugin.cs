@@ -67,7 +67,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// <summary>
     /// Gets the plugin version from the assembly (fixes L17).
     /// </summary>
-    public static string PluginVersion => typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "1.0.0";
+    public static string PluginVersion => typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
     public IEnumerable<PluginPageInfo> GetPages()
     {

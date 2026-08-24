@@ -12,9 +12,17 @@ release_tag=$3
 changelog=$4
 timestamp=${5:-$(date -u +"%Y-%m-%dT%H:%M:%SZ")}
 version=${release_tag#v}
+repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+version_file=${VERSION_FILE:-$repository_root/version.json}
+expected_version=$(jq -er '.version' "$version_file")
+target_abi=$(jq -er '.jellyfinTargetAbi' "$version_file")
 
 if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
     echo "Invalid release tag: $release_tag" >&2
+    exit 2
+fi
+if [[ $version != "$expected_version" ]]; then
+    echo "Release version $version does not match version.json ($expected_version)" >&2
     exit 2
 fi
 if [[ ! -f $manifest || ! -f $zip_file ]]; then
@@ -33,10 +41,11 @@ jq --arg version "$version" \
    --arg timestamp "$timestamp" \
    --arg changelog "$changelog" \
    --arg source_url "$source_url" \
+   --arg target_abi "$target_abi" \
    '.[0].versions = [{
       "version": $version,
       "changelog": $changelog,
-      "targetAbi": "10.10.0.0",
+      "targetAbi": $target_abi,
       "sourceUrl": $source_url,
       "checksum": $checksum,
       "timestamp": $timestamp
