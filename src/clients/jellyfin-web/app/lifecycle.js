@@ -87,7 +87,6 @@
       console.log('[OpenWatchParty] Already initialized, skipping');
       return;
     }
-    state.initialized = true;
     console.log('%c OpenWatchParty Plugin Loaded (OSD Mode) ', 'background: #2e7d32; color: #fff; font-size: 12px; padding: 2px; border-radius: 2px;');
     clearAllIntervals();
     ui.injectStyles();
@@ -99,6 +98,7 @@
       console.error('[OpenWatchParty] OWP.actions.connect not available!');
     }
     startIntervals();
+    state.initialized = true;
   };
 
   // Expose lifecycle internals for cleanup module

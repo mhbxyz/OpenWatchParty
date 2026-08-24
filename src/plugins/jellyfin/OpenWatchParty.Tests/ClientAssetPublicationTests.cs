@@ -13,7 +13,7 @@ namespace OpenWatchParty.Plugin.Tests;
 public sealed class ClientAssetPublicationTests
 {
     private static readonly Regex ModulePattern = new(
-        "loadScript\\(\\s*['\"](?<path>[^'\"]+\\.js)['\"]\\s*\\)",
+        "(?:loadScript|load)\\(\\s*['\"](?<path>[^'\"]+\\.js)['\"]\\s*\\)",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
     [Fact]
