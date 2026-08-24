@@ -58,11 +58,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let shutdown_rx = tasks::setup_shutdown_signal();
 
     info!("OpenWatchParty server listening on {}", addr);
-    let (_, server) = warp::serve(routes).bind_with_graceful_shutdown(addr, async {
-        shutdown_rx.await.ok();
-    });
-
-    server.await;
+    warp::serve(routes)
+        .bind(addr)
+        .await
+        .graceful(async {
+            shutdown_rx.await.ok();
+        })
+        .run()
+        .await;
     info!("Server shutdown complete");
     Ok(())
 }
