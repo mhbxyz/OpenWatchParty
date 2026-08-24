@@ -1,10 +1,6 @@
 services:
   session-server:
-    build:
-      context: ../../../src/server
-      dockerfile: ../../infra/docker/server.Dockerfile
-      args:
-        BUILD_MODE: release
+    image: ghcr.io/mhbxyz/owp-session-server:0.2.0@sha256:82efdd4d411b0ccc279a6e7ab122ce52b3e177369a4aa1c8df28b0fd0f6267e9
     container_name: owp-session-server
     restart: unless-stopped
     init: true
