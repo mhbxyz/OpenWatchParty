@@ -185,19 +185,24 @@
       previousSocket.onmessage = null;
       previousSocket.close();
     }
-    let token = state.authToken;
-    if (!token) {
-      token = await actions.fetchAuthToken();
-    }
+    const reusableToken = state.authToken
+      && (!actions.ensureTokenRefresh || actions.ensureTokenRefresh());
+    const authResult = reusableToken
+      ? { mode: 'authenticated', token: state.authToken }
+      : await actions.fetchAuthToken();
     if (connectionAttempt !== state.connectionAttempt || !state.autoReconnect) {
       return;
     }
-    if (state.authBlocked) {
+    if (!authResult || !['authenticated', 'insecure'].includes(authResult.mode)) {
       state.isConnecting = false;
-      if (ui.showToast) ui.showToast(state.authError || 'OpenWatchParty authentication is not configured');
+      const message = authResult?.message || 'OpenWatchParty authentication returned an invalid result';
+      state.authBlocked = true;
+      state.authError = message;
+      if (ui.showToast) ui.showToast(message);
       ui.render();
       return;
     }
+    const token = authResult.mode === 'authenticated' ? authResult.token : null;
     const wsUrl = state.wsUrl || DEFAULT_WS_URL;
     console.log('[OpenWatchParty] Connecting to WebSocket:', wsUrl);
     if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {

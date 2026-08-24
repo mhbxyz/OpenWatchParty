@@ -340,7 +340,7 @@ describe('room reconnection lifecycle', () => {
 
     const connecting = OWP.actions.connect();
     OWP.actions.disconnect();
-    resolveToken('late-token');
+    resolveToken({ mode: 'authenticated', token: 'late-token' });
     await connecting;
 
     assert.equal(sockets.length, 0);

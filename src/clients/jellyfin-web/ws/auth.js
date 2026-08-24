@@ -3,6 +3,7 @@
   const actions = OWP.actions = OWP.actions || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const TOKEN_REQUEST_TIMEOUT_MS = 10000;
 
   const getJellyfinUsername = () => {
     try {
@@ -65,16 +66,16 @@
         console.log('[OpenWatchParty] Refreshing auth token...');
         const refreshSocket = state.ws;
         state.authToken = null;
-        const newToken = await fetchAuthToken();
+        const result = await fetchAuthToken();
         if (refreshSocket !== state.ws) return;
-        if (newToken && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
+        if (result.mode === 'authenticated' && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
           refreshSocket.send(JSON.stringify({
             type: 'auth',
-            payload: { token: newToken, user_name: state.userName, user_id: state.userId },
+            payload: { token: result.token, user_name: state.userName, user_id: state.userId },
             ts: utils.nowMs()
           }));
           console.log('[OpenWatchParty] Token refreshed and re-authenticated');
-        } else if (!newToken && state.authBlocked && state.ws) {
+        } else if (result.mode === 'error' && state.ws) {
           if (actions.disconnect) actions.disconnect();
           else {
             state.autoReconnect = false;
@@ -86,72 +87,139 @@
     }
   };
 
+  const ensureTokenRefresh = () => {
+    if (!state.authEnabled || !state.authToken || !state.tokenExpiresAt) return false;
+    const remainingSeconds = Math.ceil((state.tokenExpiresAt - Date.now()) / 1000);
+    if (remainingSeconds <= 0) {
+      state.authToken = null;
+      state.tokenExpiresAt = 0;
+      return false;
+    }
+    scheduleTokenRefresh(remainingSeconds);
+    return true;
+  };
+
+  const authError = (code, message, isCurrentRequest) => {
+    if (isCurrentRequest()) {
+      state.authToken = null;
+      state.authEnabled = false;
+      state.authBlocked = true;
+      state.authError = message;
+      state.tokenExpiresAt = 0;
+    }
+    return { mode: 'error', code, message };
+  };
+
   const fetchAuthToken = async () => {
     const authRequestAttempt = ++state.authRequestAttempt;
     const isCurrentRequest = () => authRequestAttempt === state.authRequestAttempt;
+    let requestTimeout = null;
+    let timedOut = false;
+    if (state.tokenRefreshTimer) {
+      OWP.timers.clear(state.tokenRefreshTimer);
+      state.tokenRefreshTimer = null;
+    }
     try {
       let apiAccess = getApiAccessToken();
       if (!apiAccess) {
         console.log('[OpenWatchParty] Waiting for ApiClient...');
         apiAccess = await waitForApiClient(isCurrentRequest);
       }
-      if (!isCurrentRequest()) return null;
+      if (!isCurrentRequest()) {
+        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+      }
       if (!apiAccess) {
         console.warn('[OpenWatchParty] ApiClient not available after waiting');
-        state.authBlocked = true;
-        state.authError = 'Jellyfin authentication is not available';
-        state.userName = getJellyfinUsername();
-        return null;
+        return authError('api_client_unavailable', 'Jellyfin authentication is not available', isCurrentRequest);
       }
       const { accessToken, serverAddress } = apiAccess;
       const tokenUrl = `${serverAddress}/OpenWatchParty/Token`;
+      const controller = new AbortController();
+      requestTimeout = OWP.timers.setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, TOKEN_REQUEST_TIMEOUT_MS, 'auth');
       const response = await fetch(tokenUrl, {
-        headers: { 'X-Emby-Token': accessToken }
+        headers: { 'X-Emby-Token': accessToken },
+        signal: controller.signal
       });
-      if (!isCurrentRequest()) return null;
+      if (!isCurrentRequest()) {
+        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+      }
       if (!response.ok) {
-        state.authBlocked = true;
-        state.authError = response.status === 503
-          ? 'JWT authentication is not configured in the OpenWatchParty plugin'
-          : `Could not obtain an OpenWatchParty token (HTTP ${response.status})`;
+        const errors = {
+          401: ['unauthorized', 'Jellyfin rejected the OpenWatchParty token request (HTTP 401)'],
+          429: ['rate_limited', 'Too many OpenWatchParty token requests (HTTP 429)'],
+          500: ['server_error', 'The OpenWatchParty token endpoint failed (HTTP 500)'],
+          503: ['server_unavailable', 'JWT authentication is not configured or unavailable in the OpenWatchParty plugin (HTTP 503)']
+        };
+        const [code, message] = errors[response.status] || [
+          'http_error',
+          `Could not obtain an OpenWatchParty token (HTTP ${response.status})`
+        ];
         console.warn('[OpenWatchParty] Failed to fetch auth token:', response.status);
-        state.userName = getJellyfinUsername();
-        return null;
+        return authError(code, message, isCurrentRequest);
       }
-      const data = await response.json();
-      if (!isCurrentRequest()) return null;
-      state.authBlocked = false;
-      state.authError = '';
-      state.authEnabled = data.auth_enabled || false;
-      state.userId = data.user_id || '';
-      state.userName = data.user_name || getJellyfinUsername() || '';
-      if (data.session_server_url) {
-        state.wsUrl = data.session_server_url;
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        if (!isCurrentRequest()) {
+          return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+        }
+        console.warn('[OpenWatchParty] Invalid token endpoint JSON:', err);
+        return authError('invalid_json', 'OpenWatchParty token endpoint returned invalid JSON', isCurrentRequest);
       }
-      if (data.auth_enabled && data.token) {
+      if (!isCurrentRequest()) {
+        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+      }
+      if (data.auth_enabled === true && typeof data.token === 'string' && data.token) {
+        state.authBlocked = false;
+        state.authError = '';
+        state.userId = data.user_id || '';
+        state.userName = data.user_name || getJellyfinUsername() || '';
+        state.wsUrl = data.session_server_url || '';
+        state.authEnabled = true;
         state.authToken = data.token;
         const expiresIn = data.expires_in || 3600;
         state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
         scheduleTokenRefresh(expiresIn);
         console.log('[OpenWatchParty] Auth token obtained for user:', state.userName, 'expires in', expiresIn, 's');
-        return data.token;
+        return { mode: 'authenticated', token: data.token, expiresIn };
       }
       if (data.auth_enabled === false && data.insecure_mode === true) {
+        state.authBlocked = false;
+        state.authError = '';
+        state.userId = data.user_id || '';
+        state.userName = data.user_name || getJellyfinUsername() || '';
+        state.wsUrl = data.session_server_url || '';
+        state.authEnabled = false;
+        state.authToken = null;
+        state.tokenExpiresAt = 0;
         console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
-        return null;
+        return { mode: 'insecure', token: null };
       }
-      state.authBlocked = true;
-      state.authError = 'OpenWatchParty token endpoint returned an invalid authentication response';
-      return null;
+      return authError(
+        'invalid_response',
+        'OpenWatchParty token endpoint returned an invalid authentication response',
+        isCurrentRequest
+      );
     } catch (err) {
-      if (!isCurrentRequest()) return null;
+      if (!isCurrentRequest()) {
+        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+      }
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
-      state.authBlocked = true;
-      state.authError = 'Could not reach the OpenWatchParty token endpoint';
-      state.userName = getJellyfinUsername();
-      return null;
+      if (timedOut) {
+        return authError('timeout', 'OpenWatchParty token request timed out', isCurrentRequest);
+      }
+      if (err?.name === 'AbortError') {
+        return authError('aborted', 'OpenWatchParty token request was aborted', isCurrentRequest);
+      }
+      return authError('network_error', 'Could not reach the OpenWatchParty token endpoint', isCurrentRequest);
+    } finally {
+      if (requestTimeout !== null) OWP.timers.clear(requestTimeout);
     }
   };
 
-  Object.assign(actions, { fetchAuthToken });
+  Object.assign(actions, { fetchAuthToken, ensureTokenRefresh });
 })();
