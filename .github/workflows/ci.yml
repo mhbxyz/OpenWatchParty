@@ -134,6 +134,25 @@ jobs:
           context: ./src/server
           file: ./infra/docker/server.Dockerfile
           push: false
+          load: true
           tags: openwatchparty/session-server:test
+          build-args: |
+            BUILD_MODE=release
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Smoke-test release image
+        run: |
+          docker run -d --name owp-ci -p 39000:3000 \
+            -e JWT_SECRET='B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=' \
+            -e ALLOW_INSECURE_NO_AUTH=false \
+            openwatchparty/session-server:test
+          trap 'docker rm -f owp-ci >/dev/null 2>&1 || true' EXIT
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:39000/health >/dev/null; then break; fi
+            if [[ $attempt -eq 30 ]]; then docker logs owp-ci; exit 1; fi
+            sleep 1
+          done
+          [[ $(docker exec owp-ci id -u) == 1000 ]]
+          docker stop --time 10 owp-ci
+          docker logs owp-ci 2>&1 | grep -q 'Server shutdown complete'

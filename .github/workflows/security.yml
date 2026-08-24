@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build -f infra/docker/server.Dockerfile -t owp-session-server:scan ./src/server
+        run: docker build --build-arg BUILD_MODE=release -f infra/docker/server.Dockerfile -t owp-session-server:scan ./src/server
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
