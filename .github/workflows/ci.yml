@@ -126,7 +126,7 @@ jobs:
           dotnet-version: '9.0.317'
 
       - name: Check release scripts
-        run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
+        run: shellcheck .githooks/pre-commit infra/scripts/*.sh infra/scripts/tests/*.sh
 
       - name: Lint GitHub Actions workflows
         env:
@@ -141,6 +141,9 @@ jobs:
           printf '%s  %s\n' "$ACTIONLINT_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check
           tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
           "$RUNNER_TEMP/actionlint"
+
+      - name: Test pre-commit hook
+        run: infra/scripts/tests/pre-commit.test.sh
 
       - name: Verify least-privilege workflow permissions
         run: infra/scripts/verify-workflow-permissions.py

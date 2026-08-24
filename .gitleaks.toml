@@ -7,6 +7,7 @@ useDefault = true
 description = "Synthetic credentials used by secret-scanner integration tests"
 paths = [
   '''^infra/scripts/tests/secret-scan\.test\.sh$''',
+  '''^infra/scripts/tests/pre-commit\.test\.sh$''',
 ]
 
 [[allowlists]]

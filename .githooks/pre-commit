@@ -1,15 +1,102 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Only check formatting if Rust files are staged
-if git diff --cached --name-only | grep -q '\.rs$'; then
-    echo "pre-commit: checking Rust formatting..."
-    cd src/server
-    if ! cargo fmt --check 2>/dev/null; then
-        echo ""
-        echo "ERROR: Rust code is not formatted."
-        echo "Run 'just fmt' and stage the changes."
-        exit 1
-    fi
-    echo "pre-commit: Rust formatting OK"
+root=$(git rev-parse --show-toplevel)
+snapshot=$(mktemp -d "${TMPDIR:-/tmp}/owp-pre-commit.XXXXXX")
+trap 'rm -rf -- "$snapshot"' EXIT
+
+fail() {
+    printf '\npre-commit: ERROR: %s\n' "$*" >&2
+    exit 1
+}
+
+staged_files=()
+while IFS= read -r -d '' file; do
+    staged_files+=("$file")
+done < <(git -C "$root" diff --cached --name-only --diff-filter=ACMR -z)
+
+printf 'pre-commit: checking staged diff...\n'
+git -C "$root" diff --cached --check || fail 'staged diff contains whitespace errors or conflict markers.'
+
+(cd "$root" && git checkout-index --all --prefix="$snapshot/")
+chmod -R a+rX "$snapshot"
+
+rust_staged=false
+javascript_files=()
+workflow_files=()
+compose_staged=false
+for file in "${staged_files[@]}"; do
+    case "$file" in
+        *.rs) rust_staged=true ;;
+    esac
+    case "$file" in
+        *.js|*.cjs|*.mjs) javascript_files+=("$file") ;;
+    esac
+    case "$file" in
+        .github/workflows/*.yml|.github/workflows/*.yaml) workflow_files+=("$file") ;;
+    esac
+    case "$file" in
+        infra/docker/dev/docker-compose.yml|infra/docker/prod/docker-compose.yml) compose_staged=true ;;
+    esac
+done
+
+if $rust_staged; then
+    printf 'pre-commit: checking staged Rust formatting...\n'
+    (cd "$snapshot/src/server" && cargo fmt --check) || \
+        fail "Rust code is not formatted; run 'just fmt' and stage the result."
 fi
+
+if ((${#javascript_files[@]})); then
+    client_dir="$root/src/clients/jellyfin-web"
+    eslint="$client_dir/node_modules/.bin/eslint"
+    [[ -x $eslint ]] || \
+        fail "JavaScript dependencies are missing; run 'npm ci --prefix src/clients/jellyfin-web' (or 'just setup')."
+
+    printf 'pre-commit: checking staged JavaScript...\n'
+    staged_javascript=()
+    for file in "${javascript_files[@]}"; do
+        staged_file="$snapshot/$file"
+        node --check "$staged_file" || fail "JavaScript syntax check failed for '$file'."
+        staged_javascript+=("$staged_file")
+    done
+    ln -s "$client_dir/node_modules" "$snapshot/src/clients/jellyfin-web/node_modules"
+    eslint_config="$snapshot/src/clients/jellyfin-web/eslint.config.js"
+    (cd "$snapshot/src/clients/jellyfin-web" && \
+        "$eslint" --config "$eslint_config" --no-warn-ignored "${staged_javascript[@]}") || \
+        fail 'ESLint rejected staged JavaScript.'
+fi
+
+if ((${#workflow_files[@]})); then
+    printf 'pre-commit: validating staged GitHub Actions workflows...\n'
+    staged_workflows=()
+    for file in "${workflow_files[@]}"; do
+        staged_workflows+=("$snapshot/$file")
+    done
+    if command -v actionlint >/dev/null 2>&1; then
+        actionlint "${staged_workflows[@]}" || fail 'actionlint rejected a staged workflow.'
+    elif command -v docker >/dev/null 2>&1; then
+        actionlint_image='rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9'
+        docker run --rm --volume "$snapshot:/repo:ro" --workdir /repo "$actionlint_image" \
+            "${workflow_files[@]}" || fail 'actionlint rejected a staged workflow.'
+    else
+        fail 'actionlint validation requires either actionlint or Docker.'
+    fi
+fi
+
+if $compose_staged; then
+    command -v docker >/dev/null 2>&1 || fail 'Compose validation requires Docker with the Compose plugin.'
+    printf 'pre-commit: validating staged Compose files...\n'
+    compose_env=(
+        JWT_SECRET='K7xR9mPqN2wLhVbE4cT8fY0jU5sA3dG1'
+        JELLYFIN_VERSION='10.11.3'
+    )
+    for compose_file in infra/docker/dev/docker-compose.yml infra/docker/prod/docker-compose.yml; do
+        env "${compose_env[@]}" docker compose --file "$snapshot/$compose_file" config --quiet || \
+            fail "Docker Compose rejected '$compose_file'."
+    done
+fi
+
+printf 'pre-commit: scanning staged content for secrets...\n'
+(cd "$root" && infra/scripts/scan-secrets.sh --staged) || fail 'Gitleaks detected a secret in staged content.'
+
+printf 'pre-commit: all staged checks passed.\n'

@@ -28,6 +28,10 @@ REPOSITORY_ROOT="$repository" "$root/infra/scripts/scan-secrets.sh" >/dev/null
 
 printf 'api_key = "%s"\n' "$fake_secret" > "$repository/leaked.txt"
 git -C "$repository" add leaked.txt
+if REPOSITORY_ROOT="$repository" "$root/infra/scripts/scan-secrets.sh" --staged >/dev/null 2>&1; then
+    echo 'Gitleaks accepted a staged synthetic secret' >&2
+    exit 1
+fi
 git -C "$repository" commit --quiet -m 'Add synthetic leak'
 if REPOSITORY_ROOT="$repository" "$root/infra/scripts/scan-secrets.sh" >/dev/null 2>&1; then
     echo 'Gitleaks accepted a committed synthetic secret' >&2

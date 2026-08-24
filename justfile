@@ -151,6 +151,7 @@ release:
     @infra/scripts/verify-workflow-permissions.py
     @infra/scripts/verify-pins.sh
     @infra/scripts/scan-secrets.sh
+    @infra/scripts/tests/pre-commit.test.sh
     @echo -e "{{GREEN}}▶ Packaging plugin release...{{RESET}}"
     @infra/scripts/package-plugin.sh
 
@@ -163,8 +164,9 @@ reset: down
 
 [doc('Configure git hooks and local dev environment')]
 setup:
+    @npm ci --prefix {{client_dir}}
     @git config core.hooksPath .githooks
-    @echo -e "{{GREEN}}✓ Git hooks configured (.githooks/){{RESET}}"
+    @echo -e "{{GREEN}}✓ Git hooks and JavaScript dependencies configured{{RESET}}"
 
 # -- Quality -----------------------------------------------------------------
 
