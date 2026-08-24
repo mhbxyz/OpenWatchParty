@@ -9,14 +9,14 @@ on:
     # Run weekly on Monday at 00:00 UTC
     - cron: '0 0 * * 1'
 
-permissions:
-  contents: read
-  security-events: write
+permissions: {}
 
 jobs:
   cargo-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -35,6 +35,8 @@ jobs:
   nuget-audit:
     name: NuGet Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -52,6 +54,8 @@ jobs:
   bundler-audit:
     name: Bundler Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -69,6 +73,8 @@ jobs:
   npm-audit:
     name: npm Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -90,6 +96,9 @@ jobs:
   trivy-scan:
     name: Trivy Container Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 

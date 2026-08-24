@@ -148,6 +148,8 @@ rebuild:
 
 [doc('Build release artifacts (zip)')]
 release:
+    @infra/scripts/verify-workflow-permissions.py
+    @infra/scripts/verify-pins.sh
     @echo -e "{{GREEN}}▶ Packaging plugin release...{{RESET}}"
     @infra/scripts/package-plugin.sh
 

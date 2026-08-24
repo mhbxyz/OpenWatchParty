@@ -43,6 +43,7 @@ client:
 [doc('Run release script tests')]
 release:
     @echo -e "{{GREEN}}▶ Running release script tests...{{RESET}}"
+    @infra/scripts/verify-workflow-permissions.py
     @infra/scripts/verify-pins.sh
     @infra/scripts/tests/verify-pins.test.sh
     @infra/scripts/tests/verify-sha256.test.sh

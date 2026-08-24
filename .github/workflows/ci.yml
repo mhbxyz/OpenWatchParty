@@ -10,10 +10,14 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+permissions: {}
+
 jobs:
   rust-tests:
     name: Rust Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: src/server
@@ -52,6 +56,8 @@ jobs:
   dotnet-tests:
     name: .NET Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: src/plugins/jellyfin
@@ -78,6 +84,8 @@ jobs:
   js-lint:
     name: JavaScript Lint & Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -107,6 +115,8 @@ jobs:
   release-script-tests:
     name: Release Script Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
@@ -117,6 +127,23 @@ jobs:
 
       - name: Check release scripts
         run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
+
+      - name: Lint GitHub Actions workflows
+        env:
+          ACTIONLINT_VERSION: 1.7.7
+          ACTIONLINT_SHA256: 023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          release_url="https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}"
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/$archive" \
+            "$release_url/$archive"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$RUNNER_TEMP/$archive" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint"
+
+      - name: Verify least-privilege workflow permissions
+        run: infra/scripts/verify-workflow-permissions.py
 
       - name: Verify immutable dependency pins
         run: infra/scripts/verify-pins.sh
@@ -146,6 +173,8 @@ jobs:
     name: Build Server
     runs-on: ubuntu-latest
     needs: [rust-tests]
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
