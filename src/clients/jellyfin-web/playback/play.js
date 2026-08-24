@@ -60,17 +60,17 @@
     return result.success;
   };
 
-  const ensurePlayback = (itemId, attempt = 0, expectedRequestAttempt = null) => {
+  const ensurePlayback = (itemId, attempt = 0, expectedRequestAttempt = null, force = false) => {
     const state = OWP.state;
     if (!state.inRoom || !itemId || !window.ApiClient) return;
-    if (utils.getCurrentItemId() === itemId) return;
-    if (state.joiningItemId === itemId && expectedRequestAttempt === null) return;
+    if (!force && utils.getCurrentItemId() === itemId) return;
+    if (!force && state.joiningItemId === itemId && expectedRequestAttempt === null) return;
     const requestAttempt = expectedRequestAttempt ?? ++state.playbackRequestAttempt;
     if (requestAttempt !== state.playbackRequestAttempt) return;
     const userId = ApiClient.getCurrentUserId?.() || ApiClient._currentUserId;
     if (!userId) {
       if (attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt), 500);
+        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
       }
       return;
     }
@@ -78,11 +78,11 @@
     ApiClient.getItem(userId, itemId).then((item) => {
       if (requestAttempt !== state.playbackRequestAttempt || !state.inRoom) return;
       if (!playItem(item) && attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt), 500);
+        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
       }
     }).catch(() => {
       if (requestAttempt === state.playbackRequestAttempt && state.inRoom && attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt), 500);
+        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
       }
     }).finally(() => {
       if (requestAttempt === state.playbackRequestAttempt) state.joiningItemId = '';

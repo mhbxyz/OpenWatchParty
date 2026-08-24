@@ -23,6 +23,7 @@
 
   const resetRoomState = () => {
     normalizePlaybackRate();
+    if (state.mediaReadyCleanup) state.mediaReadyCleanup();
     if (state.pendingActionTimer) {
       clearTimeout(state.pendingActionTimer);
       state.pendingActionTimer = null;
@@ -50,9 +51,11 @@
       lastSyncPlayState: '',
       joiningItemId: '',
       pendingJoinRoomId: '',
+      pendingMediaId: '',
       suppressUntil: 0
     });
     state.playbackRequestAttempt++;
+    state.mediaSyncAttempt++;
     if (OWP.chat) OWP.chat.clear();
   };
 

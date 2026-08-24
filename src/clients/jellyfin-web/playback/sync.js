@@ -10,31 +10,99 @@
     PLAYBACK_RATE_MAX,
     DRIFT_GAIN,
     INITIAL_SYNC_DRIFT_THRESHOLD,
-    INITIAL_SYNC_MAX_DRIFT
+    INITIAL_SYNC_MAX_DRIFT,
+    MEDIA_READY_POLL_MS,
+    MEDIA_READY_TIMEOUT_MS
   } = OWP.constants;
 
-  const notifyReady = () => {
-    if (!state.inRoom || !state.roomId || state.readyRoomId === state.roomId) return;
+  const notifyReady = (roomId, mediaId) => {
+    if (!state.inRoom || state.roomId !== roomId || state.readyRoomId === roomId) return;
+    if (mediaId && utils.getCurrentItemId() !== mediaId) return;
     const actions = OWP.actions;
     if (!actions || !actions.send) return;
-    state.readyRoomId = state.roomId;
-    actions.send('ready', { room: state.roomId, media_id: utils.getCurrentItemId() });
+    state.readyRoomId = roomId;
+    actions.send('ready', { room: roomId, media_id: mediaId || utils.getCurrentItemId() });
   };
 
-  const watchReady = () => {
-    const video = utils.getVideo();
-    if (!video) return;
-    if (video.readyState >= 2) {
-      notifyReady();
-      return;
-    }
-    const onReady = () => {
-      video.removeEventListener('canplay', onReady);
-      video.removeEventListener('loadeddata', onReady);
-      notifyReady();
+  const watchReady = ({ roomId = state.roomId, mediaId = '', onReady = null } = {}) => {
+    if (state.mediaReadyCleanup) state.mediaReadyCleanup();
+    const attempt = ++state.mediaSyncAttempt;
+    let deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
+    const initialMediaId = utils.getCurrentItemId();
+    const initialVideo = utils.getVideo();
+    const initialSource = initialVideo?.currentSrc || initialVideo?.src || '';
+    const requiresVideoTransition = Boolean(mediaId && initialMediaId !== mediaId);
+    let timeoutReported = false;
+    let watchedVideo = null;
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (watchedVideo) {
+        watchedVideo.removeEventListener('canplay', check);
+        watchedVideo.removeEventListener('loadeddata', check);
+      }
+      watchedVideo = null;
+      if (state.mediaReadyCleanup === cleanup) state.mediaReadyCleanup = null;
     };
-    video.addEventListener('canplay', onReady);
-    video.addEventListener('loadeddata', onReady);
+
+    const scheduleCheck = () => {
+      if (Date.now() >= deadline) {
+        deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
+        if (mediaId && playback.ensurePlayback) playback.ensurePlayback(mediaId, 0, null, true);
+        if (!timeoutReported && OWP.ui?.showToast) {
+          OWP.ui.showToast('Still waiting for the watch party media');
+          timeoutReported = true;
+        }
+      }
+      timer = setTimeout(check, MEDIA_READY_POLL_MS);
+    };
+
+    function check() {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (attempt !== state.mediaSyncAttempt || !state.inRoom || state.roomId !== roomId) {
+        cleanup();
+        return;
+      }
+      if (mediaId && utils.getCurrentItemId() !== mediaId) {
+        scheduleCheck();
+        return;
+      }
+      const video = utils.getVideo();
+      if (!video) {
+        scheduleCheck();
+        return;
+      }
+      if (requiresVideoTransition && video === initialVideo) {
+        const currentSource = video.currentSrc || video.src || '';
+        if (currentSource === initialSource) {
+          scheduleCheck();
+          return;
+        }
+      }
+      if (watchedVideo !== video) {
+        if (watchedVideo) {
+          watchedVideo.removeEventListener('canplay', check);
+          watchedVideo.removeEventListener('loadeddata', check);
+        }
+        watchedVideo = video;
+        watchedVideo.addEventListener('canplay', check);
+        watchedVideo.addEventListener('loadeddata', check);
+      }
+      if (video.readyState < 2) {
+        scheduleCheck();
+        return;
+      }
+      state.pendingMediaId = '';
+      if (typeof onReady === 'function') onReady(video);
+      notifyReady(roomId, mediaId);
+      cleanup();
+    }
+
+    state.mediaReadyCleanup = cleanup;
+    check();
   };
 
   const checkInitialSync = (abs, drift, expected, video, serverNow) => {
@@ -115,6 +183,10 @@
     const video = state.currentVideoElement || utils.getVideo();
     if (!video) return;
     if (!state.inRoom || state.isHost) {
+      if (video.playbackRate !== 1) video.playbackRate = 1;
+      return;
+    }
+    if (state.pendingMediaId) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }

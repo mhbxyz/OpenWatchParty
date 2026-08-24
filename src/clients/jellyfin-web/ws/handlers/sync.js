@@ -67,13 +67,22 @@
     applyRoomState(msg);
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
-    syncToRoom(msg, video);
     if (!state.isHost && msg.payload?.media_id) {
+      state.pendingMediaId = msg.payload.media_id;
       if (OWP.playback && OWP.playback.ensurePlayback) {
         OWP.playback.ensurePlayback(msg.payload.media_id);
-        if (OWP.playback.watchReady) OWP.playback.watchReady();
       }
+      if (OWP.playback?.watchReady) {
+        OWP.playback.watchReady({
+          roomId: msg.room,
+          mediaId: msg.payload.media_id,
+          onReady: readyVideo => syncToRoom(msg, readyVideo)
+        });
+      }
+      return;
     }
+    state.pendingMediaId = '';
+    syncToRoom(msg, video);
   };
 
   h.handleStateUpdate = (msg, video) => {
