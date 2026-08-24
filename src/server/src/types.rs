@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::RwLock;
 
 pub type SharedState = Arc<RwLock<ServerState>>;
 
@@ -14,7 +14,7 @@ pub struct ServerState {
 #[derive(Debug, Clone)]
 pub struct Client {
     // Bounded sender to prevent OOM from slow/malicious clients (P-RS03 fix)
-    pub sender: mpsc::Sender<std::result::Result<warp::ws::Message, warp::Error>>,
+    pub sender: crate::messaging::ClientSender,
     pub room_id: Option<String>,
     pub user_id: String,
     pub user_name: String,

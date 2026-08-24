@@ -15,10 +15,10 @@ pub fn create_client_with_rx(
     Client,
     mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
 ) {
-    let (tx, rx) = mpsc::channel(100);
+    let (sender, rx, _disconnect) = crate::messaging::ClientSender::channel(100);
     let now = crate::utils::now_ms();
     let client = Client {
-        sender: tx,
+        sender,
         room_id: None,
         user_id: user_id.to_string(),
         user_name: user_name.to_string(),

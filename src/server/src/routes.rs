@@ -522,6 +522,43 @@ mod tests {
         assert!(state.read().await.clients.is_empty());
     }
 
+    #[tokio::test]
+    async fn outbound_failure_signal_closes_and_cleans_up_connection() {
+        let state = crate::test_helpers::create_state();
+        let route = build_ws_route(
+            state.clone(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap();
+        client.recv().await.unwrap();
+
+        let sender = state
+            .read()
+            .await
+            .clients
+            .values()
+            .next()
+            .unwrap()
+            .sender
+            .clone();
+        sender.request_disconnect();
+
+        tokio::time::timeout(Duration::from_secs(1), client.recv_closed())
+            .await
+            .unwrap()
+            .unwrap();
+        tokio::task::yield_now().await;
+        assert!(state.read().await.clients.is_empty());
+    }
+
     #[tokio::test(start_paused = true)]
     async fn authenticated_session_is_valid_before_its_expiration() {
         let state = crate::test_helpers::create_state();

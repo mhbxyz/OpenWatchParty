@@ -1,8 +1,8 @@
 use super::super::constants::MAX_CHAT_MESSAGE_LENGTH;
 use super::super::dispatch::send_error;
+use crate::messaging::ClientSender;
 use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
-use tokio::sync::mpsc;
 
 fn validate_chat(text: &str) -> Result<(), &'static str> {
     if text.is_empty() {
@@ -14,10 +14,7 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
     Ok(())
 }
 
-type BroadcastData = (
-    Vec<mpsc::Sender<Result<warp::ws::Message, warp::Error>>>,
-    WsMessage,
-);
+type BroadcastData = (Vec<ClientSender>, WsMessage);
 
 fn collect_chat_senders(
     room_id: &str,

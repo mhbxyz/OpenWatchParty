@@ -1,9 +1,52 @@
 use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 
-pub type ClientSender = mpsc::Sender<Result<warp::ws::Message, warp::Error>>;
+pub type OutboundMessage = Result<warp::ws::Message, warp::Error>;
+
+#[derive(Clone, Debug)]
+pub struct ClientSender {
+    outbound: mpsc::Sender<OutboundMessage>,
+    disconnect: watch::Sender<bool>,
+}
+
+impl ClientSender {
+    pub fn channel(
+        capacity: usize,
+    ) -> (Self, mpsc::Receiver<OutboundMessage>, watch::Receiver<bool>) {
+        let (outbound, receiver) = mpsc::channel(capacity);
+        let (disconnect, disconnect_receiver) = watch::channel(false);
+        (
+            Self {
+                outbound,
+                disconnect,
+            },
+            receiver,
+            disconnect_receiver,
+        )
+    }
+
+    pub fn try_send(
+        &self,
+        message: OutboundMessage,
+    ) -> Result<(), mpsc::error::TrySendError<OutboundMessage>> {
+        self.outbound.try_send(message).inspect_err(|_| {
+            self.request_disconnect();
+        })
+    }
+
+    pub async fn send(
+        &self,
+        message: OutboundMessage,
+    ) -> Result<(), mpsc::error::SendError<OutboundMessage>> {
+        self.outbound.send(message).await
+    }
+
+    pub(crate) fn request_disconnect(&self) {
+        self.disconnect.send_replace(true);
+    }
+}
 
 fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
     let list: Vec<serde_json::Value> = rooms
@@ -103,6 +146,17 @@ mod tests {
     use crate::test_helpers;
     use crate::types::PlaybackState;
     use std::collections::HashSet;
+
+    fn message(msg_type: &str) -> WsMessage {
+        WsMessage {
+            msg_type: msg_type.to_string(),
+            room: None,
+            client: None,
+            payload: None,
+            ts: 0,
+            server_ts: None,
+        }
+    }
 
     #[test]
     fn build_room_list_msg_empty() {
@@ -242,5 +296,49 @@ mod tests {
         send_to_senders(&senders, &msg, "event");
         assert!(test_helpers::recv_msg(&mut rx_a).is_some());
         assert!(test_helpers::recv_msg(&mut rx_b).is_some());
+    }
+
+    #[tokio::test]
+    async fn full_channel_signals_disconnect_and_keeps_other_clients_ordered() {
+        let (slow, _slow_rx, mut disconnect) = ClientSender::channel(1);
+        let (fast, mut fast_rx, _fast_disconnect) = ClientSender::channel(8);
+        slow.try_send(Ok(warp::ws::Message::text("already queued")))
+            .unwrap();
+
+        for msg_type in ["room_closed", "player_event", "participants_update"] {
+            send_to_senders(&[slow.clone(), fast.clone()], &message(msg_type), msg_type);
+        }
+        send_message(Some(slow), &message("room_state"), Some("slow"));
+        send_message(Some(fast), &message("room_state"), Some("fast"));
+
+        disconnect.changed().await.unwrap();
+        assert!(*disconnect.borrow());
+        let received: Vec<_> = std::iter::from_fn(|| test_helpers::recv_msg(&mut fast_rx))
+            .map(|message| message.msg_type)
+            .collect();
+        assert_eq!(
+            received,
+            [
+                "room_closed",
+                "player_event",
+                "participants_update",
+                "room_state"
+            ]
+        );
+    }
+
+    #[tokio::test]
+    async fn closed_channel_signals_disconnect() {
+        let (sender, receiver, mut disconnect) = ClientSender::channel(1);
+        drop(receiver);
+
+        send_to_senders(
+            &[sender],
+            &message("participants_update"),
+            "participants update",
+        );
+
+        disconnect.changed().await.unwrap();
+        assert!(*disconnect.borrow());
     }
 }

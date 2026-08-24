@@ -1,14 +1,13 @@
 use super::constants::CLIENT_CHANNEL_BUFFER;
 use super::dispatch::{client_msg, close_with_policy, is_authenticated};
 use crate::auth::JwtConfig;
-use crate::messaging::{send_message, send_room_list};
+use crate::messaging::{send_message, send_room_list, ClientSender};
 use crate::types::{SharedState, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
 use log::info;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -16,7 +15,7 @@ const MAX_EXPIRATION_RECHECK: Duration = Duration::from_secs(1);
 pub type SessionClock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
 fn register_client(
-    client_sender: mpsc::Sender<Result<warp::ws::Message, warp::Error>>,
+    client_sender: ClientSender,
     jwt_config: &Arc<JwtConfig>,
 ) -> crate::types::Client {
     let now = now_ms();
@@ -87,7 +86,8 @@ pub async fn client_connection(
     session_clock: SessionClock,
 ) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
-    let (client_sender, client_rcv) = mpsc::channel(CLIENT_CHANNEL_BUFFER);
+    let (client_sender, client_rcv, mut disconnect_requested) =
+        ClientSender::channel(CLIENT_CHANNEL_BUFFER);
     let client_rcv = ReceiverStream::new(client_rcv);
 
     let mut writer_task = tokio::task::spawn(async move {
@@ -159,6 +159,13 @@ pub async fn client_connection(
                     session_expiration_timer.as_mut().reset(Instant::now() + delay);
                 }
             }
+            result = disconnect_requested.changed() => {
+                if result.is_err() || *disconnect_requested.borrow() {
+                    info!("Outbound queue failed for client {}", temp_id);
+                    close_with_policy(&temp_id, &state, "Client cannot accept messages").await;
+                    break;
+                }
+            }
         }
     }
 
@@ -181,7 +188,7 @@ mod tests {
 
     #[test]
     fn register_client_jwt_disabled() {
-        let (tx, _rx) = mpsc::channel(10);
+        let (tx, _rx, _disconnect) = ClientSender::channel(10);
         let jwt_config = Arc::new(JwtConfig {
             secret: String::new(),
             audience: "test".to_string(),
@@ -197,7 +204,7 @@ mod tests {
 
     #[test]
     fn register_client_jwt_enabled() {
-        let (tx, _rx) = mpsc::channel(10);
+        let (tx, _rx, _disconnect) = ClientSender::channel(10);
         let jwt_config = Arc::new(JwtConfig {
             secret: "some-secret".to_string(),
             audience: "test".to_string(),
