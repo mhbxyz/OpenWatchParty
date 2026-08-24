@@ -20,9 +20,9 @@ RUN mkdir src && echo "fn main() {}" > src/main.rs
 
 # Build dependencies only (this layer is cached unless Cargo.toml/Cargo.lock change)
 RUN if [ "$BUILD_MODE" = "release" ]; then \
-        cargo build --release; \
+        cargo build --release --locked; \
     else \
-        cargo build; \
+        cargo build --locked; \
     fi && rm -rf src
 
 # Copy actual source code
@@ -31,10 +31,10 @@ COPY src ./src
 # Build the application (only recompiles app code, not dependencies)
 RUN touch src/main.rs && \
     if [ "$BUILD_MODE" = "release" ]; then \
-        cargo build --release && \
+        cargo build --release --locked && \
         cp target/release/session-server /usr/local/bin/; \
     else \
-        cargo build && \
+        cargo build --locked && \
         cp target/debug/session-server /usr/local/bin/; \
     fi
 

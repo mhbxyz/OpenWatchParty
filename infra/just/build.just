@@ -38,7 +38,7 @@ plugin:
 [doc('Build the session server locally (Rust)')]
 server:
     @echo -e "{{GREEN}}▶ Building session server...{{RESET}}"
-    @cd {{server_dir}} && cargo build --release
+    @cd {{server_dir}} && cargo build --release --locked
     @echo -e "{{GREEN}}✓ Server built: {{server_dir}}/target/release/{{RESET}}"
 
 [doc('Rebuild session server Docker image')]

@@ -64,10 +64,11 @@ services:
       - tools
     volumes:
       - ../../../src/plugins/jellyfin:/workspace
+      - ../../../global.json:/workspace/global.json:ro
     environment:
       - HOME=/tmp
       - DOTNET_CLI_HOME=/tmp/.dotnet
-    command: dotnet publish -c Release -o /workspace/OpenWatchParty/dist OpenWatchPartyPlugin.csproj
+    command: dotnet publish -c Release -p:RestoreLockedMode=true -o /workspace/OpenWatchParty/dist OpenWatchPartyPlugin.csproj
 
 volumes:
   jellyfin-cache:

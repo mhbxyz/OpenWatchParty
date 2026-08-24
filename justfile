@@ -153,7 +153,7 @@ release:
     @mkdir -p dist/plugin dist/server
     @just build plugin
     @cp -r {{plugin_dir}}/dist/* dist/plugin/
-    @cd {{server_dir}} && cargo build --release
+    @cd {{server_dir}} && cargo build --release --locked
     @cp {{server_dir}}/target/release/session-server dist/server/ 2>/dev/null || true
     @cd dist && zip -r ../{{project_name}}-release.zip .
     @echo -e "{{GREEN}}✓ Release built: {{project_name}}-release.zip{{RESET}}"

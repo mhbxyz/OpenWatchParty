@@ -4,5 +4,10 @@
     <OpenWatchPartyVersion>0.2.0</OpenWatchPartyVersion>
     <JellyfinPackageVersion>10.11.3</JellyfinPackageVersion>
     <JellyfinTargetAbi>10.11.0.0</JellyfinTargetAbi>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+    <RestoreLockedMode Condition="'$(CI)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
 </Project>

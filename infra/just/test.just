@@ -13,7 +13,7 @@ default: server plugin client release
 [doc('Run Rust server tests')]
 server:
     @echo -e "{{GREEN}}▶ Running server tests...{{RESET}}"
-    @cd {{server_dir}} && cargo test
+    @cd {{server_dir}} && cargo test --locked
     @echo -e "{{GREEN}}✓ Tests passed{{RESET}}"
 
 [doc('Run .NET plugin tests')]
@@ -24,12 +24,13 @@ plugin:
     @for f in {{client_js_files}}; do mkdir -p "$(dirname {{plugin_dir}}/Web/$f)" && cp {{client_dir}}/$f {{plugin_dir}}/Web/$f; done
     @docker run --rm \
         -v "$(pwd)/src/plugins/jellyfin:/src" \
+        -v "$(pwd)/global.json:/global.json:ro" \
         -w /src \
         -u "$(id -u):$(id -g)" \
         -e HOME=/tmp \
         -e DOTNET_CLI_HOME=/tmp/.dotnet \
         mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30 \
-        dotnet test OpenWatchParty.Tests/
+        sh -c 'dotnet restore OpenWatchParty.Tests/OpenWatchParty.Tests.csproj --locked-mode && dotnet test OpenWatchParty.Tests/ --no-restore'
     @echo -e "{{GREEN}}✓ Plugin tests passed{{RESET}}"
 
 [doc('Run JavaScript client tests')]
