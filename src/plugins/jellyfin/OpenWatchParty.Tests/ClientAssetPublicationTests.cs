@@ -29,7 +29,7 @@ public sealed class ClientAssetPublicationTests
 
         var loaderResult = Assert.IsType<ContentResult>(CreateController().GetClientScript());
         Assert.Equal(loader, loaderResult.Content);
-        Assert.Contains("const base = '/OpenWatchParty/Client'", loaderResult.Content, StringComparison.Ordinal);
+        Assert.Contains("const base = `${basePrefix}/OpenWatchParty/Client`", loaderResult.Content, StringComparison.Ordinal);
         Assert.DoesNotContain("/web/plugins/openwatchparty", loaderResult.Content, StringComparison.Ordinal);
 
         foreach (var module in modules)

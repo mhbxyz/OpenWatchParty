@@ -5,15 +5,20 @@
 
   const currentScript = document.currentScript;
   let cacheBust = '';
+  let basePrefix = '';
   if (currentScript && currentScript.src) {
     try {
       const url = new URL(currentScript.src, window.location.href);
       cacheBust = url.searchParams.get('v') || '';
+      const clientScriptPath = '/OpenWatchParty/ClientScript';
+      if (url.pathname.endsWith(clientScriptPath)) {
+        basePrefix = url.pathname.slice(0, -clientScriptPath.length);
+      }
     } catch (err) {}
   }
   if (!cacheBust) cacheBust = String(Date.now());
 
-  const base = '/OpenWatchParty/Client';
+  const base = `${basePrefix}/OpenWatchParty/Client`;
 
   const SCRIPT_TIMEOUT_MS = 10000;  // 10 seconds timeout per script
 
