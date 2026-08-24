@@ -7,7 +7,9 @@ use std::time::Duration;
 use tokio::time::sleep;
 
 pub(super) fn all_ready(room: &Room) -> bool {
-    room.ready_clients.len() >= room.clients.len()
+    room.clients
+        .iter()
+        .all(|client_id| room.ready_clients.contains(client_id))
 }
 
 pub(super) fn prepare_scheduled_play(
@@ -88,5 +90,14 @@ mod tests {
         room.clients.clear();
         room.ready_clients.clear();
         assert!(all_ready(&room));
+    }
+
+    #[test]
+    fn all_ready_ignores_unrelated_client_ids() {
+        let mut room = test_helpers::create_room("r1", "host");
+        room.clients = vec!["host".to_string(), "guest".to_string()];
+        room.ready_clients = HashSet::from(["host".to_string(), "outsider".to_string()]);
+
+        assert!(!all_ready(&room));
     }
 }

@@ -1,5 +1,5 @@
 use super::super::constants::PLAY_SCHEDULE_MS;
-use super::super::dispatch::send_error;
+use super::super::dispatch::{is_authenticated, send_error};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::handle_leave;
@@ -52,13 +52,30 @@ pub(in crate::ws) async fn handle_ready(
     parsed: &IncomingMessage,
     state: &SharedState,
 ) {
-    if let Some(ref room_id) = parsed.room {
-        {
-            let mut state = state.write().await;
+    if !is_authenticated(client_id, state).await {
+        send_error(client_id, state, "Authentication required").await;
+        return;
+    }
+    let Some(ref room_id) = parsed.room else {
+        return;
+    };
+
+    let accepted = {
+        let mut state = state.write().await;
+        let belongs_to_room = state
+            .clients
+            .get(client_id)
+            .and_then(|client| client.room_id.as_deref())
+            == Some(room_id.as_str())
+            && state
+                .rooms
+                .get(room_id)
+                .is_some_and(|room| room.clients.iter().any(|id| id == client_id));
+        if belongs_to_room {
             let crate::types::ServerState { clients, rooms } = &mut *state;
-            let Some(room) = rooms.get_mut(room_id) else {
-                return;
-            };
+            let room = rooms
+                .get_mut(room_id)
+                .expect("membership check requires an existing room");
             room.ready_clients.insert(client_id.to_string());
             if room.pending_play.is_some() && all_ready(room) {
                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
@@ -72,7 +89,14 @@ pub(in crate::ws) async fn handle_ready(
                     prepare_scheduled_play(room, clients, position, target_server_ts);
                 send_to_senders(&senders, &msg, "scheduled play");
             }
+            true
+        } else {
+            false
         }
+    };
+
+    if !accepted {
+        send_error(client_id, state, "Client is not a member of this room").await;
     }
 }
 
@@ -120,7 +144,8 @@ mod tests {
     async fn handle_ready_adds_to_set() {
         let state = test_helpers::create_state();
         let (host, _rx_h) = test_helpers::create_client_with_rx("uh", "Host", true);
-        let (guest, _rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        let (mut guest, _rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        guest.room_id = Some("room-1".to_string());
 
         {
             let mut state = state.write().await;
@@ -151,7 +176,8 @@ mod tests {
     async fn handle_ready_all_ready_triggers_play() {
         let state = test_helpers::create_state();
         let (host, mut rx_h) = test_helpers::create_client_with_rx("uh", "Host", true);
-        let (guest, mut rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        let (mut guest, mut rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        guest.room_id = Some("room-1".to_string());
 
         {
             let mut state = state.write().await;
@@ -187,5 +213,91 @@ mod tests {
         // pending_play should be cleared
         let state = state.read().await;
         assert!(state.rooms.get("room-1").unwrap().pending_play.is_none());
+    }
+
+    #[tokio::test]
+    async fn handle_ready_rejects_unauthenticated_client() {
+        let (state, mut rx) = ready_test_state(false, true).await;
+
+        handle_ready("guest", &ready_message("room-1"), &state).await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms["room-1"].ready_clients.contains("guest"));
+        drop(locked);
+        assert_eq!(test_helpers::recv_msg(&mut rx).unwrap().msg_type, "error");
+    }
+
+    #[tokio::test]
+    async fn handle_ready_rejects_non_member() {
+        let (state, mut rx) = ready_test_state(true, false).await;
+
+        handle_ready("guest", &ready_message("room-1"), &state).await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms["room-1"].ready_clients.contains("guest"));
+        drop(locked);
+        assert_eq!(test_helpers::recv_msg(&mut rx).unwrap().msg_type, "error");
+    }
+
+    #[tokio::test]
+    async fn unrelated_ready_ids_cannot_trigger_pending_play() {
+        let (state, mut rx) = ready_test_state(true, true).await;
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("room-1").unwrap();
+            room.ready_clients.clear();
+            room.ready_clients.insert("outsider-a".to_string());
+            room.ready_clients.insert("outsider-b".to_string());
+            room.pending_play = Some(crate::types::PendingPlay {
+                position: 10.0,
+                created_at: crate::utils::now_ms(),
+            });
+        }
+
+        handle_ready("guest", &ready_message("room-1"), &state).await;
+
+        let locked = state.read().await;
+        assert!(locked.rooms["room-1"].pending_play.is_some());
+        drop(locked);
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    async fn ready_test_state(
+        authenticated: bool,
+        include_guest: bool,
+    ) -> (
+        SharedState,
+        tokio::sync::mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+    ) {
+        let state = test_helpers::create_state();
+        let (host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, guest_rx) =
+            test_helpers::create_client_with_rx("guest", "Guest", authenticated);
+        if include_guest {
+            guest.room_id = Some("room-1".to_string());
+        }
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room-1", "host");
+            room.ready_clients.clear();
+            if include_guest {
+                room.clients.push("guest".to_string());
+            }
+            locked.rooms.insert("room-1".to_string(), room);
+        }
+        (state, guest_rx)
+    }
+
+    fn ready_message(room_id: &str) -> IncomingMessage {
+        IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Ready,
+            room: Some(room_id.to_string()),
+            client: Some("forged-client".to_string()),
+            payload: Some(serde_json::json!({ "client": "forged-client" })),
+            ts: 0,
+            server_ts: None,
+        }
     }
 }
