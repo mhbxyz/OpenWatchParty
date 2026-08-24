@@ -96,6 +96,7 @@ pub enum ServerMessageType {
 
 /// Incoming WebSocket message from client
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(deny_unknown_fields)]
 pub struct IncomingMessage {
     #[serde(rename = "type")]
     pub msg_type: ClientMessageType,
@@ -185,6 +186,12 @@ mod tests {
         assert_eq!(msg.msg_type, ClientMessageType::PlayerEvent);
         assert_eq!(msg.room, Some("room-123".to_string()));
         assert!(msg.payload.is_some());
+    }
+
+    #[test]
+    fn test_incoming_message_rejects_unknown_envelope_fields() {
+        let json = r#"{"type":"player_event","room":"room-123","payload":{"action":"play"},"ts":12345,"extra":true}"#;
+        assert!(serde_json::from_str::<IncomingMessage>(json).is_err());
     }
 
     #[test]

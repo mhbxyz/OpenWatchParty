@@ -26,10 +26,11 @@ pub(super) fn prepare_scheduled_play(
     let msg = WsMessage {
         msg_type: "player_event".to_string(),
         room: Some(room.room_id.clone()),
-        client: None,
+        client: Some(room.host_id.clone()),
         payload: Some(serde_json::json!({
             "action": "play",
             "position": position,
+            "play_state": "playing",
             "target_server_ts": target_server_ts
         })),
         ts: now_ms(),
@@ -119,5 +120,6 @@ mod tests {
         assert_eq!(room.last_state_ts, 4000);
         assert_eq!(room.last_command_ts, 5000);
         assert_eq!(message.server_ts, Some(4000));
+        assert_eq!(message.payload.unwrap()["play_state"], "playing");
     }
 }

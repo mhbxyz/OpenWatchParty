@@ -4,10 +4,6 @@ pub(super) fn is_valid_position(pos: f64) -> bool {
     pos.is_finite() && (0.0..=MAX_POSITION_SECONDS).contains(&pos)
 }
 
-pub(super) fn is_valid_play_state(state: &str) -> bool {
-    state == "playing" || state == "paused"
-}
-
 pub(super) fn is_valid_media_id(id: &str) -> bool {
     id.len() == 32 && id.chars().all(|c| c.is_ascii_hexdigit())
 }
@@ -51,16 +47,6 @@ mod tests {
         assert!(!is_valid_position(f64::NAN));
         assert!(!is_valid_position(f64::INFINITY));
         assert!(!is_valid_position(f64::NEG_INFINITY));
-    }
-
-    #[test]
-    fn test_is_valid_play_state() {
-        assert!(is_valid_play_state("playing"));
-        assert!(is_valid_play_state("paused"));
-        assert!(!is_valid_play_state("stopped"));
-        assert!(!is_valid_play_state(""));
-        assert!(!is_valid_play_state("PLAYING"));
-        assert!(!is_valid_play_state("buffering"));
     }
 
     #[test]
