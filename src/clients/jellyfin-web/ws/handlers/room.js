@@ -17,6 +17,12 @@
     }
   };
 
+  h.handleAuthSuccess = () => {
+    if (OWP.actions?.handleAuthenticatedConnection) {
+      OWP.actions.handleAuthenticatedConnection();
+    }
+  };
+
   h.handleParticipantsUpdate = (msg) => {
     state.participantCount = msg.payload.participant_count;
     if (state.inRoom) {
@@ -42,6 +48,7 @@
   };
 
   h.handleRoomClosed = (msg) => {
+    if (OWP.actions?.cancelRoomRejoin) OWP.actions.cancelRoomRejoin();
     state.inRoom = false;
     state.roomId = '';
     const reason = msg.payload?.reason || 'The room was closed';
@@ -52,6 +59,10 @@
   h.handleError = (msg) => {
     const message = msg.payload?.message || 'Unknown error';
     console.error('[OpenWatchParty] Server error:', message);
+    if (state.rejoinPending && OWP.actions?.failRoomRejoin) {
+      OWP.actions.failRoomRejoin(message);
+      return;
+    }
     ui.showToast(message);
   };
 })();

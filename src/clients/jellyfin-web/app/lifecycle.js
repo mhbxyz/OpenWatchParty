@@ -21,7 +21,7 @@
     console.log('[OpenWatchParty] Video player closed, cleaning up...');
     const panel = document.getElementById(OWP.constants.PANEL_ID);
     if (panel) panel.classList.add('hide');
-    if (state.inRoom && OWP.actions && OWP.actions.leaveRoom) {
+    if ((state.inRoom || state.rejoinPending) && OWP.actions && OWP.actions.leaveRoom) {
       OWP.actions.leaveRoom();
     }
     if (OWP.playback && OWP.playback.cleanupVideoListeners) {

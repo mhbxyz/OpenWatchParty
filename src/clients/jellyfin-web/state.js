@@ -67,6 +67,7 @@
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
     RECONNECT_BASE_MS: 1000,      // Base reconnect delay (1s)
     RECONNECT_MAX_MS: 30000,      // Max reconnect delay (30s)
+    ROOM_REJOIN_TIMEOUT_MS: 5000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
     INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
     INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
@@ -91,6 +92,11 @@
     isConnecting: false,
     wsUrl: '',
     reconnectAttempts: 0,        // For exponential backoff
+    connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
+    desiredRoomId: '',
+    rejoinPending: false,
+    rejectedRejoinRoomIds: [],
+    roomRejoinTimer: null,
     initialized: false,
     // Log buffering (for logs sent before WS connected)
     logBuffer: [],

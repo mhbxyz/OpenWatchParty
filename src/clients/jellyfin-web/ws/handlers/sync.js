@@ -62,7 +62,10 @@
   };
 
   h.handleRoomState = (msg, video) => {
+    if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
+    if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
     applyRoomState(msg);
+    if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
     syncToRoom(msg, video);
     if (!state.isHost && msg.payload?.media_id) {

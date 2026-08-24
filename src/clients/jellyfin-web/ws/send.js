@@ -17,6 +17,8 @@
   };
 
   const createRoom = () => {
+    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    state.desiredRoomId = '';
     const v = utils.getVideo();
     const mediaId = utils.getCurrentItemId();
     const userName = state.userName
@@ -29,7 +31,11 @@
     });
   };
 
-  const joinRoom = (id) => {
+  const joinRoom = (id, isReconnect = false) => {
+    if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    state.desiredRoomId = id;
+    state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
+    state.rejoinPending = isReconnect;
     state.roomId = id;
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
@@ -38,6 +44,7 @@
   };
 
   const leaveRoom = () => {
+    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     send('leave_room');
     state.inRoom = false;
     state.roomId = '';
