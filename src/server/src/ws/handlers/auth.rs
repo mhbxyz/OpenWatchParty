@@ -1,7 +1,7 @@
 use super::super::dispatch::send_error;
 use super::super::validation::sanitize_name;
 use crate::auth::JwtConfig;
-use crate::messaging::send_message;
+use crate::messaging::{send_message, send_room_list};
 use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
@@ -37,6 +37,7 @@ async fn handle_jwt_auth(
                     Some(client_id),
                 );
             }
+            send_room_list(client_id, state).await;
             true
         }
         Err(e) => {
@@ -103,5 +104,64 @@ pub(in crate::ws) async fn handle_auth(
             "Authentication required: no token provided",
         )
         .await;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth::Claims;
+    use crate::test_helpers;
+    use jsonwebtoken::{encode, EncodingKey, Header};
+
+    #[tokio::test]
+    async fn successful_auth_sends_success_before_room_list() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: "test-secret-with-at-least-32-characters".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        });
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = encode(
+            &Header::default(),
+            &Claims {
+                sub: "user".to_string(),
+                name: "Alice".to_string(),
+                aud: jwt_config.audience.clone(),
+                iss: jwt_config.issuer.clone(),
+                exp: now + 3600,
+                iat: now,
+            },
+            &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
+        )
+        .unwrap();
+        let parsed = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Auth,
+            room: None,
+            client: Some("forged".to_string()),
+            payload: Some(serde_json::json!({ "token": token })),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        };
+
+        handle_auth("client", &parsed, &state, &jwt_config).await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut rx).unwrap().msg_type,
+            "auth_success"
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut rx).unwrap().msg_type,
+            "room_list"
+        );
+        assert!(state.read().await.clients["client"].authenticated);
     }
 }

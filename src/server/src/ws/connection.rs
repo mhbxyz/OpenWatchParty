@@ -49,6 +49,10 @@ fn send_client_hello(client_id: &str, sender: Option<crate::messaging::ClientSen
     );
 }
 
+fn should_send_initial_room_list(jwt_config: &JwtConfig) -> bool {
+    !jwt_config.enabled
+}
+
 pub async fn client_connection(
     ws: warp::ws::WebSocket,
     state: SharedState,
@@ -76,7 +80,9 @@ pub async fn client_connection(
         send_client_hello(&temp_id, sender);
     }
 
-    send_room_list(&temp_id, &state).await;
+    if should_send_initial_room_list(&jwt_config) {
+        send_room_list(&temp_id, &state).await;
+    }
 
     while let Some(result) = client_ws_rcv.next().await {
         if let Ok(msg) = result {
@@ -119,5 +125,22 @@ mod tests {
         assert!(!client.authenticated);
         assert_eq!(client.user_id, "");
         assert_eq!(client.user_name, "");
+    }
+
+    #[test]
+    fn room_list_is_deferred_only_when_authentication_is_required() {
+        let enabled = JwtConfig {
+            secret: "some-secret".to_string(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: true,
+        };
+        let disabled = JwtConfig {
+            enabled: false,
+            ..enabled.clone()
+        };
+
+        assert!(!should_send_initial_room_list(&enabled));
+        assert!(should_send_initial_room_list(&disabled));
     }
 }

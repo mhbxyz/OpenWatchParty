@@ -54,6 +54,14 @@ pub(super) async fn is_authenticated(client_id: &str, state: &SharedState) -> bo
         .unwrap_or(false)
 }
 
+async fn handle_list_rooms(client_id: &str, state: &SharedState) {
+    if is_authenticated(client_id, state).await {
+        send_room_list(client_id, state).await;
+    } else {
+        send_error(client_id, state, "Authentication required").await;
+    }
+}
+
 pub(super) async fn client_msg(
     client_id: &str,
     msg: warp::ws::Message,
@@ -91,7 +99,7 @@ pub(super) async fn client_msg(
 
     match parsed.msg_type {
         ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
-        ClientMessageType::ListRooms => send_room_list(client_id, state).await,
+        ClientMessageType::ListRooms => handle_list_rooms(client_id, state).await,
         ClientMessageType::CreateRoom => handle_create_room(client_id, &parsed, state).await,
         ClientMessageType::JoinRoom => handle_join_room(client_id, &parsed, state).await,
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
@@ -154,5 +162,31 @@ mod tests {
     async fn is_authenticated_not_found() {
         let state = test_helpers::create_state();
         assert!(!is_authenticated("nonexistent", &state).await);
+    }
+
+    #[tokio::test]
+    async fn list_rooms_is_rejected_before_authentication() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("u1", "", false);
+        state.write().await.clients.insert("c1".to_string(), client);
+
+        handle_list_rooms("c1", &state).await;
+
+        assert_eq!(test_helpers::recv_msg(&mut rx).unwrap().msg_type, "error");
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn list_rooms_is_available_to_authenticated_clients() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        state.write().await.clients.insert("c1".to_string(), client);
+
+        handle_list_rooms("c1", &state).await;
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut rx).unwrap().msg_type,
+            "room_list"
+        );
     }
 }
