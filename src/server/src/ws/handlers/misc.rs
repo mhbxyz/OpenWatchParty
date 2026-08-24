@@ -28,18 +28,55 @@ pub(in crate::ws) async fn handle_ping(
 }
 
 pub(in crate::ws) fn handle_client_log(client_id: &str, parsed: &IncomingMessage) {
-    if let Some(payload) = &parsed.payload {
-        let category = payload
-            .get("category")
-            .and_then(|v| v.as_str())
-            .unwrap_or("LOG");
-        let message = payload
-            .get("message")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
-        let short_id = &client_id[..8];
-        info!("[CLIENT:{}:{}] {}", short_id, category, message);
+    if let Some(entry) = parse_client_log(parsed) {
+        let short_id: String = client_id.chars().take(8).collect();
+        info!(target: "openwatchparty::client", "{}", format_client_log(&short_id, &entry));
     }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct ClientLogEntry {
+    category: String,
+    message: String,
+}
+
+fn parse_client_log(parsed: &IncomingMessage) -> Option<ClientLogEntry> {
+    let payload = parsed.payload.as_ref()?;
+    let category = payload
+        .get("category")
+        .and_then(|value| value.as_str())
+        .unwrap_or("LOG")
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-'))
+        .take(super::super::constants::MAX_CLIENT_LOG_CATEGORY_LENGTH)
+        .collect::<String>();
+    let category = if category.is_empty() {
+        "LOG".to_string()
+    } else {
+        category
+    };
+    let message = payload
+        .get("message")
+        .and_then(|value| value.as_str())?
+        .chars()
+        .filter(|character| {
+            !character.is_control() && !matches!(character, '\u{0085}' | '\u{2028}' | '\u{2029}')
+        })
+        .take(super::super::constants::MAX_CLIENT_LOG_MESSAGE_LENGTH)
+        .collect::<String>();
+    if message.is_empty() {
+        return None;
+    }
+    Some(ClientLogEntry { category, message })
+}
+
+fn format_client_log(client_id: &str, entry: &ClientLogEntry) -> String {
+    serde_json::json!({
+        "client_id": client_id,
+        "category": entry.category,
+        "message": entry.message,
+    })
+    .to_string()
 }
 
 pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) {
@@ -309,6 +346,64 @@ mod tests {
             payload: Some(serde_json::json!({ "client": "forged-client" })),
             ts: 0,
             server_ts: None,
+        }
+    }
+
+    #[test]
+    fn client_log_fields_are_bounded_and_control_free() {
+        let parsed = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::ClientLog,
+            room: None,
+            client: None,
+            payload: Some(serde_json::json!({
+                "category": "AUTH\n[FORGED]:evil/category-that-is-too-long",
+                "message": format!("first\nsecond\0\u{0085}\u{2028}\u{2029}{}", "x".repeat(1200))
+            })),
+            ts: 0,
+            server_ts: None,
+        };
+
+        let entry = parse_client_log(&parsed).unwrap();
+
+        assert!(
+            entry.category.chars().count()
+                <= super::super::super::constants::MAX_CLIENT_LOG_CATEGORY_LENGTH
+        );
+        assert!(entry
+            .category
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '_' | '-')));
+        assert_eq!(
+            entry.message.chars().count(),
+            super::super::super::constants::MAX_CLIENT_LOG_MESSAGE_LENGTH
+        );
+        assert!(!entry.message.chars().any(char::is_control));
+        assert!(entry.message.starts_with("firstsecond"));
+        let formatted = format_client_log(
+            "client",
+            &ClientLogEntry {
+                category: "AUTH".to_string(),
+                message: "ok client_id=forged category=ADMIN".to_string(),
+            },
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&formatted).unwrap();
+        assert_eq!(parsed["client_id"], "client");
+        assert_eq!(parsed["category"], "AUTH");
+        assert_eq!(parsed["message"], "ok client_id=forged category=ADMIN");
+    }
+
+    #[test]
+    fn empty_or_control_only_client_logs_are_ignored() {
+        for message in ["", "\n\r\0"] {
+            let parsed = IncomingMessage {
+                msg_type: crate::types::ClientMessageType::ClientLog,
+                room: None,
+                client: None,
+                payload: Some(serde_json::json!({ "category": "///", "message": message })),
+                ts: 0,
+                server_ts: None,
+            };
+            assert!(parse_client_log(&parsed).is_none());
         }
     }
 }

@@ -25,3 +25,5 @@ pub(crate) const MAX_MESSAGE_SIZE: usize = 64 * 1024; // 64 KiB max assembled me
 pub(crate) const MAX_FRAME_SIZE: usize = 64 * 1024; // 64 KiB max frame size before assembly
 pub(super) const MAX_NAME_LENGTH: usize = 100; // Max length for user/room names
 pub(super) const MAX_CHAT_MESSAGE_LENGTH: usize = 500; // Max chat message length
+pub(super) const MAX_CLIENT_LOG_CATEGORY_LENGTH: usize = 24;
+pub(super) const MAX_CLIENT_LOG_MESSAGE_LENGTH: usize = 1000;
