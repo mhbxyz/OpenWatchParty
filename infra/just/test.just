@@ -8,7 +8,7 @@ import "common.just"
 
 [default]
 [doc('Run all tests (Rust + .NET + JS)')]
-default: server plugin client
+default: server plugin client release
 
 [doc('Run Rust server tests')]
 server:
@@ -37,3 +37,9 @@ client:
     @echo -e "{{GREEN}}▶ Running client tests...{{RESET}}"
     @node --test {{client_dir}}/tests/*.test.js
     @echo -e "{{GREEN}}✓ Client tests passed{{RESET}}"
+
+[doc('Run release script tests')]
+release:
+    @echo -e "{{GREEN}}▶ Running release script tests...{{RESET}}"
+    @infra/scripts/tests/update-plugin-manifest.test.sh
+    @echo -e "{{GREEN}}✓ Release script tests passed{{RESET}}"

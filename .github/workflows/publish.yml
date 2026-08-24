@@ -75,15 +75,18 @@ jobs:
         run: dotnet publish -c Release -o dist
 
       - name: Create plugin zip
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
+          [[ "$RELEASE_TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
           cd src/plugins/jellyfin/OpenWatchParty/dist
-          zip -r ../OpenWatchParty-${{ github.event.release.tag_name }}.zip .
+          zip -r "../OpenWatchParty-${RELEASE_TAG}.zip" .
 
       - name: Upload plugin artifact
         uses: actions/upload-artifact@v4
         with:
           name: jellyfin-plugin
-          path: src/plugins/jellyfin/OpenWatchParty/OpenWatchParty-${{ github.event.release.tag_name }}.zip
+          path: src/plugins/jellyfin/OpenWatchParty/OpenWatchParty-*.zip
 
   create-release-assets:
     name: Upload Release Assets
@@ -122,37 +125,25 @@ jobs:
           path: artifacts
 
       - name: Update manifest.json
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_CHANGELOG: ${{ github.event.release.body }}
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"  # Remove 'v' prefix if present
-          ZIP_FILE=$(ls artifacts/*.zip | head -1)
-          CHECKSUM=$(md5sum "$ZIP_FILE" | awk '{print $1}')
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          CHANGELOG="${{ github.event.release.body }}"
-          # Escape special characters for JSON
-          CHANGELOG=$(echo "$CHANGELOG" | jq -Rs '.')
-
-          # Update manifest.json using jq
-          jq --arg version "$VERSION" \
-             --arg checksum "$CHECKSUM" \
-             --arg timestamp "$TIMESTAMP" \
-             --argjson changelog "$CHANGELOG" \
-             '.[0].versions = [{
-               "version": $version,
-               "changelog": $changelog,
-               "targetAbi": "10.10.0.0",
-               "sourceUrl": "https://github.com/mhbxyz/OpenWatchParty/releases/download/v\($version)/OpenWatchParty-v\($version).zip",
-               "checksum": $checksum,
-               "timestamp": $timestamp
-             }] + .[0].versions' \
-             docs/jellyfin-plugin-repo/manifest.json > manifest.tmp.json
-
-          mv manifest.tmp.json docs/jellyfin-plugin-repo/manifest.json
+          shopt -s nullglob
+          archives=(artifacts/*.zip)
+          [[ ${#archives[@]} -eq 1 ]]
+          infra/scripts/update-plugin-manifest.sh \
+            docs/jellyfin-plugin-repo/manifest.json \
+            "${archives[0]}" \
+            "$RELEASE_TAG" \
+            "$RELEASE_CHANGELOG"
 
       - name: Commit and push manifest
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/jellyfin-plugin-repo/manifest.json
-          git commit -m "Update plugin manifest for ${{ github.event.release.tag_name }}"
+          git commit -m "Update plugin manifest for ${RELEASE_TAG}"
           git push

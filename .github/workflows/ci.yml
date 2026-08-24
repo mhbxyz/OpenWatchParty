@@ -92,6 +92,18 @@ jobs:
       - name: Run JS tests
         run: node --test src/clients/jellyfin-web/tests/*.test.js
 
+  release-script-tests:
+    name: Release Script Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release scripts
+        run: shellcheck infra/scripts/*.sh infra/scripts/tests/*.sh
+
+      - name: Test hostile release metadata
+        run: infra/scripts/tests/update-plugin-manifest.test.sh
+
   build-server:
     name: Build Server
     runs-on: ubuntu-latest
