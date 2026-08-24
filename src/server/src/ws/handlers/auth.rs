@@ -15,16 +15,23 @@ async fn handle_jwt_auth(
 ) -> bool {
     match jwt_config.validate_token(token) {
         Ok(claims) => {
+            let Some(user_name) = sanitize_name(&claims.name) else {
+                warn!(
+                    "Auth failed for {}: JWT name is empty after sanitization",
+                    client_id
+                );
+                return false;
+            };
             {
                 let mut state = state.write().await;
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 if let Some(client) = state.clients.get_mut(client_id) {
                     client.authenticated = true;
                     client.user_id = claims.sub;
-                    client.user_name = claims.name.clone();
+                    client.user_name = user_name.clone();
                     client.session_expires_at = jwt_config.enabled.then_some(claims.exp as u64);
                     client.authentication_version = client.authentication_version.wrapping_add(1);
-                    info!("Client {} authenticated as {}", client_id, claims.name);
+                    info!("Client {} authenticated as {}", client_id, user_name);
                 }
                 send_message(
                     sender,
@@ -32,7 +39,7 @@ async fn handle_jwt_auth(
                         msg_type: "auth_success".to_string(),
                         room: None,
                         client: Some(client_id.to_string()),
-                        payload: Some(serde_json::json!({ "user_name": claims.name })),
+                        payload: Some(serde_json::json!({ "user_name": user_name })),
                         ts: now_ms(),
                         server_ts: Some(now_ms()),
                     },
@@ -200,6 +207,66 @@ mod tests {
         assert_eq!(
             state.read().await.clients["client"].session_expires_at,
             None
+        );
+    }
+
+    #[tokio::test]
+    async fn jwt_names_are_sanitized_and_empty_names_are_rejected() {
+        let state = test_helpers::create_state();
+        let (client, _rx) = test_helpers::create_client_with_rx("user", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: "test-secret".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        });
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token_for = |name: String| {
+            encode(
+                &Header::default(),
+                &Claims {
+                    sub: "user".to_string(),
+                    name,
+                    aud: jwt_config.audience.clone(),
+                    iss: jwt_config.issuer.clone(),
+                    exp: now + 3600,
+                    iat: now,
+                },
+                &EncodingKey::from_secret(jwt_config.secret.as_bytes()),
+            )
+            .unwrap()
+        };
+
+        assert!(
+            handle_jwt_auth(
+                "client",
+                &token_for(format!("  Alice\0{}  ", "界".repeat(120))),
+                &state,
+                &jwt_config,
+            )
+            .await
+        );
+        let stored_name = state.read().await.clients["client"].user_name.clone();
+        assert!(
+            stored_name.starts_with("Alice"),
+            "stored name: {stored_name:?}"
+        );
+        assert!(!stored_name.chars().any(char::is_control));
+        assert!(stored_name.chars().count() <= super::super::super::constants::MAX_NAME_LENGTH);
+
+        assert!(
+            !handle_jwt_auth(
+                "client",
+                &token_for("\0\n\r".to_string()),
+                &state,
+                &jwt_config,
+            )
+            .await
         );
     }
 }
