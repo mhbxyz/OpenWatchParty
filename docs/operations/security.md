@@ -6,6 +6,8 @@ nav_order: 4
 
 # Security Guide
 
+Report vulnerabilities privately through the repository [Security Policy](https://github.com/mhbxyz/OpenWatchParty/security/policy), never through a public issue.
+
 ## Overview
 
 OpenWatchParty includes several security features to protect your installation:
