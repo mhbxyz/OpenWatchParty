@@ -88,7 +88,7 @@
     const applyScheduledEvent = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
       if (!applyPlayerEvent(msg, video) && utils.nowMs() < retryDeadline) {
-        state.pendingActionTimer = setTimeout(applyScheduledEvent, VIDEO_ACTION_RETRY_MS);
+        state.pendingActionTimer = OWP.timers.setTimeout(applyScheduledEvent, VIDEO_ACTION_RETRY_MS, 'room');
       }
     };
     utils.scheduleAt(targetTs, applyScheduledEvent);

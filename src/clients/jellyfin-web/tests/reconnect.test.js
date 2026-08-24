@@ -105,7 +105,7 @@ describe('room reconnection lifecycle', () => {
   afterEach(() => {
     OWP.state.autoReconnect = false;
     if (OWP.state.intervals.ping) {
-      clearInterval(OWP.state.intervals.ping);
+      OWP.timers.clear(OWP.state.intervals.ping);
       OWP.state.intervals.ping = null;
     }
     OWP.actions.cancelRoomRejoin();

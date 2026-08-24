@@ -95,19 +95,25 @@
         window.location.hash = detailsUrl;
         let attempts = 0;
         const maxAttempts = 50;
-        const checkInterval = setInterval(() => {
+        const roomId = room.id;
+        const cardPollAttempt = ++state.cardPollAttempt;
+        const checkInterval = OWP.timers.setInterval(() => {
+          if (cardPollAttempt !== state.cardPollAttempt || state.pendingJoinRoomId !== roomId) {
+            OWP.timers.clear(checkInterval);
+            return;
+          }
           attempts++;
           const itemName = document.querySelector('.itemName bdi');
           const playBtn = document.querySelector('.mainDetailButtons .btnPlay, .mainDetailButtons button[data-action="resume"], .mainDetailButtons button[data-action="play"]');
           if (playBtn && itemName && itemName.textContent.trim()) {
             console.log('[OpenWatchParty] Play button found and page ready, clicking it');
-            clearInterval(checkInterval);
+            OWP.timers.clear(checkInterval);
             playBtn.click();
           } else if (attempts >= maxAttempts) {
             console.log('[OpenWatchParty] Play button not found or page not ready after 5s, giving up');
-            clearInterval(checkInterval);
+            OWP.timers.clear(checkInterval);
           }
-        }, 100);
+        }, 100, 'ui');
       });
     }
     card.addEventListener('click', (e) => {

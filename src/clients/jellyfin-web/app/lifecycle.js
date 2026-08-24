@@ -10,11 +10,11 @@
   let hadVideoElement = false;
 
   const clearAllIntervals = () => {
-    if (state.intervals.ui) { clearInterval(state.intervals.ui); state.intervals.ui = null; }
-    if (state.intervals.ping) { clearInterval(state.intervals.ping); state.intervals.ping = null; }
-    if (state.intervals.home) { clearInterval(state.intervals.home); state.intervals.home = null; }
-    if (state.intervals.sync) { clearInterval(state.intervals.sync); state.intervals.sync = null; }
-    if (state.intervals.stateUpdate) { clearInterval(state.intervals.stateUpdate); state.intervals.stateUpdate = null; }
+    OWP.timers.clearScope('lifecycle');
+    Object.keys(state.intervals).forEach(key => {
+      if (state.intervals[key]) OWP.timers.clear(state.intervals[key]);
+      state.intervals[key] = null;
+    });
   };
 
   const onVideoPlayerExit = () => {
@@ -27,6 +27,8 @@
     if (OWP.playback && OWP.playback.cleanupVideoListeners) {
       OWP.playback.cleanupVideoListeners();
     }
+    state.autoJoinAttempt++;
+    OWP.timers.clearScope('media');
     state.bound = false;
   };
 
@@ -45,7 +47,7 @@
   };
 
   const startIntervals = () => {
-    state.intervals.ui = setInterval(() => {
+    state.intervals.ui = OWP.timers.setInterval(() => {
       if (document.visibilityState !== 'visible') return;
       const video = utils.getVideo();
       if (hadVideoElement && !video) {
@@ -62,24 +64,26 @@
           if (OWP.actions && OWP.actions.joinRoom) {
             const roomId = state.pendingJoinRoomId;
             state.pendingJoinRoomId = '';
-            setTimeout(() => {
+            const autoJoinAttempt = ++state.autoJoinAttempt;
+            OWP.timers.setTimeout(() => {
+              if (autoJoinAttempt !== state.autoJoinAttempt || !utils.getVideo()) return;
               console.log('[OpenWatchParty] Auto-joining room:', roomId);
               OWP.actions.joinRoom(roomId);
-            }, 500);
+            }, 500, 'media');
           }
         }
       }
-    }, UI_CHECK_MS);
-    state.intervals.home = setInterval(() => {
+    }, UI_CHECK_MS, 'lifecycle');
+    state.intervals.home = OWP.timers.setInterval(() => {
       if (document.visibilityState === 'visible' && utils.isHomeView()) {
         ui.renderHomeWatchParties();
       }
-    }, HOME_REFRESH_MS);
-    state.intervals.sync = setInterval(() => {
+    }, HOME_REFRESH_MS, 'lifecycle');
+    state.intervals.sync = OWP.timers.setInterval(() => {
       if (state.inRoom && !state.isHost) {
         playback.syncLoop();
       }
-    }, SYNC_LOOP_MS);
+    }, SYNC_LOOP_MS, 'lifecycle');
   };
 
   const init = () => {

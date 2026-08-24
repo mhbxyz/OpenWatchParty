@@ -9,15 +9,15 @@
     toast.textContent = message;
     toast.onclick = () => {
       toast.classList.add('owp-toast-out');
-      setTimeout(() => toast.remove(), 300);
+      OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');
     };
     document.body.appendChild(toast);
-    setTimeout(() => {
+    OWP.timers.setTimeout(() => {
       if (toast.parentNode) {
         toast.classList.add('owp-toast-out');
-        setTimeout(() => toast.remove(), 300);
+        OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');
       }
-    }, 1500);
+    }, 1500, 'ui');
   };
 
   const getToastContainer = () => {
@@ -38,20 +38,20 @@
     toast.innerHTML = `<span class="owp-toast-username">${utils.escapeHtml(username)}</span><span class="owp-toast-text">${utils.escapeHtml(text)}</span>`;
     toast.onclick = () => {
       toast.classList.add('owp-toast-out');
-      setTimeout(() => toast.remove(), 300);
+      OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');
     };
     container.appendChild(toast);
-    setTimeout(() => {
+    OWP.timers.setTimeout(() => {
       if (toast.parentNode) {
         toast.classList.add('owp-toast-out');
-        setTimeout(() => toast.remove(), 300);
+        OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');
       }
-    }, 5000);
+    }, 5000, 'ui');
     const toasts = container.querySelectorAll('.owp-toast:not(.owp-toast-out)');
     if (toasts.length > 5) {
       const oldest = toasts[0];
       oldest.classList.add('owp-toast-out');
-      setTimeout(() => oldest.remove(), 300);
+      OWP.timers.setTimeout(() => oldest.remove(), 300, 'ui');
     }
   };
 

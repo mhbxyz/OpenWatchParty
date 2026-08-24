@@ -8,14 +8,14 @@
 
   const clearRoomRejoinTimer = () => {
     if (state.roomRejoinTimer) {
-      clearTimeout(state.roomRejoinTimer);
+      OWP.timers.clear(state.roomRejoinTimer);
       state.roomRejoinTimer = null;
     }
   };
 
   const clearReconnectTimer = () => {
     if (state.reconnectTimer) {
-      clearTimeout(state.reconnectTimer);
+      OWP.timers.clear(state.reconnectTimer);
       state.reconnectTimer = null;
     }
   };
@@ -58,11 +58,12 @@
 
   const scheduleRoomRejoinTimeout = (roomId, message) => {
     clearRoomRejoinTimer();
-    state.roomRejoinTimer = setTimeout(() => {
+    state.roomRejoinTimer = OWP.timers.setTimeout(() => {
+      state.roomRejoinTimer = null;
       if (state.rejoinPending && state.desiredRoomId === roomId) {
         failRoomRejoin(message);
       }
-    }, ROOM_REJOIN_TIMEOUT_MS);
+    }, ROOM_REJOIN_TIMEOUT_MS, 'connection');
   };
 
   const handleAuthenticatedConnection = () => {
@@ -132,10 +133,12 @@
       state.reconnectAttempts++;
       console.log(`[OpenWatchParty] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`);
       clearReconnectTimer();
-      state.reconnectTimer = setTimeout(() => {
+      const expectedConnectionAttempt = state.connectionAttempt;
+      state.reconnectTimer = OWP.timers.setTimeout(() => {
         state.reconnectTimer = null;
+        if (expectedConnectionAttempt !== state.connectionAttempt || !state.autoReconnect) return;
         connect();
-      }, delay);
+      }, delay, 'connection');
     }
   };
 
@@ -251,7 +254,7 @@
     state.timeSyncSamples = [];
     if (actions.resetRoomState) actions.resetRoomState();
     if (state.intervals.ping) {
-      clearInterval(state.intervals.ping);
+      OWP.timers.clear(state.intervals.ping);
       state.intervals.ping = null;
     }
     const socket = state.ws;
@@ -262,15 +265,15 @@
   };
 
   const schedulePing = () => {
-    if (state.intervals.ping) clearInterval(state.intervals.ping);
+    if (state.intervals.ping) OWP.timers.clear(state.intervals.ping);
     const interval = state.successfulPings >= PING_STABLE_AFTER
       ? PING_STABLE_MS
       : PING_INIT_MS;
-    state.intervals.ping = setInterval(() => {
+    state.intervals.ping = OWP.timers.setInterval(() => {
       if (state.ws && state.ws.readyState === 1) {
         actions.send('ping', { client_ts: utils.nowMs() });
       }
-    }, interval);
+    }, interval, 'connection');
   };
 
   Object.assign(actions, {

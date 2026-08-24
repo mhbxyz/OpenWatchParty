@@ -74,7 +74,7 @@
     const userId = ApiClient.getCurrentUserId?.() || ApiClient._currentUserId;
     if (!userId) {
       if (attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
+        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
       }
       return false;
     }
@@ -86,12 +86,12 @@
       const success = await playItem(item, { isCurrent, silent: attempt < 5 });
       if (!isCurrent()) return false;
       if (!success && attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
+        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
       }
       return success;
     } catch (err) {
       if (requestAttempt === state.playbackRequestAttempt && state.inRoom && attempt < 5) {
-        setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500);
+        OWP.timers.setTimeout(() => ensurePlayback(itemId, attempt + 1, requestAttempt, force), 500, 'media');
       }
       return false;
     } finally {

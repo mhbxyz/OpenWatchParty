@@ -5,6 +5,57 @@
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.hostname;
 
+  const deferredOperations = new Map();
+  const clearDeferred = (handle) => {
+    const operation = deferredOperations.get(handle);
+    if (!operation) return false;
+    deferredOperations.delete(handle);
+    operation.clear(handle);
+    return true;
+  };
+  const createDeferred = (kind, callback, delay, scope, args) => {
+    let handle;
+    let completed = false;
+    const run = (...callbackArgs) => {
+      if (kind === 'timeout') {
+        completed = true;
+        deferredOperations.delete(handle);
+      }
+      callback(...callbackArgs);
+    };
+    const schedule = kind === 'timeout' ? window.setTimeout : window.setInterval;
+    const clear = kind === 'timeout' ? window.clearTimeout : window.clearInterval;
+    handle = schedule(run, delay, ...args);
+    if (!completed) deferredOperations.set(handle, { kind, scope, clear });
+    return handle;
+  };
+
+  OWP.timers = {
+    setTimeout(callback, delay, scope = 'lifecycle', ...args) {
+      return createDeferred('timeout', callback, delay, scope, args);
+    },
+    setInterval(callback, delay, scope = 'lifecycle', ...args) {
+      return createDeferred('interval', callback, delay, scope, args);
+    },
+    clear: clearDeferred,
+    clearScope(scope) {
+      for (const [handle, operation] of [...deferredOperations]) {
+        if (operation.scope === scope) clearDeferred(handle);
+      }
+    },
+    clearAll() {
+      for (const handle of [...deferredOperations.keys()]) clearDeferred(handle);
+    },
+    count(scope) {
+      if (scope === undefined) return deferredOperations.size;
+      let count = 0;
+      for (const operation of deferredOperations.values()) {
+        if (operation.scope === scope) count++;
+      }
+      return count;
+    }
+  };
+
   // LRU Cache implementation for image URLs
   class LRUCache {
     constructor(maxSize = 50) {
@@ -120,6 +171,8 @@
     lastParticipantCount: 0,
     joiningItemId: '',
     playbackRequestAttempt: 0,
+    autoJoinAttempt: 0,
+    cardPollAttempt: 0,
     mediaSyncAttempt: 0,
     mediaReadyCleanup: null,
     pendingMediaId: '',

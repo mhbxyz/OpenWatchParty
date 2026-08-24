@@ -37,7 +37,7 @@
     let timer = null;
 
     const cleanup = () => {
-      if (timer) clearTimeout(timer);
+      if (timer) OWP.timers.clear(timer);
       timer = null;
       if (watchedVideo) {
         watchedVideo.removeEventListener('canplay', check);
@@ -56,11 +56,11 @@
           timeoutReported = true;
         }
       }
-      timer = setTimeout(check, MEDIA_READY_POLL_MS);
+      timer = OWP.timers.setTimeout(check, MEDIA_READY_POLL_MS, 'media');
     };
 
     function check() {
-      if (timer) clearTimeout(timer);
+      if (timer) OWP.timers.clear(timer);
       timer = null;
       if (attempt !== state.mediaSyncAttempt || !state.inRoom || state.roomId !== roomId) {
         cleanup();

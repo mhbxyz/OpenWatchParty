@@ -19,7 +19,7 @@
 
   const scheduleAt = (serverTs, fn) => {
     if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
+      OWP.timers.clear(state.pendingActionTimer);
       state.pendingActionTimer = null;
     }
     const serverNow = getServerNow();
@@ -29,19 +29,19 @@
       fn();
       return;
     }
-    state.pendingActionTimer = setTimeout(() => {
+    state.pendingActionTimer = OWP.timers.setTimeout(() => {
       state.pendingActionTimer = null;
       fn();
-    }, delay);
+    }, delay, 'room');
   };
 
   const startSyncing = () => {
     state.isSyncing = true;
-    if (syncingTimer) clearTimeout(syncingTimer);
-    syncingTimer = setTimeout(() => {
+    if (syncingTimer) OWP.timers.clear(syncingTimer);
+    syncingTimer = OWP.timers.setTimeout(() => {
       state.isSyncing = false;
       syncingTimer = null;
-    }, SUPPRESS_MS);
+    }, SUPPRESS_MS, 'room');
   };
 
   Object.assign(utils, { nowMs, getServerNow, adjustedPosition, scheduleAt, startSyncing });

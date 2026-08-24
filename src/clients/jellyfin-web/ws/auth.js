@@ -34,15 +34,16 @@
     return { apiClient, accessToken, serverAddress };
   };
 
-  const waitForApiClient = (maxWaitMs = 10000, intervalMs = 250) => {
+  const waitForApiClient = (isCurrent = () => true, maxWaitMs = 10000, intervalMs = 250) => {
     return new Promise((resolve) => {
       let elapsed = 0;
       const check = () => {
+        if (!isCurrent()) return resolve(null);
         const result = getApiAccessToken();
         if (result) return resolve(result);
         elapsed += intervalMs;
         if (elapsed >= maxWaitMs) return resolve(null);
-        setTimeout(check, intervalMs);
+        OWP.timers.setTimeout(check, intervalMs, 'auth');
       };
       check();
     });
@@ -50,14 +51,17 @@
 
   const scheduleTokenRefresh = (expiresInSec) => {
     if (state.tokenRefreshTimer) {
-      clearTimeout(state.tokenRefreshTimer);
+      OWP.timers.clear(state.tokenRefreshTimer);
       state.tokenRefreshTimer = null;
     }
     const refreshBeforeMs = Math.min(5 * 60 * 1000, expiresInSec * 1000 * 0.2);
     const refreshInMs = Math.max(0, (expiresInSec * 1000) - refreshBeforeMs);
     if (refreshInMs > 0) {
       console.log('[OpenWatchParty] Token refresh scheduled in', Math.round(refreshInMs / 1000), 's');
-      state.tokenRefreshTimer = setTimeout(async () => {
+      const authRequestAttempt = state.authRequestAttempt;
+      state.tokenRefreshTimer = OWP.timers.setTimeout(async () => {
+        state.tokenRefreshTimer = null;
+        if (authRequestAttempt !== state.authRequestAttempt) return;
         console.log('[OpenWatchParty] Refreshing auth token...');
         const refreshSocket = state.ws;
         state.authToken = null;
@@ -78,7 +82,7 @@
             state.ws = null;
           }
         }
-      }, refreshInMs);
+      }, refreshInMs, 'auth');
     }
   };
 
@@ -89,7 +93,7 @@
       let apiAccess = getApiAccessToken();
       if (!apiAccess) {
         console.log('[OpenWatchParty] Waiting for ApiClient...');
-        apiAccess = await waitForApiClient();
+        apiAccess = await waitForApiClient(isCurrentRequest);
       }
       if (!isCurrentRequest()) return null;
       if (!apiAccess) {

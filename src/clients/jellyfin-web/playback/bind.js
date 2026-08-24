@@ -98,11 +98,11 @@
     video.addEventListener('pause', listeners.pause);
     video.addEventListener('seeked', listeners.seeked);
     if (state.intervals.stateUpdate) {
-      clearInterval(state.intervals.stateUpdate);
+      OWP.timers.clear(state.intervals.stateUpdate);
     }
-    state.intervals.stateUpdate = setInterval(() => {
+    state.intervals.stateUpdate = OWP.timers.setInterval(() => {
       if (state.isHost) sendStateUpdate(video);
-    }, STATE_UPDATE_MS);
+    }, STATE_UPDATE_MS, 'video');
   };
 
   const cleanupVideoListeners = () => {
@@ -117,7 +117,7 @@
       video.removeEventListener('seeked', listeners.seeked);
     }
     if (state.intervals.stateUpdate) {
-      clearInterval(state.intervals.stateUpdate);
+      OWP.timers.clear(state.intervals.stateUpdate);
       state.intervals.stateUpdate = null;
     }
     state.videoListeners = null;

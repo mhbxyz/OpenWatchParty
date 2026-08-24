@@ -34,11 +34,12 @@
 
   const cleanup = () => {
     const lc = OWP._lifecycle;
-    if (lc) lc.clearAllIntervals();
-    if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
-      state.pendingActionTimer = null;
-    }
+    OWP.timers.clearAll();
+    state.pendingActionTimer = null;
+    state.tokenRefreshTimer = null;
+    state.reconnectTimer = null;
+    state.roomRejoinTimer = null;
+    Object.keys(state.intervals).forEach(key => { state.intervals[key] = null; });
     if (lc) lc.hadVideoElement = false;
     if (OWP.actions?.disconnect) {
       OWP.actions.disconnect();

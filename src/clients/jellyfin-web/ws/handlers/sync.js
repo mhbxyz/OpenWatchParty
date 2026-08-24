@@ -77,7 +77,7 @@
       const video = activeVideo || (fallbackIsUsable ? fallbackVideo : null);
       if (!video) {
         if (utils.nowMs() < retryDeadline) {
-          state.pendingActionTimer = setTimeout(apply, VIDEO_ACTION_RETRY_MS);
+          state.pendingActionTimer = OWP.timers.setTimeout(apply, VIDEO_ACTION_RETRY_MS, 'room');
         }
         return;
       }

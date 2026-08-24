@@ -42,9 +42,9 @@ const makeDirtyRoomState = () => {
     suppressUntil: Date.now() + 1000,
     currentVideoElement: video,
     playbackRequestAttempt: 4,
-    pendingActionTimer: setTimeout(() => {
+    pendingActionTimer: OWP.timers.setTimeout(() => {
       throw new Error('cancelled room action executed');
-    }, 10000)
+    }, 10000, 'room')
   });
   return video;
 };
@@ -80,7 +80,7 @@ describe('room state reset', () => {
   });
 
   afterEach(() => {
-    if (OWP.state.pendingActionTimer) clearTimeout(OWP.state.pendingActionTimer);
+    if (OWP.state.pendingActionTimer) OWP.timers.clear(OWP.state.pendingActionTimer);
     OWP.state.pendingActionTimer = null;
   });
 

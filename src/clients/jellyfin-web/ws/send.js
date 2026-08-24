@@ -24,10 +24,9 @@
   const resetRoomState = () => {
     normalizePlaybackRate();
     if (state.mediaReadyCleanup) state.mediaReadyCleanup();
-    if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
-      state.pendingActionTimer = null;
-    }
+    OWP.timers.clearScope('room');
+    OWP.timers.clearScope('media');
+    state.pendingActionTimer = null;
     Object.assign(state, {
       inRoom: false,
       roomId: '',
@@ -55,6 +54,8 @@
       suppressUntil: 0
     });
     state.playbackRequestAttempt++;
+    state.autoJoinAttempt++;
+    state.cardPollAttempt++;
     state.mediaSyncAttempt++;
     state.playbackActionAttempt++;
     if (OWP.chat) OWP.chat.clear();
