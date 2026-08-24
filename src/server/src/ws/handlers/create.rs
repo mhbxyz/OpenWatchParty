@@ -2,6 +2,7 @@ use super::super::dispatch::{is_authenticated, send_error};
 use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_name};
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
+use crate::room::handle_leave;
 use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -115,6 +116,18 @@ pub(in crate::ws) async fn handle_create_room(
     let payload_ref = parsed.payload.as_ref();
     {
         let mut state = state.write().await;
+        let should_leave_guest_room = state
+            .clients
+            .get(client_id)
+            .and_then(|client| client.room_id.as_ref())
+            .and_then(|room_id| state.rooms.get(room_id))
+            .is_some_and(|room| room.host_id != client_id);
+        if should_leave_guest_room {
+            let crate::types::ServerState { clients, rooms } = &mut *state;
+            if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
+                send_to_senders(&senders, &msg, "previous room leave");
+            }
+        }
         let existing_room_id = state
             .rooms
             .values()
@@ -228,5 +241,51 @@ mod tests {
         let (name, payload_name) = resolve_host_name(Some(&serde_json::json!({})), &clients, "c1");
         assert_eq!(name, "FromClient");
         assert_eq!(payload_name, None);
+    }
+
+    #[tokio::test]
+    async fn guest_creating_room_leaves_previous_room() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        host.room_id = Some("old-room".to_string());
+        guest.room_id = Some("old-room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("old-room", "host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("old-room".to_string(), room);
+        }
+        let parsed = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::CreateRoom,
+            room: None,
+            client: Some("guest".to_string()),
+            payload: Some(serde_json::json!({ "user_name": "Guest" })),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        };
+
+        handle_create_room("guest", &parsed, &state).await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms["old-room"]
+            .clients
+            .contains(&"guest".to_string()));
+        let new_room_id = locked.clients["guest"].room_id.as_ref().unwrap();
+        let new_room = &locked.rooms[new_room_id];
+        assert_eq!(new_room.host_id, "guest");
+        assert_eq!(new_room.clients, vec!["guest".to_string()]);
+        drop(locked);
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            "client_left"
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_state"
+        );
     }
 }
