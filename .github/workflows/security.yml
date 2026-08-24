@@ -62,7 +62,7 @@ jobs:
         run: dotnet restore src/plugins/jellyfin/OpenWatchParty.Tests/OpenWatchParty.Tests.csproj --locked-mode
 
       - name: Audit NuGet dependencies
-        run: dotnet list src/plugins/jellyfin/OpenWatchParty.Tests/OpenWatchParty.Tests.csproj package --vulnerable --include-transitive --no-restore
+        run: dotnet list src/plugins/jellyfin/OpenWatchParty.Tests/OpenWatchParty.Tests.csproj package --vulnerable --include-transitive
 
   bundler-audit:
     name: Bundler Audit
