@@ -151,6 +151,9 @@ jobs:
       - name: Test immutable dependency verifier
         run: infra/scripts/tests/verify-pins.test.sh
 
+      - name: Test checksum and SBOM validation
+        run: infra/scripts/tests/supply-chain.test.sh
+
       - name: Test hostile release metadata
         run: infra/scripts/tests/update-plugin-manifest.test.sh
 

@@ -21,7 +21,18 @@ EXPECTED = {
         "verify-versions": {"contents": "read"},
         "release-security-gate": {"contents": "read"},
         "build-and-push": {"contents": "read", "packages": "write"},
+        "secure-image": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write",
+            "packages": "write",
+        },
         "build-plugin": {"contents": "read"},
+        "secure-plugin": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write",
+        },
         "create-release-assets": {"contents": "write"},
         "update-plugin-manifest": {"contents": "write"},
     },
