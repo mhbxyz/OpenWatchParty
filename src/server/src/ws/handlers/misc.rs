@@ -79,14 +79,23 @@ pub(in crate::ws) async fn handle_ready(
             room.ready_clients.insert(client_id.to_string());
             if room.pending_play.is_some() && all_ready(room) {
                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-                let position = room
-                    .pending_play
+                let pending = room.pending_play.clone();
+                let position = pending
                     .as_ref()
-                    .map(|p| p.position)
+                    .map(|pending| pending.position)
                     .unwrap_or(room.state.position);
+                let event_server_ts = pending
+                    .as_ref()
+                    .map(|pending| pending.position_ts)
+                    .unwrap_or_else(now_ms);
                 room.pending_play = None;
-                let (senders, msg) =
-                    prepare_scheduled_play(room, clients, position, target_server_ts);
+                let (senders, msg) = prepare_scheduled_play(
+                    room,
+                    clients,
+                    position,
+                    event_server_ts,
+                    target_server_ts,
+                );
                 send_to_senders(&senders, &msg, "scheduled play");
             }
             true
@@ -190,6 +199,7 @@ mod tests {
             room.pending_play = Some(crate::types::PendingPlay {
                 position: 10.0,
                 created_at: crate::utils::now_ms(),
+                position_ts: crate::utils::now_ms(),
             });
             state.rooms.insert("room-1".to_string(), room);
         }
@@ -251,6 +261,7 @@ mod tests {
             room.pending_play = Some(crate::types::PendingPlay {
                 position: 10.0,
                 created_at: crate::utils::now_ms(),
+                position_ts: crate::utils::now_ms(),
             });
         }
 

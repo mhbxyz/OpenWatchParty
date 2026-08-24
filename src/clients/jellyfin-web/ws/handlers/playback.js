@@ -4,109 +4,93 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
-  const { SEEK_THRESHOLD } = OWP.constants;
+  const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
-  const handlePlayerPlay = (msg, video) => {
-    state.lastSyncPlayState = 'playing';
-    state.lastSyncServerTs = msg.server_ts;
-    state.lastSyncPosition = msg.payload.position;
-    state.syncCooldownUntil = utils.nowMs() + 2000;
-    const targetTs = msg.payload.target_server_ts || msg.server_ts;
-    if (targetTs && targetTs > utils.getServerNow()) {
-      state.syncStatus = 'pending_play';
-      state.pendingPlayUntil = targetTs;
-      if (ui.updateSyncIndicator) ui.updateSyncIndicator();
-      utils.scheduleAt(targetTs, () => {
-        state.syncStatus = 'syncing';
-        state.pendingPlayUntil = 0;
-        if (ui.updateSyncIndicator) ui.updateSyncIndicator();
-        video.play().catch(() => {});
-      });
-    } else {
-      state.syncStatus = 'syncing';
-      if (ui.updateSyncIndicator) ui.updateSyncIndicator();
-      video.play().catch(() => {});
-    }
-    ui.showToast('Host resumed playback');
+  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null) => {
+    if (typeof position !== 'number' || !Number.isFinite(position)) return;
+    const elapsed = projectPlaying && typeof eventServerTs === 'number'
+      ? Math.max(0, utils.getServerNow() - eventServerTs) / 1000
+      : 0;
+    const target = position + elapsed;
+    if (Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
+    state.lastSyncPosition = target;
+    state.lastSyncServerTs = utils.getServerNow();
   };
 
-  const handlePlayerPause = (msg, video) => {
-    state.lastSyncPlayState = 'paused';
-    state.syncCooldownUntil = 0;
+  const applyPlayerEvent = (msg, fallbackVideo) => {
+    const activeVideo = utils.getVideo();
+    const fallbackIsUsable = fallbackVideo
+      && fallbackVideo.isConnected !== false
+      && (!state.currentVideoElement || state.currentVideoElement === fallbackVideo);
+    const video = activeVideo || (fallbackIsUsable ? fallbackVideo : null);
+    if (!video || !msg.payload) return false;
+    const action = msg.payload.action;
+    const position = msg.payload.position;
+    const hostPlayState = msg.payload.play_state || (action === 'play' ? 'playing' : 'paused');
+    state.pendingPlayUntil = 0;
     state.isInitialSync = false;
     state.initialSyncUntil = 0;
     state.initialSyncTargetPos = 0;
-    state.syncStatus = 'synced';
-    state.pendingPlayUntil = 0;
-    if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
-      state.pendingActionTimer = null;
+
+    switch (action) {
+      case 'play':
+        applyPosition(video, position, true, msg.server_ts);
+        state.lastSyncPlayState = 'playing';
+        state.syncCooldownUntil = utils.nowMs() + 2000;
+        state.syncStatus = 'syncing';
+        video.play().catch(() => {});
+        if (ui.showToast) ui.showToast('Host resumed playback');
+        break;
+      case 'pause':
+        applyPosition(video, position);
+        state.lastSyncPlayState = 'paused';
+        state.syncCooldownUntil = 0;
+        state.syncStatus = 'synced';
+        video.pause();
+        if (ui.showToast) ui.showToast('Host paused playback');
+        break;
+      case 'seek':
+        applyPosition(video, position, hostPlayState === 'playing', msg.server_ts);
+        state.lastSyncPlayState = hostPlayState;
+        state.syncCooldownUntil = utils.nowMs() + 2000;
+        if (hostPlayState === 'playing') {
+          state.syncStatus = 'syncing';
+          video.play().catch(() => {});
+        } else {
+          state.syncStatus = 'synced';
+          video.pause();
+        }
+        break;
+      case 'buffering':
+        applyPosition(video, position);
+        state.lastSyncPlayState = 'paused';
+        state.syncStatus = 'syncing';
+        video.pause();
+        break;
     }
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
-    video.pause();
-    ui.showToast('Host paused playback');
-  };
-
-  const handlePlayerSeek = (msg, video) => {
-    const hostPlayState = msg.payload.play_state || 'paused';
-    state.lastSyncPlayState = hostPlayState;
-    if (hostPlayState === 'playing') {
-      video.currentTime = msg.payload.position + (OWP.constants.SYNC_LEAD_MS / 1000);
-      state.lastSyncServerTs = utils.getServerNow();
-      state.lastSyncPosition = msg.payload.position;
-      state.syncCooldownUntil = utils.nowMs() + 2000;
-      video.play().catch(() => {});
-    }
-  };
-
-  const handlePlayerBuffering = (msg, video) => {
-    state.lastSyncPlayState = 'paused';
-    state.pendingPlayUntil = 0;
-    if (state.pendingActionTimer) {
-      clearTimeout(state.pendingActionTimer);
-      state.pendingActionTimer = null;
-    }
-    if (state.syncStatus === 'pending_play') {
-      state.syncStatus = 'syncing';
-      if (ui.updateSyncIndicator) ui.updateSyncIndicator();
-    }
-    video.pause();
+    return true;
   };
 
   h.handlePlayerEvent = (msg, video) => {
-    if (state.isHost || !video) return;
+    if (state.isHost) return;
     utils.startSyncing();
-    if (msg.payload && typeof msg.payload.position === 'number') {
-      const action = msg.payload.action;
-      const targetPos = (action === 'seek' || action === 'buffering')
-        ? msg.payload.position
-        : utils.adjustedPosition(msg.payload.position, msg.server_ts);
-      const serverNow = utils.getServerNow();
-      const gap = targetPos - video.currentTime;
-      utils.log('CLIENT', {
-        action,
-        msg_pos: msg.payload.position,
-        target_pos: targetPos,
-        video_pos: video.currentTime,
-        gap
-      });
-      if (Math.abs(gap) > SEEK_THRESHOLD) {
-        video.pause();
-        video.currentTime = targetPos;
-        state.lastSyncServerTs = serverNow;
-        state.lastSyncPosition = targetPos;
-      } else {
-        state.lastSyncServerTs = serverNow;
-        state.lastSyncPosition = video.currentTime;
+    if (!msg.payload) return;
+    const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();
+    const roomId = msg.room || state.roomId;
+    const actionAttempt = ++state.playbackActionAttempt;
+    const retryDeadline = utils.nowMs()
+      + Math.max(0, targetTs - utils.getServerNow())
+      + VIDEO_ACTION_MAX_WAIT_MS;
+    state.syncStatus = msg.payload.action === 'play' ? 'pending_play' : 'syncing';
+    state.pendingPlayUntil = targetTs;
+    if (ui.updateSyncIndicator) ui.updateSyncIndicator();
+    const applyScheduledEvent = () => {
+      if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      if (!applyPlayerEvent(msg, video) && utils.nowMs() < retryDeadline) {
+        state.pendingActionTimer = setTimeout(applyScheduledEvent, VIDEO_ACTION_RETRY_MS);
       }
-    }
-    if (msg.payload) {
-      switch (msg.payload.action) {
-        case 'play': handlePlayerPlay(msg, video); break;
-        case 'pause': handlePlayerPause(msg, video); break;
-        case 'seek': handlePlayerSeek(msg, video); break;
-        case 'buffering': handlePlayerBuffering(msg, video); break;
-      }
-    }
+    };
+    utils.scheduleAt(targetTs, applyScheduledEvent);
   };
 })();

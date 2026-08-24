@@ -50,6 +50,7 @@ pub struct PlaybackState {
 pub struct PendingPlay {
     pub position: f64,
     pub created_at: u64,
+    pub position_ts: u64,
 }
 
 /// Incoming message types from clients (type-safe enum for dispatch)

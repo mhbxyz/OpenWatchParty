@@ -4,7 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
-  const { SEEK_THRESHOLD } = OWP.constants;
+  const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
   const applyRoomState = (msg) => {
     state.inRoom = true;
@@ -19,20 +19,20 @@
       state.serverOffsetMs = msg.server_ts - utils.nowMs();
       state.hasTimeSync = true;
     }
-    if (msg.payload && msg.payload.state) {
-      state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
-      state.lastSyncPosition = typeof msg.payload.state.position === 'number'
-        ? msg.payload.state.position
-        : 0;
-      state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
-    }
   };
 
   const syncToRoom = (msg, video) => {
     if (!video || state.isHost || !msg.payload?.state) return;
     const basePos = msg.payload.state.position || 0;
-    const targetPos = utils.adjustedPosition(basePos, msg.server_ts);
     const hostPlaying = msg.payload.state.play_state === 'playing';
+    const stateServerTs = msg.payload.state_server_ts || msg.server_ts || utils.getServerNow();
+    const targetPos = hostPlaying ? utils.adjustedPosition(basePos, stateServerTs) : basePos;
+    state.lastSyncServerTs = stateServerTs;
+    state.lastSyncPosition = basePos;
+    state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
+    state.pendingPlayUntil = 0;
+    state.syncStatus = hostPlaying ? 'syncing' : 'synced';
+    if (ui.updateSyncIndicator) ui.updateSyncIndicator();
     utils.log('CLIENT', {
       type: 'room_state',
       msg_pos: basePos,
@@ -61,6 +61,38 @@
     }
   };
 
+  const scheduleRoomSync = (msg, fallbackVideo) => {
+    const targetServerTs = msg.payload?.target_server_ts;
+    const roomId = msg.room;
+    const actionAttempt = ++state.playbackActionAttempt;
+    const retryDeadline = utils.nowMs()
+      + Math.max(0, (targetServerTs || utils.getServerNow()) - utils.getServerNow())
+      + VIDEO_ACTION_MAX_WAIT_MS;
+    const apply = () => {
+      if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      const activeVideo = utils.getVideo();
+      const fallbackIsUsable = fallbackVideo
+        && fallbackVideo.isConnected !== false
+        && (!state.currentVideoElement || state.currentVideoElement === fallbackVideo);
+      const video = activeVideo || (fallbackIsUsable ? fallbackVideo : null);
+      if (!video) {
+        if (utils.nowMs() < retryDeadline) {
+          state.pendingActionTimer = setTimeout(apply, VIDEO_ACTION_RETRY_MS);
+        }
+        return;
+      }
+      syncToRoom(msg, video);
+    };
+    if (typeof targetServerTs === 'number' && targetServerTs > utils.getServerNow()) {
+      state.syncStatus = msg.payload?.state?.play_state === 'playing' ? 'pending_play' : 'syncing';
+      state.pendingPlayUntil = targetServerTs;
+      if (ui.updateSyncIndicator) ui.updateSyncIndicator();
+      utils.scheduleAt(targetServerTs, apply);
+    } else {
+      apply();
+    }
+  };
+
   h.handleRoomState = (msg, video) => {
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
@@ -76,13 +108,13 @@
         OWP.playback.watchReady({
           roomId: msg.room,
           mediaId: msg.payload.media_id,
-          onReady: readyVideo => syncToRoom(msg, readyVideo)
+          onReady: readyVideo => scheduleRoomSync(msg, readyVideo)
         });
       }
       return;
     }
     state.pendingMediaId = '';
-    syncToRoom(msg, video);
+    scheduleRoomSync(msg, video);
   };
 
   h.handleStateUpdate = (msg, video) => {

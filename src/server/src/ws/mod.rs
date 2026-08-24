@@ -65,6 +65,7 @@ mod concurrency_tests {
             pending_room.pending_play = Some(PendingPlay {
                 position: 12.0,
                 created_at,
+                position_ts: created_at,
             });
             locked
                 .rooms
@@ -168,6 +169,7 @@ mod concurrency_tests {
                 room.pending_play = Some(PendingPlay {
                     position: 12.0,
                     created_at: now_ms(),
+                    position_ts: now_ms(),
                 });
                 locked.rooms.insert("room".to_string(), room);
             }
@@ -276,6 +278,7 @@ mod concurrency_tests {
             room.pending_play = Some(PendingPlay {
                 position: 12.0,
                 created_at,
+                position_ts: created_at,
             });
             locked.rooms.insert("room".to_string(), room);
         }

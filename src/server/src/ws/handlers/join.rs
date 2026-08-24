@@ -37,6 +37,8 @@ fn prepare_join_notifications(
     room: &Room,
     locked_clients: &HashMap<String, Client>,
 ) -> JoinNotifications {
+    let now = now_ms();
+    let target_server_ts = (room.last_command_ts > now).then_some(room.last_command_ts);
     (
         locked_clients.get(client_id).map(|c| c.sender.clone()),
         WsMessage {
@@ -47,6 +49,8 @@ fn prepare_join_notifications(
                 "name": room.name,
                 "host_id": room.host_id,
                 "state": room.state,
+                "state_server_ts": room.last_state_ts,
+                "target_server_ts": target_server_ts,
                 "participant_count": room.clients.len(),
                 "media_id": room.media_id
             })),
@@ -187,6 +191,26 @@ mod tests {
         add_client_to_room("guest-1", &mut room, &mut clients, &payload_name);
 
         assert_eq!(clients.get("guest-1").unwrap().user_name, "NewName");
+    }
+
+    #[test]
+    fn room_state_preserves_future_command_timing() {
+        let mut clients = HashMap::new();
+        let (host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (guest, _guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        clients.insert("host".to_string(), host);
+        clients.insert("guest".to_string(), guest);
+        let now = now_ms();
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("guest".to_string());
+        room.last_state_ts = now;
+        room.last_command_ts = now + 1000;
+
+        let (_, message, _) = prepare_join_notifications("guest", &room, &clients);
+        let payload = message.payload.unwrap();
+
+        assert_eq!(payload["state_server_ts"], serde_json::json!(now));
+        assert_eq!(payload["target_server_ts"], serde_json::json!(now + 1000));
     }
 
     #[tokio::test]

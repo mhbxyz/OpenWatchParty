@@ -56,6 +56,7 @@
     });
     state.playbackRequestAttempt++;
     state.mediaSyncAttempt++;
+    state.playbackActionAttempt++;
     if (OWP.chat) OWP.chat.clear();
   };
 

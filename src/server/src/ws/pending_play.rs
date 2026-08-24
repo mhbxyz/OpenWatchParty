@@ -16,10 +16,13 @@ pub(super) fn prepare_scheduled_play(
     room: &mut Room,
     clients: &HashMap<String, Client>,
     position: f64,
+    event_server_ts: u64,
     target_server_ts: u64,
 ) -> (Vec<ClientSender>, WsMessage) {
     room.state.position = position;
     room.state.play_state = "playing".to_string();
+    room.last_state_ts = event_server_ts;
+    room.last_command_ts = target_server_ts;
     let msg = WsMessage {
         msg_type: "player_event".to_string(),
         room: Some(room.room_id.clone()),
@@ -30,7 +33,7 @@ pub(super) fn prepare_scheduled_play(
             "target_server_ts": target_server_ts
         })),
         ts: now_ms(),
-        server_ts: Some(target_server_ts),
+        server_ts: Some(event_server_ts),
     };
     let senders = collect_room_senders(room, clients, None);
     (senders, msg)
@@ -55,8 +58,13 @@ pub(super) fn schedule_pending_play(
             };
             room.pending_play = None;
             let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-            let (senders, msg) =
-                prepare_scheduled_play(room, clients, pending.position, target_server_ts);
+            let (senders, msg) = prepare_scheduled_play(
+                room,
+                clients,
+                pending.position,
+                pending.position_ts,
+                target_server_ts,
+            );
             send_to_senders(&senders, &msg, "scheduled play");
         }
     })
@@ -99,5 +107,17 @@ mod tests {
         room.ready_clients = HashSet::from(["host".to_string(), "outsider".to_string()]);
 
         assert!(!all_ready(&room));
+    }
+
+    #[test]
+    fn scheduled_play_marks_state_effective_at_target() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let clients = HashMap::new();
+
+        let (_, message) = prepare_scheduled_play(&mut room, &clients, 12.0, 4000, 5000);
+
+        assert_eq!(room.last_state_ts, 4000);
+        assert_eq!(room.last_command_ts, 5000);
+        assert_eq!(message.server_ts, Some(4000));
     }
 }

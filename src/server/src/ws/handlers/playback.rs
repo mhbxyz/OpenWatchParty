@@ -12,11 +12,13 @@ fn handle_play_not_ready(room: &mut Room, position: f64, current_ts: u64) -> Opt
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.position = position;
+        pending.position_ts = current_ts;
         None
     } else {
         room.pending_play = Some(PendingPlay {
             position,
             created_at: current_ts,
+            position_ts: current_ts,
         });
         room.last_state_ts = current_ts;
         Some((room.room_id.clone(), current_ts))
@@ -48,6 +50,7 @@ fn absorb_during_pending(
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.position = position;
+        pending.position_ts = current_ts;
     }
     room.last_state_ts = current_ts;
     true
@@ -68,9 +71,9 @@ fn should_process_state_update(room: &Room, payload: &serde_json::Value, current
     }
 
     let pos_diff = new_pos - room.state.position;
-    let in_command_cooldown =
-        room.last_command_ts > 0 && current_ts - room.last_command_ts < COMMAND_COOLDOWN_MS;
-    let too_frequent = current_ts - room.last_state_ts < MIN_STATE_UPDATE_INTERVAL_MS;
+    let in_command_cooldown = room.last_command_ts > 0
+        && current_ts.saturating_sub(room.last_command_ts) < COMMAND_COOLDOWN_MS;
+    let too_frequent = current_ts.saturating_sub(room.last_state_ts) < MIN_STATE_UPDATE_INTERVAL_MS;
     let small_backward_jitter = (-2.0..-POSITION_JITTER_THRESHOLD).contains(&pos_diff);
     let small_forward_jitter = (0.0..POSITION_JITTER_THRESHOLD).contains(&pos_diff);
 
@@ -108,17 +111,17 @@ fn apply_state_changes(
     room.last_state_ts = current_ts;
 
     if parsed.msg_type == ClientMessageType::PlayerEvent {
-        room.last_command_ts = current_ts;
         let schedule_delay = if action == Some("play") {
             PLAY_SCHEDULE_MS
         } else {
             CONTROL_SCHEDULE_MS
         };
         let target_server_ts = current_ts + schedule_delay;
+        room.last_command_ts = target_server_ts;
         if let Some(payload) = parsed.payload.as_mut() {
             payload["target_server_ts"] = serde_json::json!(target_server_ts);
         }
-        parsed.server_ts = Some(target_server_ts);
+        parsed.server_ts = Some(current_ts);
     } else {
         parsed.server_ts = Some(current_ts);
     }
@@ -264,9 +267,11 @@ mod tests {
     #[test]
     fn absorb_during_pending_state_update() {
         let mut room = test_helpers::create_room("r1", "host");
+        let created_at = now_ms();
         room.pending_play = Some(PendingPlay {
             position: 5.0,
-            created_at: now_ms(),
+            created_at,
+            position_ts: created_at,
         });
         let parsed = IncomingMessage {
             msg_type: ClientMessageType::StateUpdate,
@@ -276,7 +281,9 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        assert!(absorb_during_pending(&mut room, &parsed, None, now_ms()));
+        let update_ts = created_at + 10;
+        assert!(absorb_during_pending(&mut room, &parsed, None, update_ts));
+        assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
     }
 
     #[test]
@@ -285,6 +292,7 @@ mod tests {
         room.pending_play = Some(PendingPlay {
             position: 5.0,
             created_at: now_ms(),
+            position_ts: now_ms(),
         });
         let parsed = IncomingMessage {
             msg_type: ClientMessageType::PlayerEvent,
@@ -329,13 +337,17 @@ mod tests {
     #[test]
     fn handle_play_not_ready_existing_pending() {
         let mut room = test_helpers::create_room("r1", "host");
+        let created_at = now_ms();
         room.pending_play = Some(PendingPlay {
             position: 5.0,
-            created_at: now_ms(),
+            created_at,
+            position_ts: created_at,
         });
-        let result = handle_play_not_ready(&mut room, 15.0, now_ms());
+        let update_ts = created_at + 10;
+        let result = handle_play_not_ready(&mut room, 15.0, update_ts);
         assert!(result.is_none()); // Returns None when pending already exists
         assert!((room.pending_play.as_ref().unwrap().position - 15.0).abs() < f64::EPSILON);
+        assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
     }
 
     #[test]
@@ -370,9 +382,36 @@ mod tests {
         let now = now_ms();
         apply_state_changes(&mut room, &mut parsed, Some("play"), now);
         assert_eq!(room.state.play_state, "playing");
-        assert_eq!(room.last_command_ts, now);
+        assert_eq!(room.last_command_ts, now + PLAY_SCHEDULE_MS);
         // server_ts should be set to target_server_ts
-        assert!(parsed.server_ts.is_some());
-        assert!(parsed.server_ts.unwrap() > now);
+        assert_eq!(parsed.server_ts, Some(now));
+        assert_eq!(
+            parsed.payload.as_ref().unwrap()["target_server_ts"],
+            serde_json::json!(now + PLAY_SCHEDULE_MS)
+        );
+    }
+
+    #[test]
+    fn apply_state_changes_schedules_every_control_action() {
+        for action in ["pause", "seek", "buffering"] {
+            let mut room = test_helpers::create_room("r1", "host");
+            let mut parsed = IncomingMessage {
+                msg_type: ClientMessageType::PlayerEvent,
+                room: Some("r1".to_string()),
+                client: None,
+                payload: Some(serde_json::json!({ "action": action, "position": 10.0 })),
+                ts: 0,
+                server_ts: None,
+            };
+            let now = now_ms();
+
+            apply_state_changes(&mut room, &mut parsed, Some(action), now);
+
+            assert_eq!(parsed.server_ts, Some(now));
+            assert_eq!(
+                parsed.payload.as_ref().unwrap()["target_server_ts"],
+                serde_json::json!(now + CONTROL_SCHEDULE_MS)
+            );
+        }
     }
 }

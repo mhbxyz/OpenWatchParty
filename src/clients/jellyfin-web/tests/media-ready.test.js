@@ -41,6 +41,8 @@ class FakeVideo {
 
 OWP.constants.MEDIA_READY_POLL_MS = 1;
 OWP.constants.MEDIA_READY_TIMEOUT_MS = 50;
+OWP.constants.VIDEO_ACTION_RETRY_MS = 1;
+OWP.constants.VIDEO_ACTION_MAX_WAIT_MS = 30;
 OWP.ui = { render: () => {}, updateSyncIndicator: () => {} };
 OWP.ui.showToast = () => {};
 OWP.utils.getVideo = () => currentVideo;
@@ -60,7 +62,7 @@ OWP.playback.ensurePlayback = (...args) => {
 };
 require('../ws/handlers/sync.js');
 
-const roomState = (room, mediaId, position = 20) => ({
+const roomState = (room, mediaId, position = 20, targetServerTs = null) => ({
   type: 'room_state',
   room,
   client: 'guest',
@@ -70,6 +72,8 @@ const roomState = (room, mediaId, position = 20) => ({
     host_id: 'host',
     participant_count: 2,
     media_id: mediaId,
+    state_server_ts: Date.now(),
+    target_server_ts: targetServerTs,
     state: { position, play_state: 'paused' }
   }
 });
@@ -219,5 +223,40 @@ describe('media-correlated ready state', () => {
 
     assert.equal(sent.length, 0);
     assert.equal(ensureCalls.some(call => call[3] === true), true);
+  });
+
+  it('does not apply a future room state before its target', async () => {
+    currentMediaId = 'new-media';
+    currentVideo = new FakeVideo({ readyState: 2, currentTime: 50 });
+    const target = Date.now() + 20;
+
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media', 10, target), currentVideo);
+
+    assert.equal(currentVideo.currentTime, 50);
+    assert.equal(currentVideo.pauseCalls, 0);
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.equal(currentVideo.currentTime, 10);
+    assert.equal(currentVideo.pauseCalls, 1);
+  });
+
+  it('applies future room state to a replacement appearing after target', async () => {
+    currentMediaId = 'new-media';
+    const originalVideo = new FakeVideo({ readyState: 2, currentTime: 50 });
+    currentVideo = originalVideo;
+    const target = Date.now() + 15;
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media', 10, target), originalVideo);
+
+    setTimeout(() => {
+      originalVideo.isConnected = false;
+      currentVideo = null;
+    }, 5);
+    setTimeout(() => {
+      currentVideo = new FakeVideo({ readyState: 2, currentTime: 30 });
+    }, 20);
+    await new Promise(resolve => setTimeout(resolve, 35));
+
+    assert.equal(originalVideo.currentTime, 50);
+    assert.equal(currentVideo.currentTime, 10);
+    assert.equal(currentVideo.pauseCalls, 1);
   });
 });

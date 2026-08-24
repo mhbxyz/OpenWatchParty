@@ -92,6 +92,8 @@ fn insert_and_notify(
                 "name": room.name,
                 "host_id": room.host_id,
                 "state": room.state,
+                "state_server_ts": room.last_state_ts,
+                "target_server_ts": null,
                 "participant_count": 1,
                 "media_id": room.media_id
             })),

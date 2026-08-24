@@ -70,6 +70,8 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    VIDEO_ACTION_RETRY_MS: 50,
+    VIDEO_ACTION_MAX_WAIT_MS: 2000,
     INITIAL_SYNC_COOLDOWN_MS: 8000, // Cooldown after join to let playback rate catch up (not HARD_SEEK)
     INITIAL_SYNC_MAX_MS: 30000,   // Max time for initial sync before allowing HARD_SEEK
     INITIAL_SYNC_DRIFT_THRESHOLD: 0.5, // Drift threshold to exit initial sync early
@@ -113,6 +115,7 @@
     lastSentPosition: 0,
     hasTimeSync: false,
     pendingActionTimer: null,
+    playbackActionAttempt: 0,
     homeRoomCache: new LRUCache(50),
     lastParticipantCount: 0,
     joiningItemId: '',

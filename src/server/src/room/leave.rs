@@ -121,6 +121,7 @@ mod tests {
         rooms.get_mut("room-1").unwrap().pending_play = Some(PendingPlay {
             position: 10.0,
             created_at: crate::utils::now_ms(),
+            position_ts: 0,
         });
 
         detach_client_from_room("host-1", &mut clients, &mut rooms);
