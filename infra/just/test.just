@@ -50,4 +50,5 @@ release:
     @infra/scripts/tests/verify-versions.test.sh
     @infra/scripts/tests/write-plugin-meta.test.sh
     @infra/scripts/tests/package-plugin.test.sh
+    @infra/scripts/tests/docs-operations.test.sh
     @echo -e "{{GREEN}}✓ Release script tests passed{{RESET}}"

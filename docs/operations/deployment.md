@@ -42,7 +42,7 @@ services:
       - ./config:/config
       - ./cache:/cache
       - /path/to/media:/media:ro
-      - ./plugins/OpenWatchParty.dll:/config/plugins/OpenWatchParty/OpenWatchParty.dll:ro
+      - ./plugins/OpenWatchParty:/config/plugins/OpenWatchParty:ro
     environment:
       - JELLYFIN_PublishedServerUrl=https://jellyfin.example.com
     restart: unless-stopped
@@ -280,7 +280,7 @@ environment:
 
 ```yaml
 volumes:
-  - ./plugins/OpenWatchParty.dll:/config/plugins/OpenWatchParty/OpenWatchParty.dll:ro
+  - ./plugins/OpenWatchParty:/config/plugins/OpenWatchParty:ro
   - /path/to/media:/media:ro
 ```
 
@@ -382,11 +382,17 @@ docker compose pull
 ### 3. Update Plugin
 
 ```bash
-# Download new plugin version
-wget https://github.com/mhbxyz/OpenWatchParty/releases/latest/download/OpenWatchParty.dll
+# Download the canonical plugin package
+archive=/tmp/OpenWatchParty-v0.2.0.zip
+curl -fL \
+  https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.2.0/OpenWatchParty-v0.2.0.zip \
+  -o "$archive"
 
-# Replace plugin
-mv OpenWatchParty.dll ./plugins/OpenWatchParty/
+# Replace the complete plugin package, including its dependencies and metadata
+rm -rf ./plugins/OpenWatchParty
+mkdir -p ./plugins/OpenWatchParty
+unzip "$archive" -d ./plugins/OpenWatchParty
+rm "$archive"
 ```
 
 ### 4. Restart

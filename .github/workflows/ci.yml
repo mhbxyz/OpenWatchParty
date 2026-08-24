@@ -136,6 +136,9 @@ jobs:
       - name: Test plugin packaging validation
         run: infra/scripts/tests/package-plugin.test.sh
 
+      - name: Verify operational documentation commands
+        run: infra/scripts/tests/docs-operations.test.sh
+
       - name: Build and validate plugin package end to end
         run: infra/scripts/package-plugin.sh
 

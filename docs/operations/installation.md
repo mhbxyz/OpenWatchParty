@@ -72,23 +72,31 @@ Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/je
 Use the official image from GitHub Container Registry:
 
 ```bash
+JWT_SECRET="$(openssl rand -base64 32)"
+printf 'Configure this same JWT secret in the OpenWatchParty plugin: %s\n' "$JWT_SECRET"
+
 # Latest stable release
 docker run -d \
   --name owp-session \
   -p 3000:3000 \
   -e ALLOWED_ORIGINS="http://localhost:8096" \
+  -e JWT_SECRET="$JWT_SECRET" \
   ghcr.io/mhbxyz/owp-session-server:latest
 
 # Or use a specific version
 docker run -d \
   --name owp-session \
   -p 3000:3000 \
-  ghcr.io/mhbxyz/owp-session-server:v0.1.0
+  -e ALLOWED_ORIGINS="http://localhost:8096" \
+  -e JWT_SECRET="$JWT_SECRET" \
+  ghcr.io/mhbxyz/owp-session-server:v0.2.0
 
 # Or use the beta (latest from main branch)
 docker run -d \
   --name owp-session \
   -p 3000:3000 \
+  -e ALLOWED_ORIGINS="http://localhost:8096" \
+  -e JWT_SECRET="$JWT_SECRET" \
   ghcr.io/mhbxyz/owp-session-server:beta
 ```
 
@@ -96,13 +104,18 @@ docker run -d \
 
 ```bash
 # Build the image
-docker build -t owp-session-server ./src/server
+docker build --build-arg BUILD_MODE=release \
+  -f infra/docker/server.Dockerfile \
+  -t owp-session-server ./src/server
 
 # Run the container
+JWT_SECRET="$(openssl rand -base64 32)"
+printf 'Configure this same JWT secret in the OpenWatchParty plugin: %s\n' "$JWT_SECRET"
 docker run -d \
   --name owp-session \
   -p 3000:3000 \
   -e ALLOWED_ORIGINS="http://localhost:8096" \
+  -e JWT_SECRET="$JWT_SECRET" \
   owp-session-server
 ```
 
@@ -139,8 +152,13 @@ This method provides automatic update notifications when new versions are releas
 
 1. **Download the Plugin**
 
-   Get the latest release from the [releases page](https://github.com/mhbxyz/OpenWatchParty/releases):
-   - `OpenWatchParty-vX.Y.Z.zip`
+   Download the canonical plugin archive from the [releases page](https://github.com/mhbxyz/OpenWatchParty/releases):
+
+   ```bash
+   curl -fLO https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.2.0/OpenWatchParty-v0.2.0.zip
+   ```
+
+   The archive contains the canonical `OpenWatchPartyPlugin.dll` assembly, its dependencies, and `meta.json`.
 
 2. **Install to Jellyfin**
 
@@ -148,11 +166,11 @@ This method provides automatic update notifications when new versions are releas
 
    ```bash
    # Linux (Docker)
-   unzip OpenWatchParty-v0.1.0.zip -d /tmp/owp
+   unzip OpenWatchParty-v0.2.0.zip -d /tmp/owp
    docker cp /tmp/owp/. jellyfin:/config/plugins/OpenWatchParty/
 
    # Linux (native)
-   sudo unzip OpenWatchParty-v0.1.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
+   sudo unzip OpenWatchParty-v0.2.0.zip -d /var/lib/jellyfin/plugins/OpenWatchParty/
 
    # Windows
    # Extract to: C:\ProgramData\Jellyfin\Server\plugins\OpenWatchParty\
