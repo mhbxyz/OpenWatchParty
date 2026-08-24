@@ -9,22 +9,27 @@ use crate::types::{ClientMessageType, IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{debug, warn};
 use std::sync::Arc;
+use std::time::Duration;
+use tokio::time::Instant;
+
+fn update_rate_limit(client: &mut crate::types::Client, now: Instant) -> bool {
+    use super::constants::{RATE_LIMIT_MESSAGES, RATE_LIMIT_WINDOW_MS};
+
+    client.last_seen = now;
+    if crate::utils::elapsed_saturating(now, client.last_reset)
+        > Duration::from_millis(RATE_LIMIT_WINDOW_MS)
+    {
+        client.message_count = 0;
+        client.last_reset = now;
+    }
+    client.message_count += 1;
+    client.message_count > RATE_LIMIT_MESSAGES
+}
 
 pub(super) async fn check_rate_limit(client_id: &str, state: &SharedState) -> bool {
-    use super::constants::RATE_LIMIT_MESSAGES;
-    use super::constants::RATE_LIMIT_WINDOW_MS;
     let mut state = state.write().await;
     if let Some(client) = state.clients.get_mut(client_id) {
-        let now = now_ms();
-        client.last_seen = now;
-        if now - client.last_reset > RATE_LIMIT_WINDOW_MS {
-            client.message_count = 0;
-            client.last_reset = now;
-        }
-        client.message_count += 1;
-        if client.message_count > RATE_LIMIT_MESSAGES {
-            return true;
-        }
+        return update_rate_limit(client, Instant::now());
     }
     false
 }
@@ -195,6 +200,23 @@ mod tests {
         // Next message should be rate limited
         let limited = check_rate_limit("c1", &state).await;
         assert!(limited);
+    }
+
+    #[test]
+    fn rate_window_uses_monotonic_progress_when_wall_clock_recedes() {
+        let (mut client, _rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        let start = Instant::now();
+        client.last_reset = start;
+        client.message_count = super::super::constants::RATE_LIMIT_MESSAGES;
+        let wall_before = 10_000_u64;
+        let wall_after = 9_000_u64;
+
+        assert!(wall_after < wall_before);
+        assert!(!update_rate_limit(
+            &mut client,
+            start + Duration::from_millis(super::super::constants::RATE_LIMIT_WINDOW_MS + 1)
+        ));
+        assert_eq!(client.message_count, 1);
     }
 
     #[tokio::test]

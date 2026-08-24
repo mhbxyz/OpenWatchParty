@@ -26,7 +26,7 @@ fn register_client(
     client_sender: ClientSender,
     jwt_config: &Arc<JwtConfig>,
 ) -> crate::types::Client {
-    let now = now_ms();
+    let now = Instant::now();
     let authenticated = !jwt_config.enabled;
     let (user_id, user_name) = if authenticated {
         ("anonymous".to_string(), "Anonymous".to_string())

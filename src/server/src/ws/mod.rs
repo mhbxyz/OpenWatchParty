@@ -65,7 +65,7 @@ mod concurrency_tests {
             pending_room.ready_clients.clear();
             pending_room.pending_play = Some(PendingPlay {
                 position: 12.0,
-                created_at,
+                generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,
             });
             locked
@@ -73,18 +73,18 @@ mod concurrency_tests {
                 .insert("pending-room".to_string(), pending_room);
         }
 
-        let created_at = {
+        let generation = {
             let locked = state.read().await;
             locked.rooms["pending-room"]
                 .pending_play
                 .as_ref()
                 .unwrap()
-                .created_at
+                .generation
         };
         let tasks = crate::tasks::AppTasks::new();
         let pending = schedule_pending_play(
             "pending-room".to_string(),
-            created_at,
+            generation,
             state.clone(),
             &tasks,
         );
@@ -175,7 +175,7 @@ mod concurrency_tests {
                 room.ready_clients.insert("host".to_string());
                 room.pending_play = Some(PendingPlay {
                     position: 12.0,
-                    created_at: now_ms(),
+                    generation: crate::types::next_pending_play_generation(),
                     position_ts: now_ms(),
                 });
                 locked.rooms.insert("room".to_string(), room);
@@ -276,7 +276,7 @@ mod concurrency_tests {
         host.room_id = Some("room".to_string());
         guest.room_id = Some("room".to_string());
         let created_at = now_ms();
-        {
+        let generation = {
             let mut locked = state.write().await;
             locked.clients.insert("host".to_string(), host);
             locked.clients.insert("guest".to_string(), guest);
@@ -284,14 +284,16 @@ mod concurrency_tests {
             room.clients = vec!["host".to_string(), "guest".to_string()];
             room.pending_play = Some(PendingPlay {
                 position: 12.0,
-                created_at,
+                generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,
             });
+            let generation = room.pending_play.as_ref().unwrap().generation;
             locked.rooms.insert("room".to_string(), room);
-        }
+            generation
+        };
 
         let tasks = crate::tasks::AppTasks::new();
-        let timer = schedule_pending_play("room".to_string(), created_at, state.clone(), &tasks);
+        let timer = schedule_pending_play("room".to_string(), generation, state.clone(), &tasks);
         let pause = IncomingMessage {
             msg_type: ClientMessageType::PlayerEvent,
             room: Some("room".to_string()),

@@ -185,8 +185,11 @@ mod tests {
                     position: 0.0,
                     play_state: "paused".to_string(),
                 },
-                last_state_ts: 0,
-                last_command_ts: 0,
+                state_server_ts: 0,
+                target_server_ts: None,
+                target_at: None,
+                last_state_at: None,
+                command_cooldown_until: None,
             },
         );
         rooms.insert(
@@ -203,8 +206,11 @@ mod tests {
                     position: 10.0,
                     play_state: "playing".to_string(),
                 },
-                last_state_ts: 0,
-                last_command_ts: 0,
+                state_server_ts: 0,
+                target_server_ts: None,
+                target_at: None,
+                last_state_at: None,
+                command_cooldown_until: None,
             },
         );
         let msg = build_room_list_msg(&rooms);

@@ -1,5 +1,4 @@
 use crate::types::SharedState;
-use crate::utils::now_ms;
 use log::{info, warn};
 use std::collections::HashMap;
 use std::future::Future;
@@ -8,12 +7,17 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::task::{AbortHandle, JoinHandle};
+use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 const ZOMBIE_CHECK_INTERVAL_SECS: u64 = 30;
-const ZOMBIE_TIMEOUT_MS: u64 = 60_000;
+const ZOMBIE_TIMEOUT: Duration = Duration::from_secs(60);
 pub const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(5);
+
+fn is_zombie(client: &crate::types::Client, now: Instant) -> bool {
+    crate::utils::elapsed_saturating(now, client.last_seen) > ZOMBIE_TIMEOUT
+}
 
 #[derive(Clone)]
 pub struct AppTasks {
@@ -113,7 +117,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
             if cancellation.is_cancelled() {
                 break;
             }
-            let now = now_ms();
+            let now = Instant::now();
             let zombies: Vec<String> = {
                 let locked_state = state.read().await;
                 if cancellation.is_cancelled() {
@@ -122,7 +126,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
                 locked_state
                     .clients
                     .iter()
-                    .filter(|(_, c)| now - c.last_seen > ZOMBIE_TIMEOUT_MS)
+                    .filter(|(_, client)| is_zombie(client, now))
                     .map(|(id, _)| id.clone())
                     .collect()
             };
@@ -190,6 +194,22 @@ mod tests {
         assert_eq!(shutdown_app_tasks(&tasks, Duration::from_secs(1)).await, 0);
         cleanup.await.unwrap();
         assert_eq!(tasks.active_count(), 0);
+    }
+
+    #[test]
+    fn zombie_detection_uses_saturating_monotonic_elapsed_time() {
+        let (mut client, _rx) = crate::test_helpers::create_client_with_rx("u1", "User", true);
+        let start = Instant::now();
+        client.last_seen = start;
+        let wall_before = 10_000_u64;
+        let wall_after = 9_000_u64;
+
+        assert!(wall_after < wall_before);
+        assert!(!is_zombie(&client, start - Duration::from_secs(1)));
+        assert!(is_zombie(
+            &client,
+            start + ZOMBIE_TIMEOUT + Duration::from_millis(1)
+        ));
     }
 
     #[tokio::test]

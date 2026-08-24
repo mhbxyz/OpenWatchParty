@@ -1,4 +1,5 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::time::Instant;
 
 /// Returns the current time in milliseconds since UNIX epoch.
 /// Uses saturating arithmetic to handle clock drift gracefully (fixes L01).
@@ -7,6 +8,11 @@ pub fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default() // Returns Duration::ZERO if clock went backwards
         .as_millis() as u64
+}
+
+/// Returns monotonic elapsed time without panicking if a supplied instant is in the future.
+pub fn elapsed_saturating(now: Instant, earlier: Instant) -> Duration {
+    now.checked_duration_since(earlier).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -23,9 +29,10 @@ mod tests {
     }
 
     #[test]
-    fn test_now_ms_monotonic() {
-        let ts1 = now_ms();
-        let ts2 = now_ms();
-        assert!(ts2 >= ts1, "Timestamps should be monotonically increasing");
+    fn elapsed_saturates_when_instants_are_reversed() {
+        let now = Instant::now();
+        let future = now + Duration::from_secs(1);
+        assert_eq!(elapsed_saturating(now, future), Duration::ZERO);
+        assert_eq!(elapsed_saturating(future, now), Duration::from_secs(1));
     }
 }

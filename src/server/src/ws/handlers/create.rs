@@ -7,6 +7,7 @@ use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage}
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashSet;
+use tokio::time::Instant;
 
 fn resolve_host_name(
     payload: Option<&serde_json::Value>,
@@ -50,6 +51,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         room_name, room_id, client_id
     );
 
+    let state_server_ts = now_ms();
     Room {
         room_id,
         name: room_name,
@@ -62,8 +64,11 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
             position: start_pos,
             play_state: "paused".to_string(),
         },
-        last_state_ts: now_ms(),
-        last_command_ts: 0,
+        state_server_ts,
+        target_server_ts: None,
+        target_at: None,
+        last_state_at: Some(Instant::now()),
+        command_cooldown_until: None,
     }
 }
 
@@ -92,7 +97,7 @@ fn insert_and_notify(
                 "name": room.name,
                 "host_id": room.host_id,
                 "state": room.state,
-                "state_server_ts": room.last_state_ts,
+                "state_server_ts": room.state_server_ts,
                 "target_server_ts": null,
                 "participant_count": 1,
                 "media_id": room.media_id

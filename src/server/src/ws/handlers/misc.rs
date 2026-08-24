@@ -198,7 +198,7 @@ mod tests {
             room.ready_clients.insert("host".to_string());
             room.pending_play = Some(crate::types::PendingPlay {
                 position: 10.0,
-                created_at: crate::utils::now_ms(),
+                generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),
             });
             state.rooms.insert("room-1".to_string(), room);
@@ -260,7 +260,7 @@ mod tests {
             room.ready_clients.insert("outsider-b".to_string());
             room.pending_play = Some(crate::types::PendingPlay {
                 position: 10.0,
-                created_at: crate::utils::now_ms(),
+                generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),
             });
         }

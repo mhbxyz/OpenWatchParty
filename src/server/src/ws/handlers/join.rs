@@ -7,6 +7,7 @@ use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
+use tokio::time::Instant;
 
 type JoinNotifications = (
     Option<ClientSender>,
@@ -37,8 +38,20 @@ fn prepare_join_notifications(
     room: &Room,
     locked_clients: &HashMap<String, Client>,
 ) -> JoinNotifications {
-    let now = now_ms();
-    let target_server_ts = (room.last_command_ts > now).then_some(room.last_command_ts);
+    prepare_join_notifications_at(client_id, room, locked_clients, Instant::now(), now_ms())
+}
+
+fn prepare_join_notifications_at(
+    client_id: &str,
+    room: &Room,
+    locked_clients: &HashMap<String, Client>,
+    now: Instant,
+    wall_now_ms: u64,
+) -> JoinNotifications {
+    let target_server_ts = match (room.target_at, room.target_server_ts) {
+        (Some(deadline), Some(target)) if now < deadline && wall_now_ms < target => Some(target),
+        _ => None,
+    };
     (
         locked_clients.get(client_id).map(|c| c.sender.clone()),
         WsMessage {
@@ -49,7 +62,7 @@ fn prepare_join_notifications(
                 "name": room.name,
                 "host_id": room.host_id,
                 "state": room.state,
-                "state_server_ts": room.last_state_ts,
+                "state_server_ts": room.state_server_ts,
                 "target_server_ts": target_server_ts,
                 "participant_count": room.clients.len(),
                 "media_id": room.media_id
@@ -203,14 +216,60 @@ mod tests {
         let now = now_ms();
         let mut room = test_helpers::create_room("room", "host");
         room.clients.push("guest".to_string());
-        room.last_state_ts = now;
-        room.last_command_ts = now + 1000;
+        room.state_server_ts = now;
+        room.target_server_ts = Some(now + 1000);
+        room.target_at = Some(Instant::now() + std::time::Duration::from_secs(1));
 
         let (_, message, _) = prepare_join_notifications("guest", &room, &clients);
         let payload = message.payload.unwrap();
 
         assert_eq!(payload["state_server_ts"], serde_json::json!(now));
         assert_eq!(payload["target_server_ts"], serde_json::json!(now + 1000));
+    }
+
+    #[test]
+    fn expired_target_is_not_revived_by_wall_clock_rollback() {
+        let mut clients = HashMap::new();
+        let (guest, _guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        clients.insert("guest".to_string(), guest);
+        let start = Instant::now();
+        let mut room = test_helpers::create_room("room", "host");
+        room.state_server_ts = 10_000;
+        room.target_server_ts = Some(11_000);
+        room.target_at = Some(start + std::time::Duration::from_secs(1));
+
+        let (_, message, _) = prepare_join_notifications_at(
+            "guest",
+            &room,
+            &clients,
+            start + std::time::Duration::from_secs(2),
+            0,
+        );
+        let payload = message.payload.unwrap();
+
+        assert_eq!(payload["state_server_ts"], serde_json::json!(10_000));
+        assert!(payload["target_server_ts"].is_null());
+    }
+
+    #[test]
+    fn wall_clock_jump_expires_target_even_if_monotonic_deadline_is_future() {
+        let mut clients = HashMap::new();
+        let (guest, _guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        clients.insert("guest".to_string(), guest);
+        let start = Instant::now();
+        let mut room = test_helpers::create_room("room", "host");
+        room.target_server_ts = Some(11_000);
+        room.target_at = Some(start + std::time::Duration::from_secs(1));
+
+        let (_, message, _) = prepare_join_notifications_at(
+            "guest",
+            &room,
+            &clients,
+            start + std::time::Duration::from_millis(500),
+            12_000,
+        );
+
+        assert!(message.payload.unwrap()["target_server_ts"].is_null());
     }
 
     #[tokio::test]

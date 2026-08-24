@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::time::Instant;
 
 pub type SharedState = Arc<RwLock<ServerState>>;
 
@@ -23,8 +24,8 @@ pub struct Client {
     pub session_expires_at: Option<u64>,
     pub authentication_version: u64,
     pub message_count: u32,
-    pub last_reset: u64,
-    pub last_seen: u64, // For zombie connection detection
+    pub last_reset: Instant,
+    pub last_seen: Instant, // For zombie connection detection
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -38,9 +39,15 @@ pub struct Room {
     pub pending_play: Option<PendingPlay>,
     pub state: PlaybackState,
     #[serde(skip)]
-    pub last_state_ts: u64,
+    pub state_server_ts: u64,
     #[serde(skip)]
-    pub last_command_ts: u64,
+    pub target_server_ts: Option<u64>,
+    #[serde(skip)]
+    pub target_at: Option<Instant>,
+    #[serde(skip)]
+    pub last_state_at: Option<Instant>,
+    #[serde(skip)]
+    pub command_cooldown_until: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,8 +59,16 @@ pub struct PlaybackState {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PendingPlay {
     pub position: f64,
-    pub created_at: u64,
+    #[serde(skip)]
+    pub generation: u64,
     pub position_ts: u64,
+}
+
+pub(crate) fn next_pending_play_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+    NEXT_GENERATION.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Incoming message types from clients (type-safe enum for dispatch)
@@ -203,5 +218,25 @@ mod tests {
         let json = serde_json::to_string(&state).unwrap();
         assert!(json.contains("123.45"));
         assert!(json.contains("playing"));
+    }
+
+    #[test]
+    fn room_serialization_skips_internal_timing_and_pending_identity() {
+        let mut room = crate::test_helpers::create_room("r1", "host");
+        room.pending_play = Some(PendingPlay {
+            position: 12.0,
+            generation: next_pending_play_generation(),
+            position_ts: 1_700_000_000_000,
+        });
+
+        let json = serde_json::to_value(room).unwrap();
+
+        assert!(json.get("state_server_ts").is_none());
+        assert!(json.get("target_server_ts").is_none());
+        assert!(json.get("target_at").is_none());
+        assert!(json.get("last_state_at").is_none());
+        assert!(json.get("command_cooldown_until").is_none());
+        assert!(json["pending_play"].get("generation").is_none());
+        assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }
 }

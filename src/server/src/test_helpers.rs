@@ -16,7 +16,7 @@ pub fn create_client_with_rx(
     mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
 ) {
     let (sender, rx, _disconnect) = crate::messaging::ClientSender::channel(100);
-    let now = crate::utils::now_ms();
+    let now = tokio::time::Instant::now();
     let client = Client {
         sender,
         room_id: None,
@@ -45,8 +45,11 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
             position: 0.0,
             play_state: "paused".to_string(),
         },
-        last_state_ts: 0,
-        last_command_ts: 0,
+        state_server_ts: 0,
+        target_server_ts: None,
+        target_at: None,
+        last_state_at: None,
+        command_cooldown_until: None,
     }
 }
 

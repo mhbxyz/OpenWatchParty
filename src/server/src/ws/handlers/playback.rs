@@ -8,6 +8,8 @@ use crate::messaging::{collect_room_senders, send_to_senders};
 use crate::types::{ClientMessageType, IncomingMessage, PendingPlay, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use tokio::time::Instant;
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -105,7 +107,12 @@ impl PlaybackMessage {
     }
 }
 
-fn handle_play_not_ready(room: &mut Room, position: f64, current_ts: u64) -> Option<(String, u64)> {
+fn handle_play_not_ready(
+    room: &mut Room,
+    position: f64,
+    current_ts: u64,
+    now: Instant,
+) -> Option<(String, u64)> {
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.position = position;
@@ -114,15 +121,24 @@ fn handle_play_not_ready(room: &mut Room, position: f64, current_ts: u64) -> Opt
     } else {
         room.pending_play = Some(PendingPlay {
             position,
-            created_at: current_ts,
+            generation: crate::types::next_pending_play_generation(),
             position_ts: current_ts,
         });
-        room.last_state_ts = current_ts;
-        Some((room.room_id.clone(), current_ts))
+        room.state_server_ts = current_ts;
+        room.last_state_at = Some(now);
+        Some((
+            room.room_id.clone(),
+            room.pending_play.as_ref().unwrap().generation,
+        ))
     }
 }
 
-fn absorb_during_pending(room: &mut Room, message: &PlaybackMessage, current_ts: u64) -> bool {
+fn absorb_during_pending(
+    room: &mut Room,
+    message: &PlaybackMessage,
+    current_ts: u64,
+    now: Instant,
+) -> bool {
     if room.pending_play.is_none() {
         return false;
     }
@@ -136,11 +152,12 @@ fn absorb_during_pending(room: &mut Room, message: &PlaybackMessage, current_ts:
         pending.position = position;
         pending.position_ts = current_ts;
     }
-    room.last_state_ts = current_ts;
+    room.state_server_ts = current_ts;
+    room.last_state_at = Some(now);
     true
 }
 
-fn should_process_state_update(room: &Room, payload: &StateUpdatePayload, current_ts: u64) -> bool {
+fn should_process_state_update(room: &Room, payload: &StateUpdatePayload, now: Instant) -> bool {
     let new_pos = payload.position;
     let new_play_state = payload.play_state.as_str();
 
@@ -149,9 +166,13 @@ fn should_process_state_update(room: &Room, payload: &StateUpdatePayload, curren
     }
 
     let pos_diff = new_pos - room.state.position;
-    let in_command_cooldown = room.last_command_ts > 0
-        && current_ts.saturating_sub(room.last_command_ts) < COMMAND_COOLDOWN_MS;
-    let too_frequent = current_ts.saturating_sub(room.last_state_ts) < MIN_STATE_UPDATE_INTERVAL_MS;
+    let in_command_cooldown = room
+        .command_cooldown_until
+        .is_some_and(|deadline| now < deadline);
+    let too_frequent = room.last_state_at.is_some_and(|last_state_at| {
+        crate::utils::elapsed_saturating(now, last_state_at)
+            < Duration::from_millis(MIN_STATE_UPDATE_INTERVAL_MS)
+    });
     let small_backward_jitter = (-2.0..-POSITION_JITTER_THRESHOLD).contains(&pos_diff);
     let small_forward_jitter = (0.0..POSITION_JITTER_THRESHOLD).contains(&pos_diff);
 
@@ -163,6 +184,7 @@ fn apply_state_changes(
     message: &PlaybackMessage,
     client_id: &str,
     current_ts: u64,
+    now: Instant,
 ) -> WsMessage {
     if let Some(position) = message.position() {
         room.state.position = position;
@@ -184,7 +206,10 @@ fn apply_state_changes(
                 CONTROL_SCHEDULE_MS
             };
             let target_server_ts = current_ts + schedule_delay;
-            room.last_command_ts = target_server_ts;
+            room.target_server_ts = Some(target_server_ts);
+            room.target_at = now.checked_add(Duration::from_millis(schedule_delay));
+            room.command_cooldown_until =
+                now.checked_add(Duration::from_millis(schedule_delay + COMMAND_COOLDOWN_MS));
             let canonical_payload = PlayerEventPayload {
                 action: payload.action,
                 position: Some(room.state.position),
@@ -203,7 +228,8 @@ fn apply_state_changes(
             )
         }
     };
-    room.last_state_ts = current_ts;
+    room.state_server_ts = current_ts;
+    room.last_state_at = Some(now);
 
     WsMessage {
         msg_type: msg_type.to_string(),
@@ -241,6 +267,7 @@ pub(in crate::ws) async fn handle_playback(
         }
 
         let current_ts = now_ms();
+        let now = Instant::now();
         let action = message.action();
 
         if action == Some(PlaybackAction::Pause) {
@@ -249,18 +276,18 @@ pub(in crate::ws) async fn handle_playback(
 
         let broadcast_data = if action == Some(PlaybackAction::Play) && !all_ready(room) {
             let position = message.position().unwrap_or(room.state.position);
-            pending_schedule = handle_play_not_ready(room, position, current_ts);
+            pending_schedule = handle_play_not_ready(room, position, current_ts, now);
             None
-        } else if absorb_during_pending(room, &message, current_ts) {
+        } else if absorb_during_pending(room, &message, current_ts, now) {
             None
         } else {
             if let PlaybackMessage::StateUpdate(payload) = &message {
-                if !should_process_state_update(room, payload, current_ts) {
+                if !should_process_state_update(room, payload, now) {
                     return;
                 }
             }
 
-            let outgoing = apply_state_changes(room, &message, client_id, current_ts);
+            let outgoing = apply_state_changes(room, &message, client_id, current_ts, now);
             let senders = collect_room_senders(room, clients, Some(client_id));
             Some((senders, outgoing))
         };
@@ -269,10 +296,10 @@ pub(in crate::ws) async fn handle_playback(
             send_to_senders(&senders, &outgoing, "playback");
         }
     }
-    if let Some((room_id, created_at)) = pending_schedule {
+    if let Some((room_id, generation)) = pending_schedule {
         std::mem::drop(schedule_pending_play(
             room_id,
-            created_at,
+            generation,
             state.clone(),
             tasks,
         ));
@@ -333,45 +360,87 @@ mod tests {
             position: 0.0,
             play_state: PlayState::Playing,
         };
-        assert!(should_process_state_update(&room, &payload, now_ms()));
+        assert!(should_process_state_update(&room, &payload, Instant::now()));
     }
 
     #[test]
     fn should_process_state_update_during_cooldown() {
         let mut room = test_helpers::create_room("r1", "host");
-        let now = now_ms();
-        room.last_command_ts = now; // Just issued a command
-        room.last_state_ts = now;
+        let now = Instant::now();
+        room.command_cooldown_until = Some(now + Duration::from_millis(COMMAND_COOLDOWN_MS));
+        room.last_state_at = Some(now);
         let payload = StateUpdatePayload {
             position: 0.1,
             play_state: PlayState::Paused,
         };
-        assert!(!should_process_state_update(&room, &payload, now + 100));
+        assert!(!should_process_state_update(
+            &room,
+            &payload,
+            now + Duration::from_millis(100)
+        ));
+    }
+
+    #[test]
+    fn cooldown_and_interval_ignore_wall_clock_rollback() {
+        let mut room = test_helpers::create_room("r1", "host");
+        room.state.position = 10.0;
+        let start = Instant::now();
+        room.last_state_at = Some(start);
+        room.command_cooldown_until = Some(start + Duration::from_millis(COMMAND_COOLDOWN_MS));
+        let payload = StateUpdatePayload {
+            position: 15.0,
+            play_state: PlayState::Paused,
+        };
+        let wall_before = 10_000_u64;
+        let wall_after = 9_000_u64;
+
+        assert!(wall_after < wall_before);
+        assert!(!should_process_state_update(
+            &room,
+            &payload,
+            start + Duration::from_millis(MIN_STATE_UPDATE_INTERVAL_MS + 1)
+        ));
+        let after_cooldown = start + Duration::from_millis(COMMAND_COOLDOWN_MS + 1);
+        assert!(should_process_state_update(&room, &payload, after_cooldown));
+
+        let outgoing = apply_state_changes(
+            &mut room,
+            &state_update(15.0, PlayState::Paused),
+            "host",
+            wall_after,
+            after_cooldown,
+        );
+        assert_eq!(outgoing.server_ts, Some(wall_after));
+        assert_eq!(room.state_server_ts, wall_after);
     }
 
     #[test]
     fn should_process_state_update_jitter() {
         let mut room = test_helpers::create_room("r1", "host");
         room.state.position = 10.0;
-        room.last_state_ts = 0;
+        room.last_state_at = None;
         let payload = StateUpdatePayload {
             position: 10.2,
             play_state: PlayState::Paused,
         };
         // 0.2 < POSITION_JITTER_THRESHOLD (0.5), should be filtered
-        assert!(!should_process_state_update(&room, &payload, now_ms()));
+        assert!(!should_process_state_update(
+            &room,
+            &payload,
+            Instant::now()
+        ));
     }
 
     #[test]
     fn should_process_state_update_significant_move() {
         let mut room = test_helpers::create_room("r1", "host");
         room.state.position = 10.0;
-        room.last_state_ts = 0;
+        room.last_state_at = None;
         let payload = StateUpdatePayload {
             position: 15.0,
             play_state: PlayState::Paused,
         };
-        assert!(should_process_state_update(&room, &payload, now_ms()));
+        assert!(should_process_state_update(&room, &payload, Instant::now()));
     }
 
     #[test]
@@ -380,12 +449,17 @@ mod tests {
         let created_at = now_ms();
         room.pending_play = Some(PendingPlay {
             position: 5.0,
-            created_at,
+            generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
         });
         let message = state_update(6.0, PlayState::Paused);
         let update_ts = created_at + 10;
-        assert!(absorb_during_pending(&mut room, &message, update_ts));
+        assert!(absorb_during_pending(
+            &mut room,
+            &message,
+            update_ts,
+            Instant::now()
+        ));
         assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
     }
 
@@ -394,7 +468,7 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         room.pending_play = Some(PendingPlay {
             position: 5.0,
-            created_at: now_ms(),
+            generation: crate::types::next_pending_play_generation(),
             position_ts: now_ms(),
         });
         let message = PlaybackMessage::PlayerEvent(PlayerEventPayload {
@@ -402,21 +476,31 @@ mod tests {
             position: None,
             play_state: None,
         });
-        assert!(!absorb_during_pending(&mut room, &message, now_ms()));
+        assert!(!absorb_during_pending(
+            &mut room,
+            &message,
+            now_ms(),
+            Instant::now()
+        ));
     }
 
     #[test]
     fn absorb_no_pending() {
         let mut room = test_helpers::create_room("r1", "host");
         let message = state_update(6.0, PlayState::Paused);
-        assert!(!absorb_during_pending(&mut room, &message, now_ms()));
+        assert!(!absorb_during_pending(
+            &mut room,
+            &message,
+            now_ms(),
+            Instant::now()
+        ));
     }
 
     #[test]
     fn handle_play_not_ready_creates_pending() {
         let mut room = test_helpers::create_room("r1", "host");
         assert!(room.pending_play.is_none());
-        let result = handle_play_not_ready(&mut room, 10.0, now_ms());
+        let result = handle_play_not_ready(&mut room, 10.0, now_ms(), Instant::now());
         assert!(result.is_some());
         assert!(room.pending_play.is_some());
         assert!((room.pending_play.as_ref().unwrap().position - 10.0).abs() < f64::EPSILON);
@@ -428,11 +512,11 @@ mod tests {
         let created_at = now_ms();
         room.pending_play = Some(PendingPlay {
             position: 5.0,
-            created_at,
+            generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
         });
         let update_ts = created_at + 10;
-        let result = handle_play_not_ready(&mut room, 15.0, update_ts);
+        let result = handle_play_not_ready(&mut room, 15.0, update_ts, Instant::now());
         assert!(result.is_none()); // Returns None when pending already exists
         assert!((room.pending_play.as_ref().unwrap().position - 15.0).abs() < f64::EPSILON);
         assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
@@ -443,10 +527,10 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         let message = state_update(42.0, PlayState::Playing);
         let now = now_ms();
-        let outgoing = apply_state_changes(&mut room, &message, "host", now);
+        let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
         assert!((room.state.position - 42.0).abs() < f64::EPSILON);
         assert_eq!(room.state.play_state, "playing");
-        assert_eq!(room.last_state_ts, now);
+        assert_eq!(room.state_server_ts, now);
         assert_eq!(outgoing.msg_type, "state_update");
         assert_eq!(outgoing.room.as_deref(), Some("r1"));
         assert_eq!(outgoing.client.as_deref(), Some("host"));
@@ -467,9 +551,9 @@ mod tests {
             play_state: Some(PlayState::Paused),
         });
         let now = now_ms();
-        let outgoing = apply_state_changes(&mut room, &message, "host", now);
+        let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
         assert_eq!(room.state.play_state, "playing");
-        assert_eq!(room.last_command_ts, now + PLAY_SCHEDULE_MS);
+        assert_eq!(room.target_server_ts, Some(now + PLAY_SCHEDULE_MS));
         assert_eq!(
             outgoing.payload,
             Some(serde_json::json!({
@@ -500,7 +584,7 @@ mod tests {
             });
             let now = now_ms();
 
-            let outgoing = apply_state_changes(&mut room, &message, "host", now);
+            let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
 
             assert_eq!(
                 outgoing.payload.as_ref().unwrap()["target_server_ts"],
@@ -519,7 +603,7 @@ mod tests {
             play_state: None,
         });
 
-        let outgoing = apply_state_changes(&mut room, &message, "host", now_ms());
+        let outgoing = apply_state_changes(&mut room, &message, "host", now_ms(), Instant::now());
 
         assert_eq!(outgoing.payload.unwrap()["play_state"], "playing");
         assert_eq!(room.state.play_state, "playing");

@@ -4,7 +4,7 @@ use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::time::{sleep, Instant};
 
 pub(super) fn all_ready(room: &Room) -> bool {
     room.clients
@@ -21,8 +21,14 @@ pub(super) fn prepare_scheduled_play(
 ) -> (Vec<ClientSender>, WsMessage) {
     room.state.position = position;
     room.state.play_state = "playing".to_string();
-    room.last_state_ts = event_server_ts;
-    room.last_command_ts = target_server_ts;
+    let now = Instant::now();
+    room.state_server_ts = event_server_ts;
+    room.target_server_ts = Some(target_server_ts);
+    room.target_at = now.checked_add(Duration::from_millis(PLAY_SCHEDULE_MS));
+    room.last_state_at = Some(now);
+    room.command_cooldown_until = now.checked_add(Duration::from_millis(
+        PLAY_SCHEDULE_MS + super::constants::COMMAND_COOLDOWN_MS,
+    ));
     let msg = WsMessage {
         msg_type: "player_event".to_string(),
         room: Some(room.room_id.clone()),
@@ -42,7 +48,7 @@ pub(super) fn prepare_scheduled_play(
 
 pub(super) fn schedule_pending_play(
     room_id: String,
-    created_at: u64,
+    generation: u64,
     state: SharedState,
     tasks: &crate::tasks::AppTasks,
 ) -> tokio::task::JoinHandle<()> {
@@ -66,7 +72,7 @@ pub(super) fn schedule_pending_play(
                 return;
             };
             let pending = match room.pending_play.clone() {
-                Some(pending) if pending.created_at == created_at => pending,
+                Some(pending) if pending.generation == generation => pending,
                 _ => return,
             };
             room.pending_play = None;
@@ -129,8 +135,8 @@ mod tests {
 
         let (_, message) = prepare_scheduled_play(&mut room, &clients, 12.0, 4000, 5000);
 
-        assert_eq!(room.last_state_ts, 4000);
-        assert_eq!(room.last_command_ts, 5000);
+        assert_eq!(room.state_server_ts, 4000);
+        assert_eq!(room.target_server_ts, Some(5000));
         assert_eq!(message.server_ts, Some(4000));
         assert_eq!(message.payload.unwrap()["play_state"], "playing");
     }
@@ -142,12 +148,13 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         room.pending_play = Some(crate::types::PendingPlay {
             position: 12.0,
-            created_at,
+            generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
         });
+        let generation = room.pending_play.as_ref().unwrap().generation;
         state.write().await.rooms.insert("r1".to_string(), room);
         let tasks = crate::tasks::AppTasks::new();
-        let timer = schedule_pending_play("r1".to_string(), created_at, state.clone(), &tasks);
+        let timer = schedule_pending_play("r1".to_string(), generation, state.clone(), &tasks);
         tokio::task::yield_now().await;
 
         tasks.cancel();
@@ -166,12 +173,13 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         room.pending_play = Some(crate::types::PendingPlay {
             position: 12.0,
-            created_at,
+            generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
         });
+        let generation = room.pending_play.as_ref().unwrap().generation;
         state.write().await.rooms.insert("r1".to_string(), room);
         let tasks = crate::tasks::AppTasks::new();
-        let timer = schedule_pending_play("r1".to_string(), created_at, state.clone(), &tasks);
+        let timer = schedule_pending_play("r1".to_string(), generation, state.clone(), &tasks);
         tokio::task::yield_now().await;
         let state_guard = state.write().await;
 
@@ -185,5 +193,36 @@ mod tests {
         let room = &state.read().await.rooms["r1"];
         assert!(room.pending_play.is_some());
         assert_eq!(room.state.play_state, "paused");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn stale_timer_cannot_match_replaced_play_after_wall_clock_rollback() {
+        let state = test_helpers::create_state();
+        let mut room = test_helpers::create_room("r1", "host");
+        let old_generation = crate::types::next_pending_play_generation();
+        room.pending_play = Some(crate::types::PendingPlay {
+            position: 12.0,
+            generation: old_generation,
+            position_ts: 10_000,
+        });
+        state.write().await.rooms.insert("r1".to_string(), room);
+        let tasks = crate::tasks::AppTasks::new();
+        let timer = schedule_pending_play("r1".to_string(), old_generation, state.clone(), &tasks);
+        tokio::task::yield_now().await;
+        let mut locked = state.write().await;
+        locked.rooms.get_mut("r1").unwrap().pending_play = Some(crate::types::PendingPlay {
+            position: 8.0,
+            generation: crate::types::next_pending_play_generation(),
+            position_ts: 9_000,
+        });
+        drop(locked);
+
+        tokio::time::advance(Duration::from_millis(MAX_READY_WAIT_MS + 1)).await;
+        timer.await.unwrap();
+
+        let locked = state.read().await;
+        let pending = locked.rooms["r1"].pending_play.as_ref().unwrap();
+        assert_eq!(pending.position_ts, 9_000);
+        assert_eq!(locked.rooms["r1"].state.play_state, "paused");
     }
 }

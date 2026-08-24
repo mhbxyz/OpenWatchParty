@@ -120,7 +120,7 @@ mod tests {
 
         rooms.get_mut("room-1").unwrap().pending_play = Some(PendingPlay {
             position: 10.0,
-            created_at: crate::utils::now_ms(),
+            generation: crate::types::next_pending_play_generation(),
             position_ts: 0,
         });
 
