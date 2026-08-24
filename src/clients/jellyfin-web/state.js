@@ -92,6 +92,8 @@
     isConnecting: false,
     wsUrl: '',
     reconnectAttempts: 0,        // For exponential backoff
+    reconnectTimer: null,
+    connectionAttempt: 0,
     connectionPhase: 'disconnected', // disconnected | connecting | authenticating | authenticated
     desiredRoomId: '',
     rejoinPending: false,
@@ -134,6 +136,7 @@
     authEnabled: false,
     authBlocked: false,
     authError: '',
+    authRequestAttempt: 0,
     userId: '',
     userName: '',
     tokenExpiresAt: 0,           // Timestamp when token expires

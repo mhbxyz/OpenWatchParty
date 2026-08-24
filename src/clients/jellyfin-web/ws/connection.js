@@ -13,6 +13,13 @@
     }
   };
 
+  const clearReconnectTimer = () => {
+    if (state.reconnectTimer) {
+      clearTimeout(state.reconnectTimer);
+      state.reconnectTimer = null;
+    }
+  };
+
   const rejectRoomState = (roomId) => {
     if (!roomId || state.rejectedRejoinRoomIds.includes(roomId)) return;
     state.rejectedRejoinRoomIds.push(roomId);
@@ -69,8 +76,10 @@
     scheduleRoomRejoinTimeout(roomId, 'Could not rejoin the watch party');
   };
 
-  const onWsOpen = (token) => {
+  const onWsOpen = (token, socket) => {
+    if (socket !== state.ws) return;
     console.log('[OpenWatchParty] WebSocket connected');
+    clearReconnectTimer();
     state.isConnecting = false;
     state.connectionPhase = token ? 'authenticating' : 'authenticated';
     state.reconnectAttempts = 0;
@@ -80,7 +89,7 @@
     if (state.userName) authPayload.user_name = state.userName;
     if (state.userId) authPayload.user_id = state.userId;
     if (Object.keys(authPayload).length > 0) {
-      state.ws.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
+      socket.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
     }
     actions.send('ping', { client_ts: utils.nowMs() });
     schedulePing();
@@ -91,8 +100,10 @@
     ui.render();
   };
 
-  const onWsClose = (e) => {
+  const onWsClose = (e, socket) => {
+    if (socket !== state.ws) return;
     console.log('[OpenWatchParty] WebSocket closed:', e.code, e.reason);
+    state.ws = null;
     state.isConnecting = false;
     state.connectionPhase = 'disconnected';
     state.successfulPings = 0;
@@ -124,7 +135,11 @@
       );
       state.reconnectAttempts++;
       console.log(`[OpenWatchParty] Reconnecting in ${delay}ms (attempt ${state.reconnectAttempts})`);
-      setTimeout(connect, delay);
+      clearReconnectTimer();
+      state.reconnectTimer = setTimeout(() => {
+        state.reconnectTimer = null;
+        connect();
+      }, delay);
     }
   };
 
@@ -157,18 +172,26 @@
       console.log('[OpenWatchParty] Already connected, skipping');
       return;
     }
+    state.autoReconnect = true;
+    clearReconnectTimer();
+    const connectionAttempt = ++state.connectionAttempt;
     state.isConnecting = true;
     state.connectionPhase = 'connecting';
     if (state.ws) {
-      const wasAutoReconnect = state.autoReconnect;
-      state.autoReconnect = false;
-      state.ws.close();
+      const previousSocket = state.ws;
       state.ws = null;
-      state.autoReconnect = wasAutoReconnect;
+      previousSocket.onopen = null;
+      previousSocket.onclose = null;
+      previousSocket.onerror = null;
+      previousSocket.onmessage = null;
+      previousSocket.close();
     }
     let token = state.authToken;
     if (!token) {
       token = await actions.fetchAuthToken();
+    }
+    if (connectionAttempt !== state.connectionAttempt || !state.autoReconnect) {
+      return;
     }
     if (state.authBlocked) {
       state.isConnecting = false;
@@ -188,13 +211,16 @@
       state.isConnecting = false;
       return;
     }
-    state.ws.onopen = () => onWsOpen(token);
-    state.ws.onerror = (err) => {
+    const socket = state.ws;
+    socket.onopen = () => onWsOpen(token, socket);
+    socket.onerror = (err) => {
+      if (socket !== state.ws) return;
       console.error('[OpenWatchParty] WebSocket error:', err);
       state.isConnecting = false;
     };
-    state.ws.onclose = onWsClose;
-    state.ws.onmessage = (e) => {
+    socket.onclose = (event) => onWsClose(event, socket);
+    socket.onmessage = (e) => {
+      if (socket !== state.ws) return;
       try {
         const msg = JSON.parse(e.data);
         if (msg.type === 'room_state') {
@@ -216,6 +242,32 @@
     };
   };
 
+  const disconnect = () => {
+    state.autoReconnect = false;
+    state.connectionAttempt++;
+    state.authRequestAttempt++;
+    clearReconnectTimer();
+    cancelRoomRejoin();
+    state.isConnecting = false;
+    state.connectionPhase = 'disconnected';
+    state.clientId = '';
+    state.successfulPings = 0;
+    state.timeSyncSamples = [];
+    state.inRoom = false;
+    state.roomId = '';
+    state.readyRoomId = '';
+    state.isHost = false;
+    if (state.intervals.ping) {
+      clearInterval(state.intervals.ping);
+      state.intervals.ping = null;
+    }
+    const socket = state.ws;
+    state.ws = null;
+    if (socket && socket.readyState !== WebSocket.CLOSED) {
+      socket.close(1000, 'OpenWatchParty client cleanup');
+    }
+  };
+
   const schedulePing = () => {
     if (state.intervals.ping) clearInterval(state.intervals.ping);
     const interval = state.successfulPings >= PING_STABLE_AFTER
@@ -234,6 +286,7 @@
     handleAuthenticatedConnection,
     completeRoomRejoin,
     failRoomRejoin,
-    cancelRoomRejoin
+    cancelRoomRejoin,
+    disconnect
   });
 })();

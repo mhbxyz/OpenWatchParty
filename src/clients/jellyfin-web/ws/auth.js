@@ -59,31 +59,39 @@
       console.log('[OpenWatchParty] Token refresh scheduled in', Math.round(refreshInMs / 1000), 's');
       state.tokenRefreshTimer = setTimeout(async () => {
         console.log('[OpenWatchParty] Refreshing auth token...');
+        const refreshSocket = state.ws;
         state.authToken = null;
         const newToken = await fetchAuthToken();
-        if (newToken && state.ws && state.ws.readyState === WebSocket.OPEN) {
-          state.ws.send(JSON.stringify({
+        if (refreshSocket !== state.ws) return;
+        if (newToken && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
+          refreshSocket.send(JSON.stringify({
             type: 'auth',
             payload: { token: newToken, user_name: state.userName, user_id: state.userId },
             ts: utils.nowMs()
           }));
           console.log('[OpenWatchParty] Token refreshed and re-authenticated');
         } else if (!newToken && state.authBlocked && state.ws) {
-          state.autoReconnect = false;
-          state.ws.close(4003, 'OpenWatchParty authentication failed');
-          state.ws = null;
+          if (actions.disconnect) actions.disconnect();
+          else {
+            state.autoReconnect = false;
+            state.ws.close(4003, 'OpenWatchParty authentication failed');
+            state.ws = null;
+          }
         }
       }, refreshInMs);
     }
   };
 
   const fetchAuthToken = async () => {
+    const authRequestAttempt = ++state.authRequestAttempt;
+    const isCurrentRequest = () => authRequestAttempt === state.authRequestAttempt;
     try {
       let apiAccess = getApiAccessToken();
       if (!apiAccess) {
         console.log('[OpenWatchParty] Waiting for ApiClient...');
         apiAccess = await waitForApiClient();
       }
+      if (!isCurrentRequest()) return null;
       if (!apiAccess) {
         console.warn('[OpenWatchParty] ApiClient not available after waiting');
         state.authBlocked = true;
@@ -96,6 +104,7 @@
       const response = await fetch(tokenUrl, {
         headers: { 'X-Emby-Token': accessToken }
       });
+      if (!isCurrentRequest()) return null;
       if (!response.ok) {
         state.authBlocked = true;
         state.authError = response.status === 503
@@ -106,6 +115,7 @@
         return null;
       }
       const data = await response.json();
+      if (!isCurrentRequest()) return null;
       state.authBlocked = false;
       state.authError = '';
       state.authEnabled = data.auth_enabled || false;
@@ -130,6 +140,7 @@
       state.authError = 'OpenWatchParty token endpoint returned an invalid authentication response';
       return null;
     } catch (err) {
+      if (!isCurrentRequest()) return null;
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
       state.authBlocked = true;
       state.authError = 'Could not reach the OpenWatchParty token endpoint';

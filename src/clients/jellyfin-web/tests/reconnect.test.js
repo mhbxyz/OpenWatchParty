@@ -33,8 +33,10 @@ class FakeWebSocket {
     this.onclose({ code: 1006, reason: 'network lost' });
   }
 
-  close() {
+  close(code = 1000, reason = '') {
+    if (this.readyState === FakeWebSocket.CLOSED) return;
     this.readyState = FakeWebSocket.CLOSED;
+    queueMicrotask(() => this.onclose?.({ code, reason }));
   }
 }
 
@@ -55,6 +57,7 @@ require('../ws/send.js');
 require('../ws/handlers/room.js');
 require('../ws/handlers/sync.js');
 require('../ws/connection.js');
+require('../app/cleanup.js');
 
 const roomState = (room = 'room-a') => ({
   type: 'room_state',
@@ -88,6 +91,9 @@ describe('room reconnection lifecycle', () => {
       autoReconnect: true,
       isConnecting: false,
       reconnectAttempts: 0,
+      reconnectTimer: null,
+      connectionAttempt: 0,
+      authRequestAttempt: 0,
       connectionPhase: 'disconnected',
       roomRejoinTimer: null,
       successfulPings: 0,
@@ -277,5 +283,78 @@ describe('room reconnection lifecycle', () => {
     second.receive(roomState('room-b'));
     assert.equal(OWP.state.inRoom, true);
     assert.equal(OWP.state.roomId, 'room-b');
+  });
+
+  it('cancels a scheduled reconnect during intentional disconnect', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+
+    socket.serverClose();
+    OWP.actions.disconnect();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    assert.equal(sockets.length, 1);
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.autoReconnect, false);
+  });
+
+  it('cleanup closes the socket without reconnecting', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    Object.assign(OWP.state, {
+      inRoom: true,
+      roomId: 'cleanup-room',
+      isHost: true,
+      successfulPings: 4,
+      timeSyncSamples: [{ rtt: 1 }]
+    });
+
+    OWP.app.cleanup();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    assert.equal(sockets.length, 1);
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.autoReconnect, false);
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.roomId, '');
+    assert.equal(OWP.state.isHost, false);
+    assert.equal(OWP.state.clientId, '');
+    assert.equal(OWP.state.successfulPings, 0);
+    assert.deepEqual(OWP.state.timeSyncSamples, []);
+  });
+
+  it('invalidates a connection attempt waiting for a token', async () => {
+    OWP.state.authToken = null;
+    let resolveToken;
+    OWP.actions.fetchAuthToken = () => new Promise(resolve => { resolveToken = resolve; });
+
+    const connecting = OWP.actions.connect();
+    OWP.actions.disconnect();
+    resolveToken('late-token');
+    await connecting;
+
+    assert.equal(sockets.length, 0);
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.autoReconnect, false);
+  });
+
+  it('ignores late messages and closes from a replaced socket', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    first.open();
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const second = sockets[1];
+    second.open();
+
+    first.receive(roomState('stale-room'));
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(sockets.length, 2);
+    assert.equal(OWP.state.ws, second);
   });
 });

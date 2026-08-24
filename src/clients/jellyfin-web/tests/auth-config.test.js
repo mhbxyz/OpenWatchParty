@@ -29,6 +29,7 @@ describe('authentication configuration', () => {
     OWP.state.authBlocked = false;
     OWP.state.authError = '';
     OWP.state.authToken = null;
+    OWP.state.authRequestAttempt = 0;
     OWP.state.isConnecting = false;
     OWP.state.ws = null;
     OWP.state.autoReconnect = true;
@@ -118,5 +119,23 @@ describe('authentication configuration', () => {
 
     assert.equal(OWP.state.ws, null);
     assert.equal(OWP.state.isConnecting, false);
+  });
+
+  it('ignores a token response invalidated by disconnect or a newer request', async () => {
+    let resolveFetch;
+    globalThis.fetch = () => new Promise(resolve => { resolveFetch = resolve; });
+
+    const pending = fetchAuthToken();
+    OWP.state.authRequestAttempt++;
+    resolveFetch({
+      ok: true,
+      status: 200,
+      json: async () => ({ auth_enabled: true, token: 'stale-token', expires_in: 3600 })
+    });
+    const token = await pending;
+
+    assert.equal(token, null);
+    assert.equal(OWP.state.authToken, null);
+    assert.equal(OWP.state.authBlocked, false);
   });
 });

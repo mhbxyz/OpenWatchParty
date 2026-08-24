@@ -40,7 +40,10 @@
       state.pendingActionTimer = null;
     }
     if (lc) lc.hadVideoElement = false;
-    if (state.ws) {
+    if (OWP.actions?.disconnect) {
+      OWP.actions.disconnect();
+    } else if (state.ws) {
+      state.autoReconnect = false;
       state.ws.close();
       state.ws = null;
     }
