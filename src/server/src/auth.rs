@@ -16,6 +16,8 @@ pub struct Claims {
 
 const MIN_ENTROPY_BITS: f64 = 80.0;
 const MIN_SECRET_LENGTH: usize = 32;
+/// JWT `exp` is enforced at the exact whole Unix second, without clock leeway.
+pub const JWT_EXPIRATION_LEEWAY_SECONDS: u64 = 0;
 
 fn calculate_entropy(data: &[u8]) -> f64 {
     if data.is_empty() {
@@ -150,14 +152,21 @@ impl JwtConfig {
         validation.set_audience(&[&self.audience]);
         validation.set_issuer(&[&self.issuer]);
         validation.validate_exp = true;
-        validation.leeway = 60;
+        validation.leeway = JWT_EXPIRATION_LEEWAY_SECONDS;
 
         match decode::<Claims>(
             token,
             &DecodingKey::from_secret(self.secret.as_bytes()),
             &validation,
         ) {
-            Ok(token_data) => Ok(token_data.claims),
+            Ok(token_data) => {
+                let now_seconds = (crate::utils::now_ms() / 1000) as usize;
+                if token_data.claims.exp <= now_seconds {
+                    Err("Invalid token: token has expired".to_string())
+                } else {
+                    Ok(token_data.claims)
+                }
+            }
             Err(e) => Err(format!("Invalid token: {}", e)),
         }
     }
@@ -397,5 +406,33 @@ mod tests {
         };
         let result = config.validate_token("invalid-token");
         assert!(result.is_err(), "Should fail for invalid token");
+    }
+
+    #[test]
+    fn test_jwt_rejects_token_at_exact_expiration_second() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+
+        let config = JwtConfig {
+            secret: "test-secret".to_string(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: true,
+        };
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = encode(
+            &Header::default(),
+            &Claims {
+                sub: "user".to_string(),
+                name: "User".to_string(),
+                aud: "test".to_string(),
+                iss: "test".to_string(),
+                exp: now,
+                iat: now.saturating_sub(1),
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap();
+
+        assert!(config.validate_token(&token).is_err());
     }
 }

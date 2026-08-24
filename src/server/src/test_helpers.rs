@@ -23,6 +23,8 @@ pub fn create_client_with_rx(
         user_id: user_id.to_string(),
         user_name: user_name.to_string(),
         authenticated,
+        session_expires_at: None,
+        authentication_version: 0,
         message_count: 0,
         last_reset: now,
         last_seen: now,

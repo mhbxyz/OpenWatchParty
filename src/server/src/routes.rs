@@ -199,6 +199,22 @@ pub fn build_ws_route(
     allowed_origins: Arc<Vec<String>>,
     ingress_config: IngressConfig,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    build_ws_route_with_clock(
+        state,
+        jwt_config,
+        allowed_origins,
+        ingress_config,
+        Arc::new(crate::utils::now_ms),
+    )
+}
+
+fn build_ws_route_with_clock(
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    allowed_origins: Arc<Vec<String>>,
+    ingress_config: IngressConfig,
+    session_clock: crate::ws::SessionClock,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let state_filter = warp::any().map(move || state.clone());
     let jwt_filter = {
         let config = jwt_config;
@@ -214,6 +230,7 @@ pub fn build_ws_route(
     );
     let trusted_proxies = Arc::new(ingress_config.trusted_proxies);
     let auth_timeout = ingress_config.auth_timeout;
+    let clock_filter = warp::any().map(move || session_clock.clone());
 
     let admission = warp::addr::remote()
         .and(warp::header::optional::<String>("x-forwarded-for"))
@@ -250,13 +267,21 @@ pub fn build_ws_route(
         .and(warp::ws())
         .and(state_filter)
         .and(jwt_filter)
+        .and(clock_filter)
         .map(
-            move |permit, ws: warp::ws::Ws, state, jwt_config: Arc<JwtConfig>| {
+            move |permit, ws: warp::ws::Ws, state, jwt_config: Arc<JwtConfig>, session_clock| {
                 ws.max_message_size(crate::ws::constants::MAX_MESSAGE_SIZE)
                     .max_frame_size(crate::ws::constants::MAX_FRAME_SIZE)
                     .on_upgrade(move |socket| async move {
                         let _permit = permit;
-                        crate::ws::client_connection(socket, state, jwt_config, auth_timeout).await;
+                        crate::ws::client_connection(
+                            socket,
+                            state,
+                            jwt_config,
+                            auth_timeout,
+                            session_clock,
+                        )
+                        .await;
                     })
             },
         )
@@ -320,6 +345,9 @@ pub fn build_health_route(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::Claims;
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    use std::sync::atomic::{AtomicU64, Ordering};
 
     #[test]
     fn is_origin_allowed_exact_match() {
@@ -434,6 +462,35 @@ mod tests {
         })
     }
 
+    fn token_with_expiration(config: &JwtConfig, expiration: u64) -> String {
+        encode(
+            &Header::default(),
+            &Claims {
+                sub: "user".to_string(),
+                name: "Alice".to_string(),
+                aud: config.audience.clone(),
+                iss: config.issuer.clone(),
+                exp: expiration as usize,
+                iat: (crate::utils::now_ms() / 1000) as usize,
+            },
+            &EncodingKey::from_secret(config.secret.as_bytes()),
+        )
+        .unwrap()
+    }
+
+    async fn authenticate(client: &mut warp::test::WsClient, token: &str) {
+        client
+            .send_text(format!(
+                r#"{{"type":"auth","payload":{{"token":"{token}"}},"ts":0}}"#
+            ))
+            .await;
+        for expected in ["auth_success", "room_list"] {
+            let response: serde_json::Value =
+                serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
+            assert_eq!(response["type"], expected);
+        }
+    }
+
     #[tokio::test]
     async fn unauthenticated_jwt_connection_times_out_and_is_cleaned_up() {
         let state = crate::test_helpers::create_state();
@@ -465,11 +522,110 @@ mod tests {
         assert!(state.read().await.clients.is_empty());
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
+    async fn authenticated_session_is_valid_before_its_expiration() {
+        let state = crate::test_helpers::create_state();
+        let jwt_config = test_jwt_config(true);
+        let route = build_ws_route(
+            state.clone(),
+            jwt_config.clone(),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap();
+        let expiration = crate::utils::now_ms() / 1000 + 60;
+
+        authenticate(&mut client, &token_with_expiration(&jwt_config, expiration)).await;
+        client.send_text(r#"{"type":"ping","ts":0}"#).await;
+        let response: serde_json::Value =
+            serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
+
+        assert_eq!(response["type"], "pong");
+        let locked = state.read().await;
+        let authenticated = locked.clients.values().next().unwrap();
+        assert!(authenticated.authenticated);
+        assert_eq!(authenticated.session_expires_at, Some(expiration));
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn authenticated_session_expires_without_inbound_traffic_and_is_cleaned_up() {
+        let state = crate::test_helpers::create_state();
+        let jwt_config = test_jwt_config(true);
+        let wall_clock = Arc::new(AtomicU64::new(crate::utils::now_ms()));
+        let session_clock: crate::ws::SessionClock = {
+            let wall_clock = wall_clock.clone();
+            Arc::new(move || wall_clock.load(Ordering::SeqCst))
+        };
+        let route = build_ws_route_with_clock(
+            state.clone(),
+            jwt_config.clone(),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+            session_clock,
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap();
+        let expiration = crate::utils::now_ms() / 1000 + 10;
+        authenticate(&mut client, &token_with_expiration(&jwt_config, expiration)).await;
+
+        wall_clock.store(expiration * 1000, Ordering::SeqCst);
+        tokio::time::advance(Duration::from_secs(1)).await;
+        client.recv_closed().await.unwrap();
+        tokio::task::yield_now().await;
+
+        assert!(state.read().await.clients.is_empty());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn valid_refresh_rearms_the_session_expiration() {
+        let state = crate::test_helpers::create_state();
+        let jwt_config = test_jwt_config(true);
+        let route = build_ws_route(
+            state.clone(),
+            jwt_config.clone(),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap();
+        let now = crate::utils::now_ms() / 1000;
+        authenticate(&mut client, &token_with_expiration(&jwt_config, now + 60)).await;
+
+        tokio::time::advance(Duration::from_secs(30)).await;
+        authenticate(&mut client, &token_with_expiration(&jwt_config, now + 120)).await;
+        tokio::time::advance(Duration::from_secs(31)).await;
+        client.send_text(r#"{"type":"ping","ts":0}"#).await;
+        let response: serde_json::Value =
+            serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
+
+        assert_eq!(response["type"], "pong");
+        let locked = state.read().await;
+        let authenticated = locked.clients.values().next().unwrap();
+        assert_eq!(authenticated.session_expires_at, Some(now + 120));
+        assert_eq!(authenticated.authentication_version, 2);
+    }
+
+    #[tokio::test(start_paused = true)]
     async fn insecure_connection_has_no_authentication_timeout() {
         let state = crate::test_helpers::create_state();
         let route = build_ws_route(
-            state,
+            state.clone(),
             test_jwt_config(false),
             Arc::new(vec!["https://example.com".to_string()]),
             test_ingress_config(Duration::from_millis(10)),
@@ -483,10 +639,21 @@ mod tests {
 
         client.recv().await.unwrap();
         client.recv().await.unwrap();
-        tokio::time::sleep(Duration::from_millis(30)).await;
+        tokio::time::advance(Duration::from_secs(3_600)).await;
         client.send_text(r#"{"type":"ping","ts":0}"#).await;
         let response: serde_json::Value =
             serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
         assert_eq!(response["type"], "pong");
+        assert_eq!(
+            state
+                .read()
+                .await
+                .clients
+                .values()
+                .next()
+                .unwrap()
+                .session_expires_at,
+            None
+        );
     }
 }

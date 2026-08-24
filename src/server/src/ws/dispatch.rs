@@ -76,8 +76,25 @@ pub(super) async fn is_authenticated(client_id: &str, state: &SharedState) -> bo
     state
         .clients
         .get(client_id)
-        .map(|c| c.authenticated)
+        .map(|client| authentication_is_valid(client, now_ms()))
         .unwrap_or(false)
+}
+
+fn authentication_is_valid(client: &crate::types::Client, now_ms: u64) -> bool {
+    client.authenticated
+        && client
+            .session_expires_at
+            .is_none_or(|expiration| expiration.saturating_mul(1000) > now_ms)
+}
+
+async fn has_expired_session(client_id: &str, state: &SharedState) -> bool {
+    let state = state.read().await;
+    state.clients.get(client_id).is_some_and(|client| {
+        client.authenticated
+            && client
+                .session_expires_at
+                .is_some_and(|expiration| expiration.saturating_mul(1000) <= now_ms())
+    })
 }
 
 async fn handle_list_rooms(client_id: &str, state: &SharedState) {
@@ -126,6 +143,12 @@ pub(super) async fn client_msg(
     };
 
     debug!("Message from {}: {:?}", client_id, parsed.msg_type);
+
+    if parsed.msg_type != ClientMessageType::Auth && has_expired_session(client_id, state).await {
+        warn!("Authenticated session expired for client {}", client_id);
+        close_with_policy(client_id, state, "Authentication expired").await;
+        return true;
+    }
 
     match parsed.msg_type {
         ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
@@ -193,6 +216,38 @@ mod tests {
     async fn is_authenticated_not_found() {
         let state = test_helpers::create_state();
         assert!(!is_authenticated("nonexistent", &state).await);
+    }
+
+    #[tokio::test]
+    async fn command_after_session_expiration_is_terminal() {
+        let state = test_helpers::create_state();
+        let (mut client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        client.session_expires_at = Some(now_ms() / 1000);
+        state.write().await.clients.insert("c1".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: "unused".to_string(),
+            audience: "test".to_string(),
+            issuer: "test".to_string(),
+            enabled: true,
+        });
+
+        let terminal = client_msg(
+            "c1",
+            warp::ws::Message::text(r#"{"type":"list_rooms","ts":0}"#),
+            &state,
+            &jwt_config,
+        )
+        .await;
+
+        assert!(terminal);
+        let close = rx.recv().await.unwrap().unwrap();
+        assert_eq!(
+            close.close_frame(),
+            Some((
+                super::super::constants::POLICY_VIOLATION_CLOSE_CODE,
+                "Authentication expired"
+            ))
+        );
     }
 
     #[tokio::test]

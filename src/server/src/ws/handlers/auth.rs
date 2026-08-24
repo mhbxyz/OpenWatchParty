@@ -22,6 +22,8 @@ async fn handle_jwt_auth(
                     client.authenticated = true;
                     client.user_id = claims.sub;
                     client.user_name = claims.name.clone();
+                    client.session_expires_at = jwt_config.enabled.then_some(claims.exp as u64);
+                    client.authentication_version = client.authentication_version.wrapping_add(1);
                     info!("Client {} authenticated as {}", client_id, claims.name);
                 }
                 send_message(
@@ -163,5 +165,41 @@ mod tests {
             "room_list"
         );
         assert!(state.read().await.clients["client"].authenticated);
+        assert_eq!(
+            state.read().await.clients["client"].session_expires_at,
+            Some((now + 3600) as u64)
+        );
+    }
+
+    #[tokio::test]
+    async fn insecure_auth_with_token_remains_non_expiring() {
+        let state = test_helpers::create_state();
+        let (client, _rx) = test_helpers::create_client_with_rx("anonymous", "Anonymous", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: String::new(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: false,
+        });
+        let parsed = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Auth,
+            room: None,
+            client: None,
+            payload: Some(serde_json::json!({ "token": "ignored-in-insecure-mode" })),
+            ts: crate::utils::now_ms(),
+            server_ts: None,
+        };
+
+        handle_auth("client", &parsed, &state, &jwt_config).await;
+
+        assert_eq!(
+            state.read().await.clients["client"].session_expires_at,
+            None
+        );
     }
 }

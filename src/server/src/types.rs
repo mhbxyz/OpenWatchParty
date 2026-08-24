@@ -19,6 +19,9 @@ pub struct Client {
     pub user_id: String,
     pub user_name: String,
     pub authenticated: bool, // Whether client has authenticated via auth message
+    /// JWT `exp` as Unix seconds. `None` is reserved for insecure no-auth sessions.
+    pub session_expires_at: Option<u64>,
+    pub authentication_version: u64,
     pub message_count: u32,
     pub last_reset: u64,
     pub last_seen: u64, // For zombie connection detection

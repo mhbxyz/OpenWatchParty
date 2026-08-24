@@ -6,6 +6,7 @@ mod pending_play;
 mod validation;
 
 pub use connection::client_connection;
+pub(crate) use connection::SessionClock;
 
 #[cfg(test)]
 mod concurrency_tests {

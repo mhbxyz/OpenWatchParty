@@ -9,7 +9,11 @@ use log::info;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
+
+const MAX_EXPIRATION_RECHECK: Duration = Duration::from_secs(1);
+pub type SessionClock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
 fn register_client(
     client_sender: mpsc::Sender<Result<warp::ws::Message, warp::Error>>,
@@ -29,6 +33,8 @@ fn register_client(
         user_id,
         user_name,
         authenticated,
+        session_expires_at: None,
+        authentication_version: 0,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -54,11 +60,31 @@ fn should_send_initial_room_list(jwt_config: &JwtConfig) -> bool {
     !jwt_config.enabled
 }
 
+fn expiration_delay(expiration_seconds: u64, current_time_ms: u64) -> Duration {
+    Duration::from_millis(
+        expiration_seconds
+            .saturating_mul(1000)
+            .saturating_sub(current_time_ms),
+    )
+    .min(MAX_EXPIRATION_RECHECK)
+}
+
+async fn session_expiration(client_id: &str, state: &SharedState) -> (Option<u64>, u64) {
+    state
+        .read()
+        .await
+        .clients
+        .get(client_id)
+        .map(|client| (client.session_expires_at, client.authentication_version))
+        .unwrap_or((None, 0))
+}
+
 pub async fn client_connection(
     ws: warp::ws::WebSocket,
     state: SharedState,
     jwt_config: Arc<JwtConfig>,
     auth_timeout: Duration,
+    session_clock: SessionClock,
 ) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
     let (client_sender, client_rcv) = mpsc::channel(CLIENT_CHANNEL_BUFFER);
@@ -89,6 +115,9 @@ pub async fn client_connection(
     let authentication_timeout = tokio::time::sleep(auth_timeout);
     tokio::pin!(authentication_timeout);
     let mut authentication_pending = jwt_config.enabled;
+    let session_expiration_timer = tokio::time::sleep(Duration::from_secs(1));
+    tokio::pin!(session_expiration_timer);
+    let mut scheduled_expiration = (None, 0);
 
     loop {
         tokio::select! {
@@ -101,12 +130,34 @@ pub async fn client_connection(
                     if authentication_pending && is_authenticated(&temp_id, &state).await {
                         authentication_pending = false;
                     }
+                    let expiration = session_expiration(&temp_id, &state).await;
+                    if expiration != scheduled_expiration {
+                        scheduled_expiration = expiration;
+                        if let Some(expiration) = expiration.0 {
+                            session_expiration_timer.as_mut().reset(
+                                Instant::now() + expiration_delay(expiration, session_clock())
+                            );
+                        }
+                    }
                 }
             }
             _ = &mut authentication_timeout, if authentication_pending => {
                 info!("Authentication timed out for client {}", temp_id);
                 close_with_policy(&temp_id, &state, "Authentication timeout").await;
                 break;
+            }
+            _ = &mut session_expiration_timer, if scheduled_expiration.0.is_some() => {
+                let current_expiration = session_expiration(&temp_id, &state).await;
+                scheduled_expiration = current_expiration;
+                if let Some(expiration) = current_expiration.0 {
+                    let delay = expiration_delay(expiration, session_clock());
+                    if delay.is_zero() {
+                        info!("Authentication expired for client {}", temp_id);
+                        close_with_policy(&temp_id, &state, "Authentication expired").await;
+                        break;
+                    }
+                    session_expiration_timer.as_mut().reset(Instant::now() + delay);
+                }
             }
         }
     }
@@ -141,6 +192,7 @@ mod tests {
         assert!(client.authenticated);
         assert_eq!(client.user_id, "anonymous");
         assert_eq!(client.user_name, "Anonymous");
+        assert_eq!(client.session_expires_at, None);
     }
 
     #[test]
@@ -156,6 +208,7 @@ mod tests {
         assert!(!client.authenticated);
         assert_eq!(client.user_id, "");
         assert_eq!(client.user_name, "");
+        assert_eq!(client.session_expires_at, None);
     }
 
     #[test]
@@ -186,5 +239,16 @@ mod tests {
 
         assert!(!config.enabled);
         assert!(should_send_initial_room_list(&config));
+    }
+
+    #[test]
+    fn expiration_delay_caps_wall_clock_rechecks_without_leeway() {
+        assert_eq!(expiration_delay(1_010, 1_000_250), Duration::from_secs(1));
+        assert_eq!(
+            expiration_delay(1_001, 1_000_250),
+            Duration::from_millis(750)
+        );
+        assert_eq!(expiration_delay(1_000, 1_000_000), Duration::ZERO);
+        assert_eq!(expiration_delay(999, 1_000_000), Duration::ZERO);
     }
 }
