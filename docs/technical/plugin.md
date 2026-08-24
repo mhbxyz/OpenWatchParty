@@ -140,7 +140,7 @@ public ActionResult GetToken()
         return Unauthorized(new { error = "User identity not found" });
     }
 
-    // Rate limiting: 10 tokens per minute per user
+    // Rate limiting: 30 tokens per minute per user
     if (!CheckRateLimit(userId))
     {
         return StatusCode(429, new { error = "Rate limit exceeded" });
@@ -176,7 +176,7 @@ public ActionResult GetToken()
 
 **Features:**
 - Jellyfin authentication required
-- Rate limiting (10 tokens/minute/user)
+- Rate limiting (30 tokens/minute/user)
 - JWT token generation
 - Graceful handling when JWT not configured
 

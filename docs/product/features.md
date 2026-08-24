@@ -42,7 +42,7 @@ nav_order: 2
 - **WebSocket communication** - Low-latency real-time sync
 - **Auto-reconnect** - Automatic reconnection on disconnect
 - **Clock synchronization** - NTP-like time sync between clients
-- **Rate limiting** - Protection against abuse (10 tokens/min)
+- **Rate limiting** - Protection against abuse (30 tokens/min)
 
 ### Security
 - **JWT authentication** - Optional token-based auth

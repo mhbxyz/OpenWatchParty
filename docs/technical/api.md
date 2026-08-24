@@ -80,13 +80,13 @@ Generates a JWT token for the authenticated user.
 |------|-------------|
 | 200 | Token generated successfully |
 | 401 | Not authenticated or claims missing |
-| 429 | Rate limit exceeded (10 tokens/min) |
+| 429 | Rate limit exceeded (30 tokens/min) |
 | 500 | Plugin not configured |
 | 503 | JWT authentication configuration missing or secret rejected by the quality policy |
 
 **Rate Limiting:**
-- Maximum 10 tokens per minute per user
-- Counter resets after 1 minute of inactivity
+- Maximum 30 tokens per fixed one-minute window per user
+- Window starts with the first accepted request
 
 **Example:**
 ```bash

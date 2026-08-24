@@ -56,8 +56,10 @@ public class OpenWatchPartyController : ControllerBase
 
     // Rate limiting: max 30 tokens per minute per user (allows for reconnections)
     private const int MaxTokensPerMinute = 30;
-    private static readonly ConcurrentDictionary<string, (int Count, DateTime ResetTime)> TokenRateLimits = new();
-    private static DateTime _lastRateLimitCleanup = DateTime.UtcNow;
+    private static readonly TimeProvider RateLimitClock = TimeProvider.System;
+    private static readonly TokenRateLimiter TokenRequestLimiter = new(MaxTokensPerMinute, TimeSpan.FromMinutes(1), RateLimitClock);
+    private static readonly object RateLimitCleanupLock = new();
+    private static long _lastRateLimitCleanup = RateLimitClock.GetTimestamp();
     private static readonly TimeSpan RateLimitCleanupInterval = TimeSpan.FromMinutes(5);
 
     // Cache for embedded script content using Lazy<T> for thread-safe initialization (fixes audit 4.5.1)
@@ -249,29 +251,21 @@ public class OpenWatchPartyController : ControllerBase
     /// </summary>
     private static void CleanupExpiredRateLimits()
     {
-        var now = DateTime.UtcNow;
-        if (now - _lastRateLimitCleanup < RateLimitCleanupInterval)
+        var now = RateLimitClock.GetTimestamp();
+        lock (RateLimitCleanupLock)
         {
-            return;
+            if (RateLimitClock.GetElapsedTime(_lastRateLimitCleanup, now) < RateLimitCleanupInterval)
+            {
+                return;
+            }
+            _lastRateLimitCleanup = now;
         }
-
-        _lastRateLimitCleanup = now;
-
-        // Remove all expired entries
-        var expiredKeys = TokenRateLimits
-            .Where(kvp => now > kvp.Value.ResetTime)
-            .Select(kvp => kvp.Key)
-            .ToList();
-
-        foreach (var key in expiredKeys)
-        {
-            TokenRateLimits.TryRemove(key, out _);
-        }
+        TokenRequestLimiter.CleanupExpiredAt(now);
     }
 
     /// <summary>
     /// Generates a JWT token for the authenticated user to connect to the session server.
-    /// Rate limited to 10 tokens per minute per user.
+    /// Rate limited to 30 tokens per minute per user.
     /// </summary>
     /// <returns>Token response containing the JWT or indication that auth is disabled.</returns>
     /// <response code="200">Returns the token or auth disabled response.</response>
@@ -330,21 +324,10 @@ public class OpenWatchPartyController : ControllerBase
         }
 
         // Rate limiting check
-        var now = DateTime.UtcNow;
-        var limit = TokenRateLimits.GetOrAdd(userId, _ => (0, now.AddMinutes(1)));
-        if (now >= limit.ResetTime)
-        {
-            limit = (1, now.AddMinutes(1));
-            TokenRateLimits[userId] = limit;
-        }
-        else if (limit.Count >= MaxTokensPerMinute)
+        if (!TokenRequestLimiter.TryAcquire(userId))
         {
             _logger.LogWarning("Token rate limit exceeded for user {UserId}", userId);
             return StatusCode(429, new { error = "Rate limit exceeded. Try again later." });
-        }
-        else
-        {
-            TokenRateLimits[userId] = (limit.Count + 1, limit.ResetTime);
         }
 
         var token = GenerateJwtToken(userId, userName, config);

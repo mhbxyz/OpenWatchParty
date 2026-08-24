@@ -249,7 +249,7 @@ OWP.state = {
 - **Authentication**: Optional JWT tokens validated by session server
 - **Authorization**: Only hosts can send playback commands
 - **Transport**: WebSocket (ws://) or secure WebSocket (wss://)
-- **Rate limiting**: 10 tokens per minute per user
+- **Rate limiting**: 30 tokens per fixed minute per user
 - **Message size**: 64KB maximum
 
 See [Security Guide](../operations/security.md) for detailed security configuration.
@@ -264,7 +264,7 @@ See [Security Guide](../operations/security.md) for detailed security configurat
 | Rooms per user | 3 | Server constant `MAX_ROOMS_PER_USER` |
 | Messages per second | 30 | Server constant `RATE_LIMIT_MESSAGES` |
 | Message size | 64 KB | Server constant |
-| Token requests | 10/min per user | Plugin constant |
+| Token requests | 30/min per user | Plugin constant |
 
 ### Performance Characteristics
 

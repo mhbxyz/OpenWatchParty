@@ -172,7 +172,7 @@ nav_order: 5
    - Refresh the page to get a new token
 
 3. **Rate limiting**
-   - Max 10 token requests per minute
+   - Max 30 token requests per fixed one-minute window
    - Wait and try again
 
 ### HLS Streaming Issues
@@ -243,13 +243,13 @@ HLS (HTTP Live Streaming) breaks video into small segments (typically 2-10 secon
 
 | Limit | Value | Applies To |
 |-------|-------|------------|
-| Token requests | 10/min | Per user, plugin endpoint |
+| Token requests | 30/min | Per user, fixed one-minute window |
 | WebSocket messages | 30/sec | Per client connection |
 | Message size | 64 KB | Per message |
 
 **Solutions:**
 
-1. **Token rate limit (10/min)**
+1. **Token rate limit (30/min)**
    ```
    Cause: Too many page refreshes or reconnection attempts
    Solution: Wait 1 minute, then refresh once
