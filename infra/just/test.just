@@ -49,4 +49,5 @@ release:
     @infra/scripts/tests/update-plugin-manifest.test.sh
     @infra/scripts/tests/verify-versions.test.sh
     @infra/scripts/tests/write-plugin-meta.test.sh
+    @infra/scripts/tests/package-plugin.test.sh
     @echo -e "{{GREEN}}✓ Release script tests passed{{RESET}}"
