@@ -81,7 +81,13 @@ mod concurrency_tests {
                 .unwrap()
                 .created_at
         };
-        let pending = schedule_pending_play("pending-room".to_string(), created_at, state.clone());
+        let tasks = crate::tasks::AppTasks::new();
+        let pending = schedule_pending_play(
+            "pending-room".to_string(),
+            created_at,
+            state.clone(),
+            &tasks,
+        );
 
         let create_state = state.clone();
         let create = tokio::spawn(async move {
@@ -198,7 +204,7 @@ mod concurrency_tests {
             });
             let pause_state = state.clone();
             let pause_task = tokio::spawn(async move {
-                handle_playback("host", pause, &pause_state).await;
+                handle_playback("host", pause, &pause_state, &crate::tasks::AppTasks::new()).await;
             });
             ready_task.await.unwrap();
             pause_task.await.unwrap();
@@ -284,7 +290,8 @@ mod concurrency_tests {
             locked.rooms.insert("room".to_string(), room);
         }
 
-        let timer = schedule_pending_play("room".to_string(), created_at, state.clone());
+        let tasks = crate::tasks::AppTasks::new();
+        let timer = schedule_pending_play("room".to_string(), created_at, state.clone(), &tasks);
         let pause = IncomingMessage {
             msg_type: ClientMessageType::PlayerEvent,
             room: Some("room".to_string()),
@@ -293,7 +300,7 @@ mod concurrency_tests {
             ts: now_ms(),
             server_ts: None,
         };
-        handle_playback("host", pause, &state).await;
+        handle_playback("host", pause, &state, &tasks).await;
         timer.await.unwrap();
 
         let messages: Vec<_> =

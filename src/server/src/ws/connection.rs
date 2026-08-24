@@ -14,6 +14,14 @@ use tokio_stream::wrappers::ReceiverStream;
 const MAX_EXPIRATION_RECHECK: Duration = Duration::from_secs(1);
 pub type SessionClock = Arc<dyn Fn() -> u64 + Send + Sync>;
 
+struct AbortOnDropTask(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDropTask {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 fn register_client(
     client_sender: ClientSender,
     jwt_config: &Arc<JwtConfig>,
@@ -78,21 +86,38 @@ async fn session_expiration(client_id: &str, state: &SharedState) -> (Option<u64
         .unwrap_or((None, 0))
 }
 
+async fn enqueue_going_away(sender: Option<ClientSender>) -> bool {
+    let Some(sender) = sender else { return false };
+    let close = warp::ws::Message::close_with(
+        super::constants::GOING_AWAY_CLOSE_CODE,
+        "Server shutting down",
+    );
+    matches!(
+        tokio::time::timeout(
+            Duration::from_millis(super::constants::CLOSE_ENQUEUE_TIMEOUT_MS),
+            sender.send(Ok(close)),
+        )
+        .await,
+        Ok(Ok(()))
+    )
+}
+
 pub async fn client_connection(
     ws: warp::ws::WebSocket,
     state: SharedState,
     jwt_config: Arc<JwtConfig>,
     auth_timeout: Duration,
     session_clock: SessionClock,
+    tasks: crate::tasks::AppTasks,
 ) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
     let (client_sender, client_rcv, mut disconnect_requested) =
         ClientSender::channel(CLIENT_CHANNEL_BUFFER);
     let client_rcv = ReceiverStream::new(client_rcv);
 
-    let mut writer_task = tokio::task::spawn(async move {
+    let mut writer_task = AbortOnDropTask(tokio::task::spawn(async move {
         let _ = client_rcv.forward(client_ws_sender).await;
-    });
+    }));
 
     let temp_id = uuid::Uuid::new_v4().to_string();
     info!(
@@ -118,13 +143,14 @@ pub async fn client_connection(
     let session_expiration_timer = tokio::time::sleep(Duration::from_secs(1));
     tokio::pin!(session_expiration_timer);
     let mut scheduled_expiration = (None, 0);
+    let cancellation = tasks.cancellation_token();
 
     loop {
         tokio::select! {
             result = client_ws_rcv.next() => {
                 let Some(result) = result else { break };
                 if let Ok(msg) = result {
-                    if client_msg(&temp_id, msg, &state, &jwt_config).await {
+                    if client_msg(&temp_id, msg, &state, &jwt_config, &tasks).await {
                         break;
                     }
                     if authentication_pending && is_authenticated(&temp_id, &state).await {
@@ -166,19 +192,27 @@ pub async fn client_connection(
                     break;
                 }
             }
+            _ = cancellation.cancelled() => {
+                let sender = {
+                    let state = state.read().await;
+                    state.clients.get(&temp_id).map(|client| client.sender.clone())
+                };
+                enqueue_going_away(sender).await;
+                break;
+            }
         }
     }
 
     crate::room::handle_disconnect(&temp_id, &state).await;
     if tokio::time::timeout(
         Duration::from_millis(super::constants::WRITER_SHUTDOWN_TIMEOUT_MS),
-        &mut writer_task,
+        &mut writer_task.0,
     )
     .await
     .is_err()
     {
-        writer_task.abort();
-        let _ = writer_task.await;
+        writer_task.0.abort();
+        let _ = (&mut writer_task.0).await;
     }
 }
 
@@ -257,5 +291,36 @@ mod tests {
         );
         assert_eq!(expiration_delay(1_000, 1_000_000), Duration::ZERO);
         assert_eq!(expiration_delay(999, 1_000_000), Duration::ZERO);
+    }
+
+    #[tokio::test]
+    async fn slow_client_does_not_block_shutdown_close_enqueue() {
+        let (sender, mut receiver, _disconnect) = ClientSender::channel(1);
+        sender
+            .try_send(Ok(warp::ws::Message::text("queued")))
+            .unwrap();
+
+        let enqueued = enqueue_going_away(Some(sender)).await;
+
+        assert!(!enqueued);
+        assert_eq!(
+            receiver.recv().await.unwrap().unwrap().to_str().unwrap(),
+            "queued"
+        );
+    }
+
+    #[tokio::test]
+    async fn shutdown_enqueues_going_away_close_frame() {
+        let (sender, mut receiver, _disconnect) = ClientSender::channel(1);
+
+        assert!(enqueue_going_away(Some(sender)).await);
+        let close = receiver.recv().await.unwrap().unwrap();
+        assert_eq!(
+            close.close_frame(),
+            Some((
+                super::super::constants::GOING_AWAY_CLOSE_CODE,
+                "Server shutting down"
+            ))
+        );
     }
 }

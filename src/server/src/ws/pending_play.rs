@@ -44,11 +44,23 @@ pub(super) fn schedule_pending_play(
     room_id: String,
     created_at: u64,
     state: SharedState,
+    tasks: &crate::tasks::AppTasks,
 ) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        sleep(Duration::from_millis(MAX_READY_WAIT_MS)).await;
+    let cancellation = tasks.cancellation_token();
+    tasks.spawn(async move {
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = sleep(Duration::from_millis(MAX_READY_WAIT_MS)) => {}
+        }
+        if cancellation.is_cancelled() {
+            return;
+        }
         {
             let mut state = state.write().await;
+            if cancellation.is_cancelled() {
+                return;
+            }
             let crate::types::ServerState { clients, rooms } = &mut *state;
             let Some(room) = rooms.get_mut(&room_id) else {
                 return;
@@ -121,5 +133,57 @@ mod tests {
         assert_eq!(room.last_command_ts, 5000);
         assert_eq!(message.server_ts, Some(4000));
         assert_eq!(message.payload.unwrap()["play_state"], "playing");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_play_timer_is_reaped_on_shutdown() {
+        let state = test_helpers::create_state();
+        let created_at = now_ms();
+        let mut room = test_helpers::create_room("r1", "host");
+        room.pending_play = Some(crate::types::PendingPlay {
+            position: 12.0,
+            created_at,
+            position_ts: created_at,
+        });
+        state.write().await.rooms.insert("r1".to_string(), room);
+        let tasks = crate::tasks::AppTasks::new();
+        let timer = schedule_pending_play("r1".to_string(), created_at, state.clone(), &tasks);
+        tokio::task::yield_now().await;
+
+        tasks.cancel();
+        timer.await.unwrap();
+        tasks.wait().await;
+        tokio::time::advance(Duration::from_millis(MAX_READY_WAIT_MS + 1)).await;
+
+        assert_eq!(tasks.active_count(), 0);
+        assert!(state.read().await.rooms["r1"].pending_play.is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn pending_play_cancelled_while_waiting_for_state_lock_has_no_effect() {
+        let state = test_helpers::create_state();
+        let created_at = now_ms();
+        let mut room = test_helpers::create_room("r1", "host");
+        room.pending_play = Some(crate::types::PendingPlay {
+            position: 12.0,
+            created_at,
+            position_ts: created_at,
+        });
+        state.write().await.rooms.insert("r1".to_string(), room);
+        let tasks = crate::tasks::AppTasks::new();
+        let timer = schedule_pending_play("r1".to_string(), created_at, state.clone(), &tasks);
+        tokio::task::yield_now().await;
+        let state_guard = state.write().await;
+
+        tokio::time::advance(Duration::from_millis(MAX_READY_WAIT_MS + 1)).await;
+        tokio::task::yield_now().await;
+        tasks.cancel();
+        drop(state_guard);
+        timer.await.unwrap();
+        tasks.wait().await;
+
+        let room = &state.read().await.rooms["r1"];
+        assert!(room.pending_play.is_some());
+        assert_eq!(room.state.play_state, "paused");
     }
 }

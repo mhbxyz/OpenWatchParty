@@ -219,6 +219,7 @@ pub(in crate::ws) async fn handle_playback(
     client_id: &str,
     parsed: IncomingMessage,
     state: &SharedState,
+    tasks: &crate::tasks::AppTasks,
 ) {
     let Some(room_id) = parsed.room.clone() else {
         return;
@@ -269,7 +270,12 @@ pub(in crate::ws) async fn handle_playback(
         }
     }
     if let Some((room_id, created_at)) = pending_schedule {
-        std::mem::drop(schedule_pending_play(room_id, created_at, state.clone()));
+        std::mem::drop(schedule_pending_play(
+            room_id,
+            created_at,
+            state.clone(),
+            tasks,
+        ));
     }
 }
 
@@ -588,7 +594,7 @@ mod tests {
             })),
         );
 
-        handle_playback("host", parsed, &state).await;
+        handle_playback("host", parsed, &state, &crate::tasks::AppTasks::new()).await;
 
         let outgoing = test_helpers::recv_msg(&mut guest_rx).expect("canonical broadcast");
         assert_eq!(outgoing.client.as_deref(), Some("host"));
@@ -605,7 +611,7 @@ mod tests {
             Some(serde_json::json!({ "position": -1.0, "play_state": "playing" })),
         );
 
-        handle_playback("host", parsed, &state).await;
+        handle_playback("host", parsed, &state, &crate::tasks::AppTasks::new()).await;
 
         let locked = state.read().await;
         assert_eq!(locked.rooms["r1"].state.position, 0.0);

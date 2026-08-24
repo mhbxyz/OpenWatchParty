@@ -110,6 +110,7 @@ pub(super) async fn client_msg(
     msg: warp::ws::Message,
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
+    tasks: &crate::tasks::AppTasks,
 ) -> bool {
     if check_rate_limit(client_id, state).await {
         warn!("Rate limited client: {}", client_id);
@@ -158,7 +159,7 @@ pub(super) async fn client_msg(
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
         ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
-            handle_playback(client_id, parsed, state).await
+            handle_playback(client_id, parsed, state, tasks).await
         }
         ClientMessageType::Ping => handle_ping(client_id, &parsed, state).await,
         ClientMessageType::ClientLog => handle_client_log(client_id, &parsed),
@@ -236,6 +237,7 @@ mod tests {
             warp::ws::Message::text(r#"{"type":"list_rooms","ts":0}"#),
             &state,
             &jwt_config,
+            &crate::tasks::AppTasks::new(),
         )
         .await;
 
@@ -296,6 +298,7 @@ mod tests {
             warp::ws::Message::text(r#"{"type":"ping","ts":0}"#),
             &state,
             &jwt_config,
+            &crate::tasks::AppTasks::new(),
         )
         .await;
 

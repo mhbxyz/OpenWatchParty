@@ -12,7 +12,7 @@ mod test_helpers;
 
 use crate::auth::JwtConfig;
 use crate::types::{ServerState, SharedState};
-use log::info;
+use log::{info, warn};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -42,14 +42,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let state: SharedState = Arc::new(RwLock::new(ServerState::default()));
+    let app_tasks = tasks::AppTasks::new();
 
-    tasks::spawn_zombie_cleanup(state.clone());
+    tasks::spawn_zombie_cleanup(state.clone(), &app_tasks);
 
-    let routes = routes::build_ws_route(
+    let routes = routes::build_ws_route_with_tasks(
         state,
         jwt_config.clone(),
         allowed_origins.clone(),
         ingress_config,
+        app_tasks.clone(),
     )
     .or(routes::build_health_route(jwt_config, allowed_origins))
     .recover(routes::handle_rejection);
@@ -62,18 +64,42 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr: SocketAddr = format!("{}:{}", host, port)
         .parse()
         .expect("Invalid HOST:PORT combination");
-
-    let shutdown_rx = tasks::setup_shutdown_signal();
+    let shutdown_signal = tasks::shutdown_signal();
 
     info!("OpenWatchParty server listening on {}", addr);
-    warp::serve(routes)
+    let cancellation = app_tasks.cancellation_token();
+    let server = warp::serve(routes)
         .bind(addr)
         .await
-        .graceful(async {
-            shutdown_rx.await.ok();
-        })
-        .run()
-        .await;
+        .graceful(cancellation.cancelled_owned())
+        .run();
+    let mut server_task = tokio::spawn(server);
+
+    tokio::select! {
+        result = &mut server_task => {
+            result?;
+            app_tasks.cancel();
+            app_tasks.wait().await;
+        }
+        _ = shutdown_signal => {
+            app_tasks.cancel();
+            let graceful = async {
+                let result = (&mut server_task).await;
+                app_tasks.wait().await;
+                result
+            };
+            if tokio::time::timeout(tasks::SHUTDOWN_GRACE_PERIOD, graceful)
+                .await
+                .is_err()
+            {
+                let aborted = app_tasks.abort_remaining();
+                warn!("Graceful shutdown deadline elapsed; aborting {aborted} application tasks");
+                server_task.abort();
+                let _ = server_task.await;
+                app_tasks.wait().await;
+            }
+        }
+    }
     info!("Server shutdown complete");
     Ok(())
 }

@@ -193,11 +193,28 @@ fn is_origin_allowed(origin: &str, allowed: &Arc<Vec<String>>) -> bool {
     allowed.iter().any(|o| o == origin)
 }
 
+#[cfg(test)]
 pub fn build_ws_route(
     state: SharedState,
     jwt_config: Arc<JwtConfig>,
     allowed_origins: Arc<Vec<String>>,
     ingress_config: IngressConfig,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    build_ws_route_with_tasks(
+        state,
+        jwt_config,
+        allowed_origins,
+        ingress_config,
+        crate::tasks::AppTasks::new(),
+    )
+}
+
+pub fn build_ws_route_with_tasks(
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    allowed_origins: Arc<Vec<String>>,
+    ingress_config: IngressConfig,
+    tasks: crate::tasks::AppTasks,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     build_ws_route_with_clock(
         state,
@@ -205,6 +222,7 @@ pub fn build_ws_route(
         allowed_origins,
         ingress_config,
         Arc::new(crate::utils::now_ms),
+        tasks,
     )
 }
 
@@ -214,6 +232,7 @@ fn build_ws_route_with_clock(
     allowed_origins: Arc<Vec<String>>,
     ingress_config: IngressConfig,
     session_clock: crate::ws::SessionClock,
+    tasks: crate::tasks::AppTasks,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let state_filter = warp::any().map(move || state.clone());
     let jwt_filter = {
@@ -231,6 +250,7 @@ fn build_ws_route_with_clock(
     let trusted_proxies = Arc::new(ingress_config.trusted_proxies);
     let auth_timeout = ingress_config.auth_timeout;
     let clock_filter = warp::any().map(move || session_clock.clone());
+    let tasks_filter = warp::any().map(move || tasks.clone());
 
     let admission = warp::addr::remote()
         .and(warp::header::optional::<String>("x-forwarded-for"))
@@ -268,20 +288,31 @@ fn build_ws_route_with_clock(
         .and(state_filter)
         .and(jwt_filter)
         .and(clock_filter)
+        .and(tasks_filter)
         .map(
-            move |permit, ws: warp::ws::Ws, state, jwt_config: Arc<JwtConfig>, session_clock| {
+            move |permit,
+                  ws: warp::ws::Ws,
+                  state,
+                  jwt_config: Arc<JwtConfig>,
+                  session_clock,
+                  tasks: crate::tasks::AppTasks| {
                 ws.max_message_size(crate::ws::constants::MAX_MESSAGE_SIZE)
                     .max_frame_size(crate::ws::constants::MAX_FRAME_SIZE)
                     .on_upgrade(move |socket| async move {
-                        let _permit = permit;
-                        crate::ws::client_connection(
-                            socket,
-                            state,
-                            jwt_config,
-                            auth_timeout,
-                            session_clock,
-                        )
-                        .await;
+                        let connection_tasks = tasks.clone();
+                        let connection = tasks.spawn(async move {
+                            let _permit = permit;
+                            crate::ws::client_connection(
+                                socket,
+                                state,
+                                jwt_config,
+                                auth_timeout,
+                                session_clock,
+                                connection_tasks,
+                            )
+                            .await;
+                        });
+                        let _ = connection.await;
                     })
             },
         )
@@ -559,6 +590,36 @@ mod tests {
         assert!(state.read().await.clients.is_empty());
     }
 
+    #[tokio::test]
+    async fn shutdown_closes_active_socket_and_reaps_connection_task() {
+        let state = crate::test_helpers::create_state();
+        let tasks = crate::tasks::AppTasks::new();
+        let route = build_ws_route_with_tasks(
+            state.clone(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+            tasks.clone(),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap();
+        client.recv().await.unwrap();
+
+        tasks.cancel();
+        client.recv_closed().await.unwrap();
+        tokio::time::timeout(Duration::from_secs(1), tasks.wait())
+            .await
+            .expect("connection task survived shutdown");
+
+        assert!(state.read().await.clients.is_empty());
+        assert_eq!(tasks.active_count(), 0);
+    }
+
     #[tokio::test(start_paused = true)]
     async fn authenticated_session_is_valid_before_its_expiration() {
         let state = crate::test_helpers::create_state();
@@ -605,6 +666,7 @@ mod tests {
             Arc::new(vec!["https://example.com".to_string()]),
             test_ingress_config(Duration::from_secs(5)),
             session_clock,
+            crate::tasks::AppTasks::new(),
         );
         let mut client = warp::test::ws()
             .path("/ws")

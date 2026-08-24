@@ -14,6 +14,7 @@ pub(super) const COMMAND_COOLDOWN_MS: u64 = 2000;
 pub(super) const RATE_LIMIT_MESSAGES: u32 = 30; // Max messages per window
 pub(super) const RATE_LIMIT_WINDOW_MS: u64 = 1000; // Window size in ms
 pub(super) const POLICY_VIOLATION_CLOSE_CODE: u16 = 1008;
+pub(crate) const GOING_AWAY_CLOSE_CODE: u16 = 1001;
 
 // Resource limits
 pub(super) const MAX_CLIENTS_PER_ROOM: usize = 20; // Max clients in a room
