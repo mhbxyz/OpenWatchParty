@@ -1,4 +1,5 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
+use crate::room::close_room_parts;
 use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
@@ -6,7 +7,7 @@ use std::collections::HashMap;
 
 enum LeaveOutcome {
     Left(Vec<ClientSender>, WsMessage),
-    Close(String, Vec<String>),
+    Close(String),
 }
 
 fn detach_client_from_room(
@@ -25,8 +26,7 @@ fn detach_client_from_room(
     }
 
     if room.clients.is_empty() || room.host_id == client_id {
-        let clients_to_notify = room.clients.clone();
-        Some(LeaveOutcome::Close(room_id, clients_to_notify))
+        Some(LeaveOutcome::Close(room_id))
     } else {
         let msg = WsMessage {
             msg_type: "client_left".to_string(),
@@ -43,12 +43,10 @@ fn detach_client_from_room(
 
 fn close_and_notify(
     room_id: &str,
-    clients_to_notify: &[String],
-    clients: &HashMap<String, Client>,
+    clients: &mut HashMap<String, Client>,
     rooms: &mut HashMap<String, Room>,
 ) -> (Vec<ClientSender>, WsMessage) {
-    info!("Closing room {}", room_id);
-    rooms.remove(room_id);
+    let senders = close_room_parts(room_id, clients, rooms).unwrap_or_default();
     let msg = WsMessage {
         msg_type: "room_closed".to_string(),
         room: Some(room_id.to_string()),
@@ -57,10 +55,6 @@ fn close_and_notify(
         ts: now_ms(),
         server_ts: Some(now_ms()),
     };
-    let senders = clients_to_notify
-        .iter()
-        .filter_map(|cid| clients.get(cid).map(|client| client.sender.clone()))
-        .collect();
     (senders, msg)
 }
 
@@ -71,12 +65,7 @@ pub fn handle_leave(
 ) -> Option<(Vec<ClientSender>, WsMessage)> {
     match detach_client_from_room(client_id, clients, rooms) {
         Some(LeaveOutcome::Left(senders, msg)) => Some((senders, msg)),
-        Some(LeaveOutcome::Close(room_id, clients_to_notify)) => Some(close_and_notify(
-            &room_id,
-            &clients_to_notify,
-            clients,
-            rooms,
-        )),
+        Some(LeaveOutcome::Close(room_id)) => Some(close_and_notify(&room_id, clients, rooms)),
         None => None,
     }
 }
@@ -150,5 +139,56 @@ mod tests {
 
         let result = detach_client_from_room("c1", &mut clients, &mut rooms);
         assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn host_disconnect_clears_guest_room_membership() {
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        host.room_id = Some("room".to_string());
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        handle_disconnect("host", &state).await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms.contains_key("room"));
+        assert!(!locked.clients.contains_key("host"));
+        assert!(locked.clients["guest"].room_id.is_none());
+        drop(locked);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_closed"
+        );
+    }
+
+    #[test]
+    fn host_leave_clears_guest_room_membership() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        host.room_id = Some("room".to_string());
+        guest.room_id = Some("room".to_string());
+        clients.insert("host".to_string(), host);
+        clients.insert("guest".to_string(), guest);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("guest".to_string());
+        rooms.insert("room".to_string(), room);
+
+        let notification = handle_leave("host", &mut clients, &mut rooms);
+
+        assert!(notification.is_some());
+        assert!(!rooms.contains_key("room"));
+        assert!(clients["host"].room_id.is_none());
+        assert!(clients["guest"].room_id.is_none());
     }
 }

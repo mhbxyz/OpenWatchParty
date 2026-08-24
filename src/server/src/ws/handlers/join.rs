@@ -302,6 +302,44 @@ mod tests {
         assert_previous_membership(&state).await;
     }
 
+    #[tokio::test]
+    async fn host_joining_another_room_clears_previous_guests() {
+        let state = test_helpers::create_state();
+        let (mut host_a, _host_a_rx) =
+            test_helpers::create_client_with_rx("host-a", "Host A", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        let (mut host_b, _host_b_rx) =
+            test_helpers::create_client_with_rx("host-b", "Host B", true);
+        host_a.room_id = Some("room-a".to_string());
+        guest.room_id = Some("room-a".to_string());
+        host_b.room_id = Some("room-b".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host-a".to_string(), host_a);
+            locked.clients.insert("guest".to_string(), guest);
+            locked.clients.insert("host-b".to_string(), host_b);
+            let mut room_a = test_helpers::create_room("room-a", "host-a");
+            room_a.clients.push("guest".to_string());
+            locked.rooms.insert("room-a".to_string(), room_a);
+            locked.rooms.insert(
+                "room-b".to_string(),
+                test_helpers::create_room("room-b", "host-b"),
+            );
+        }
+
+        handle_join_room("host-a", &join_message("room-b"), &state).await;
+
+        let locked = state.read().await;
+        assert!(!locked.rooms.contains_key("room-a"));
+        assert!(locked.clients["guest"].room_id.is_none());
+        assert_eq!(locked.clients["host-a"].room_id.as_deref(), Some("room-b"));
+        drop(locked);
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_closed"
+        );
+    }
+
     async fn state_with_guest_in_previous_room() -> SharedState {
         let state = test_helpers::create_state();
         let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
