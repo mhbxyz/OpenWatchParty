@@ -41,7 +41,7 @@
       syncCooldownUntil: 0,
       isInitialSync: false,
       initialSyncUntil: 0,
-      initialSyncTargetPos: 0,
+      initialSyncTargetPos: null,
       syncStatus: 'synced',
       currentDrift: 0,
       pendingPlayUntil: 0,

@@ -135,7 +135,7 @@
       state.syncCooldownUntil = 0;
       state.isInitialSync = false;
       state.initialSyncUntil = 0;
-      state.initialSyncTargetPos = 0;
+      state.initialSyncTargetPos = null;
       video.pause();
     }
     if (state.isBuffering || !utils.isVideoReady()) return;

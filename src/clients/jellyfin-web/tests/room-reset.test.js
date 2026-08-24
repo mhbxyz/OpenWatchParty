@@ -64,6 +64,7 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.wantsToPlay, false);
   assert.equal(OWP.state.isSyncing, false);
   assert.equal(OWP.state.isInitialSync, false);
+  assert.equal(OWP.state.initialSyncTargetPos, null);
   assert.equal(OWP.state.syncStatus, 'synced');
   assert.equal(OWP.state.currentDrift, 0);
   assert.equal(OWP.state.pendingPlayUntil, 0);

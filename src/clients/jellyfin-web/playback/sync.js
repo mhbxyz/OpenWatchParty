@@ -108,31 +108,34 @@
   const checkInitialSync = (abs, drift, expected, video, serverNow) => {
     if (!state.isInitialSync) return false;
     const now = utils.nowMs();
-    if (state.initialSyncTargetPos && abs > INITIAL_SYNC_DRIFT_THRESHOLD) {
+    const inCooldown = state.syncCooldownUntil && now < state.syncCooldownUntil;
+    if (abs > INITIAL_SYNC_MAX_DRIFT) {
+      utils.log('SYNC', { type: 'initial_sync_critical_drift', drift, videoPos: video.currentTime, expected });
+      video.currentTime = expected;
+      state.lastSyncServerTs = serverNow;
+      state.lastSyncPosition = expected;
+      state.initialSyncTargetPos = null;
+      return true;
+    }
+    if (state.initialSyncTargetPos !== null
+        && abs > INITIAL_SYNC_DRIFT_THRESHOLD
+        && !inCooldown) {
       utils.log('SYNC', { type: 'post_buffer_seek', drift, videoPos: video.currentTime, expected });
       video.currentTime = expected;
       state.lastSyncServerTs = serverNow;
       state.lastSyncPosition = expected;
-      state.initialSyncTargetPos = 0;
-      return true;
-    }
-    if (abs > INITIAL_SYNC_MAX_DRIFT) {
-      utils.log('SYNC', { type: 'initial_sync_large_drift', drift, videoPos: video.currentTime, expected });
-      video.currentTime = expected;
-      state.lastSyncServerTs = serverNow;
-      state.lastSyncPosition = expected;
-      state.initialSyncTargetPos = 0;
+      state.initialSyncTargetPos = null;
       return true;
     }
     if (abs < INITIAL_SYNC_DRIFT_THRESHOLD) {
       state.isInitialSync = false;
       state.initialSyncUntil = 0;
-      state.initialSyncTargetPos = 0;
+      state.initialSyncTargetPos = null;
       utils.log('SYNC', { type: 'initial_sync_complete', drift, reason: 'drift_threshold' });
     } else if (state.initialSyncUntil && now >= state.initialSyncUntil) {
       state.isInitialSync = false;
       state.initialSyncUntil = 0;
-      state.initialSyncTargetPos = 0;
+      state.initialSyncTargetPos = null;
       utils.log('SYNC', { type: 'initial_sync_timeout', drift });
     }
     return false;
