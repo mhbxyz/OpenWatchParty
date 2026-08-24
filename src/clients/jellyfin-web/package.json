@@ -1,0 +1,16 @@
+{
+  "name": "openwatchparty-jellyfin-web",
+  "private": true,
+  "scripts": {
+    "lint": "eslint .",
+    "check:syntax": "node tests/check-syntax.cjs",
+    "test": "node --test tests/*.test.js && sh tests/lint-command.test.sh"
+  },
+  "devDependencies": {
+    "eslint": "10.9.0",
+    "globals": "17.11.0"
+  },
+  "engines": {
+    "node": "^20.19.0 || ^22.13.0 || >=24"
+  }
+}

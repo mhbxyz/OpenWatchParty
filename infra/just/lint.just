@@ -16,13 +16,11 @@ server:
     @cd {{server_dir}} && cargo clippy -- -D warnings
     @echo -e "{{GREEN}}✓ Rust lint passed{{RESET}}"
 
-[doc('Lint JavaScript code (requires eslint)')]
+[doc('Lint JavaScript code')]
 client:
     #!/usr/bin/env bash
-    set -uo pipefail
+    set -euo pipefail
     echo -e "{{CYAN}}▶ Linting JavaScript...{{RESET}}"
-    if command -v eslint &> /dev/null; then
-        eslint {{client_dir}}/**/*.js {{client_dir}}/*.js || true
-    else
-        echo -e "{{YELLOW}}⚠ eslint not installed, skipping{{RESET}}"
-    fi
+    npm --prefix {{client_dir}} ci
+    npm --prefix {{client_dir}} run lint
+    echo -e "{{GREEN}}✓ JavaScript lint passed{{RESET}}"

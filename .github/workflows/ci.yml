@@ -81,16 +81,24 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: src/clients/jellyfin-web/package-lock.json
 
-      - name: Check JS syntax
-        run: |
-          for file in src/clients/jellyfin-web/*.js; do
-            echo "Checking $file..."
-            node --check "$file"
-          done
+      - name: Install JS dependencies
+        working-directory: src/clients/jellyfin-web
+        run: npm ci
+
+      - name: Lint JS recursively
+        working-directory: src/clients/jellyfin-web
+        run: npm run lint
+
+      - name: Check JS syntax recursively
+        working-directory: src/clients/jellyfin-web
+        run: npm run check:syntax
 
       - name: Run JS tests
-        run: node --test src/clients/jellyfin-web/tests/*.test.js
+        working-directory: src/clients/jellyfin-web
+        run: npm test
 
   release-script-tests:
     name: Release Script Tests

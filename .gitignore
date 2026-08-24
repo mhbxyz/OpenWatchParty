@@ -9,6 +9,9 @@ infra/docker/dev/config/
 __pycache__/
 *.pyc
 
+# Node.js
+node_modules/
+
 # .NET build artifacts
 bin/
 obj/

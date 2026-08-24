@@ -35,7 +35,8 @@ plugin:
 [doc('Run JavaScript client tests')]
 client:
     @echo -e "{{GREEN}}▶ Running client tests...{{RESET}}"
-    @node --test {{client_dir}}/tests/*.test.js
+    @npm ci --prefix {{client_dir}}
+    @npm test --prefix {{client_dir}}
     @echo -e "{{GREEN}}✓ Client tests passed{{RESET}}"
 
 [doc('Run release script tests')]
