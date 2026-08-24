@@ -203,10 +203,19 @@
       return;
     }
     const token = authResult.mode === 'authenticated' ? authResult.token : null;
-    const wsUrl = state.wsUrl || DEFAULT_WS_URL;
+    const sessionServerUrl = utils.normalizeSessionServerUrl(state.wsUrl || DEFAULT_WS_URL);
+    if (!sessionServerUrl.valid) {
+      state.isConnecting = false;
+      state.authBlocked = true;
+      state.authError = sessionServerUrl.error;
+      if (ui.showToast) ui.showToast(sessionServerUrl.error);
+      ui.render();
+      return;
+    }
+    const wsUrl = sessionServerUrl.url;
     console.log('[OpenWatchParty] Connecting to WebSocket:', wsUrl);
-    if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {
-      console.warn('[OpenWatchParty] WARNING: Using insecure WebSocket (ws://) on HTTPS page. Data may be intercepted.');
+    if (sessionServerUrl.thirdParty) {
+      console.warn('[OpenWatchParty] Session server uses a different hostname or port:', wsUrl);
     }
     try {
       state.ws = new WebSocket(wsUrl);

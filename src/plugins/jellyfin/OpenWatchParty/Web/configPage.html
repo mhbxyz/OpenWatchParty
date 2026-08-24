@@ -49,7 +49,14 @@
                         <h2 class="sectionTitle">Session Server</h2>
                         <div class="inputContainer">
                             <input is="emby-input" type="text" id="SessionServerUrl" label="Session Server URL" placeholder="Auto-detect (same host, port 3000)" />
-                            <div class="fieldDescription">WebSocket server URL (e.g., wss://party.example.com/ws). Leave empty for auto-detection.</div>
+                            <div class="fieldDescription">Absolute ws:// or wss:// URL without credentials, query, or fragment. Leave empty for auto-detection.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="AllowAutoDetectedSessionServer" />
+                                <span>Trust automatic same-host port 3000 session server</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">Explicitly permits sending OpenWatchParty tokens to ws(s)://this-host:3000/ws.</div>
                         </div>
                     </div>
 
@@ -151,6 +158,40 @@
                         return 'JWT secret contains an obvious sequential pattern';
                     }
                     return '';
+                },
+
+                normalizeSessionServerUrl: function(value) {
+                    var candidate = (value || '').trim();
+                    if (!candidate) return { valid: true, url: '', thirdParty: false };
+                    var url;
+                    try {
+                        url = new URL(candidate);
+                    } catch (err) {
+                        return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host.' };
+                    }
+                    if ((url.protocol !== 'ws:' && url.protocol !== 'wss:') || !url.hostname) {
+                        return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host.' };
+                    }
+                    if (url.username || url.password) {
+                        return { valid: false, error: 'Session server URL must not contain credentials.' };
+                    }
+                    if (candidate.indexOf('?') !== -1 || candidate.indexOf('#') !== -1) {
+                        return { valid: false, error: 'Session server URL must not contain a query string or fragment.' };
+                    }
+                    if (window.location.protocol === 'https:' && url.protocol === 'ws:') {
+                        return { valid: false, error: 'This HTTPS page requires a secure wss:// session server URL.' };
+                    }
+                    var defaultPort = function(protocol) {
+                        return protocol === 'https:' || protocol === 'wss:' ? '443' : '80';
+                    };
+                    var pagePort = window.location.port || defaultPort(window.location.protocol);
+                    var targetPort = url.port || defaultPort(url.protocol);
+                    return {
+                        valid: true,
+                        url: url.href,
+                        target: url.host,
+                        thirdParty: url.hostname.toLowerCase() !== window.location.hostname.toLowerCase() || targetPort !== pagePort
+                    };
                 }
             };
 
@@ -183,6 +224,7 @@
 
                     // Server settings
                     $('#SessionServerUrl', page).val(config.SessionServerUrl || '');
+                    $('#AllowAutoDetectedSessionServer', page).prop('checked', config.AllowAutoDetectedSessionServer === true);
                     OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
 
                     Dashboard.hideLoadingMsg();
@@ -194,7 +236,6 @@
 
             $('.openwatchpartyConfigurationForm').on('submit', function (e) {
                 e.preventDefault();
-                Dashboard.showLoadingMsg();
                 var page = $(this).parents('.pluginConfigurationPage')[0];
                 var jwtSecret = $('#JwtSecret', page).val() || '';
                 var allowInsecure = $('#AllowInsecureNoAuth', page).prop('checked') === true;
@@ -209,10 +250,32 @@
                     $('#AllowInsecureNoAuth', page).prop('checked', false);
                 }
                 if (!jwtSecret && !allowInsecure) {
-                    Dashboard.hideLoadingMsg();
                     Dashboard.alert('Configure a JWT secret or explicitly enable insecure development mode.');
                     return false;
                 }
+
+                var sessionServerUrl = OpenWatchPartyConfigurationPage.normalizeSessionServerUrl($('#SessionServerUrl', page).val());
+                if (!sessionServerUrl.valid) {
+                    Dashboard.alert(sessionServerUrl.error);
+                    return false;
+                }
+                var allowAutoDetected = $('#AllowAutoDetectedSessionServer', page).prop('checked') === true;
+                if (!sessionServerUrl.url && !allowAutoDetected) {
+                    Dashboard.alert('Enter a session server URL or explicitly trust automatic same-host port 3000 detection.');
+                    return false;
+                }
+                if (!sessionServerUrl.url && !window.confirm(
+                    'Allow OpenWatchParty tokens to be sent to the automatically detected same-host port 3000 session server?'
+                )) {
+                    return false;
+                }
+                if (sessionServerUrl.thirdParty && !window.confirm(
+                    'The session server uses a different hostname or port (' + sessionServerUrl.target + '). Save this destination?'
+                )) {
+                    return false;
+                }
+                $('#SessionServerUrl', page).val(sessionServerUrl.url);
+                Dashboard.showLoadingMsg();
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
                     // Authentication settings
@@ -223,7 +286,8 @@
                     config.TokenTtlSeconds = parseInt($('#TokenTtlSeconds', page).val(), 10) || 3600;
 
                     // Server settings
-                    config.SessionServerUrl = $('#SessionServerUrl', page).val();
+                    config.SessionServerUrl = sessionServerUrl.url;
+                    config.AllowAutoDetectedSessionServer = allowAutoDetected;
 
                     return ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config);
                 }).then(function () {

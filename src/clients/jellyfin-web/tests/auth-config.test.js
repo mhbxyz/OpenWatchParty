@@ -209,7 +209,7 @@ describe('authentication configuration', () => {
     globalThis.fetch = async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ auth_enabled: false, insecure_mode: true })
+      json: async () => ({ auth_enabled: false, insecure_mode: true, session_server_url: '' })
     });
 
     const result = await OWP.actions.fetchAuthToken();
@@ -246,6 +246,56 @@ describe('authentication configuration', () => {
     assert.ok(OWP.state.tokenExpiresAt > Date.now());
   });
 
+  it('rejects absent or non-string session server URL fields', async () => {
+    for (const payload of [
+      { auth_enabled: false, insecure_mode: true },
+      { auth_enabled: false, insecure_mode: true, session_server_url: null }
+    ]) {
+      globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => payload });
+      const result = await OWP.actions.fetchAuthToken();
+      assert.equal(result.mode, 'error');
+      assert.equal(result.code, 'invalid_response');
+    }
+  });
+
+  it('fails closed when the token response contains an invalid websocket URL', async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        auth_enabled: true,
+        token: 'owp-token',
+        session_server_url: 'https://session.example/ws'
+      })
+    });
+
+    const result = await OWP.actions.fetchAuthToken();
+
+    assert.equal(result.mode, 'error');
+    assert.equal(result.code, 'invalid_response');
+    assert.equal(OWP.state.authBlocked, true);
+    assert.equal(OWP.state.authToken, null);
+    assert.equal(OWP.state.ws, null);
+  });
+
+  it('fails closed when the token response would create mixed content', async () => {
+    globalThis.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        auth_enabled: false,
+        insecure_mode: true,
+        session_server_url: 'ws://session.example/ws'
+      })
+    });
+
+    const result = await OWP.actions.fetchAuthToken();
+
+    assert.equal(result.mode, 'error');
+    assert.equal(result.code, 'invalid_response');
+    assert.match(result.message, /HTTPS.*wss/);
+  });
+
   it('does not create a websocket while authentication is blocked', async () => {
     OWP.actions.fetchAuthToken = async () => {
       OWP.state.authBlocked = true;
@@ -267,6 +317,18 @@ describe('authentication configuration', () => {
     assert.equal(OWP.state.ws, null);
     assert.equal(OWP.state.authBlocked, true);
     assert.match(OWP.state.authError, /invalid result/);
+  });
+
+  it('revalidates the websocket URL immediately before construction', async () => {
+    OWP.state.wsUrl = 'wss://user:secret@session.example/ws';
+    OWP.actions.fetchAuthToken = async () => ({ mode: 'insecure', token: null });
+
+    await OWP.actions.connect();
+
+    assert.equal(OWP.state.ws, null);
+    assert.equal(OWP.state.isConnecting, false);
+    assert.equal(OWP.state.authBlocked, true);
+    assert.match(OWP.state.authError, /credentials/);
   });
 
   it('rearms refresh for a reusable token after cleanup', () => {
@@ -338,7 +400,7 @@ describe('authentication configuration', () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ auth_enabled: true, token: 'initial-token', expires_in: 1 })
+          json: async () => ({ auth_enabled: true, token: 'initial-token', expires_in: 1, session_server_url: '' })
         };
       }
       return { ok: false, status: 500 };
@@ -383,8 +445,8 @@ describe('authentication configuration', () => {
         ok: true,
         status: 200,
         json: async () => request === 1
-          ? { auth_enabled: true, token: 'initial-token', expires_in: 1 }
-          : { auth_enabled: false, insecure_mode: true }
+          ? { auth_enabled: true, token: 'initial-token', expires_in: 1, session_server_url: '' }
+          : { auth_enabled: false, insecure_mode: true, session_server_url: '' }
       };
     };
     OWP.state.ws = socket;
@@ -413,7 +475,7 @@ describe('authentication configuration', () => {
     resolveFetch({
       ok: true,
       status: 200,
-      json: async () => ({ auth_enabled: true, token: 'stale-token', expires_in: 3600 })
+      json: async () => ({ auth_enabled: true, token: 'stale-token', expires_in: 3600, session_server_url: '' })
     });
     const result = await pending;
 

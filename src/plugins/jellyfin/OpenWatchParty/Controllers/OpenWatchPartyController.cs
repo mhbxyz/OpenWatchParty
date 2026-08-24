@@ -25,6 +25,7 @@ public class OpenWatchPartyController : ControllerBase
     {
         "state.js",
         "utils/time.js",
+        "utils/url.js",
         "utils/video.js",
         "utils/misc.js",
         "utils/media.js",
@@ -281,10 +282,30 @@ public class OpenWatchPartyController : ControllerBase
         // P-CS01 fix: Periodically clean up expired rate limit entries to prevent memory leak
         CleanupExpiredRateLimits();
 
-        var config = Plugin.Instance?.Configuration;
+        return GetTokenForConfiguration(Plugin.Instance?.Configuration);
+    }
+
+    internal ActionResult GetTokenForConfiguration(PluginConfiguration? config)
+    {
         if (config == null)
         {
             return StatusCode(500, new { error = "Plugin not configured" });
+        }
+
+        if (!SessionServerUrlValidator.TryNormalize(config.SessionServerUrl, out var sessionServerUrl, out var sessionServerUrlError))
+        {
+            _logger.LogError("Token issuance is blocked by invalid SessionServerUrl: {ValidationError}", sessionServerUrlError);
+            return StatusCode(503, new {
+                error = sessionServerUrlError,
+                configuration_error = true
+            });
+        }
+        if (sessionServerUrl.Length == 0 && !config.AllowAutoDetectedSessionServer)
+        {
+            return StatusCode(503, new {
+                error = "Automatic same-host session server detection requires explicit opt-in",
+                configuration_error = true
+            });
         }
 
         // Get user info from the authenticated context
@@ -320,7 +341,7 @@ public class OpenWatchPartyController : ControllerBase
                 insecure_mode = true,
                 user_id = userId,
                 user_name = userName,
-                session_server_url = config.SessionServerUrl ?? string.Empty
+                session_server_url = sessionServerUrl
             });
         }
 
@@ -340,7 +361,7 @@ public class OpenWatchPartyController : ControllerBase
             expires_in = config.TokenTtlSeconds,
             user_id = userId,
             user_name = userName,
-            session_server_url = config.SessionServerUrl ?? string.Empty
+            session_server_url = sessionServerUrl
         });
     }
 

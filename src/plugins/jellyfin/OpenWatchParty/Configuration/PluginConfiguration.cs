@@ -60,9 +60,15 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// The WebSocket server URL. If empty, uses the default (same host, port 3000).
+    /// Gets or sets the absolute session WebSocket URL. An empty value enables automatic discovery.
+    /// Only ws/wss URLs with a host and without credentials, query strings, or fragments are valid.
     /// </summary>
     /// <example>ws://localhost:3000/ws or wss://party.example.com/ws</example>
     public string SessionServerUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether same-host port 3000 auto-detection is explicitly trusted.
+    /// </summary>
+    public bool AllowAutoDetectedSessionServer { get; set; }
 
 }

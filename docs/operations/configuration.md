@@ -20,7 +20,8 @@ Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatc
 | JWT Issuer | `Jellyfin` | Issuer claim in generated tokens |
 | Token TTL | `3600` | Token lifetime in seconds (1 hour default) |
 | Invite TTL | `3600` | Invite link lifetime in seconds |
-| Session Server URL | (empty) | Custom WebSocket server URL. If empty, uses `ws(s)://[host]:3000/ws` |
+| Session Server URL | (empty) | Absolute `ws://` or `wss://` URL. Empty requires explicit trust of same-host port 3000 auto-detection. |
+| Trust automatic session server | disabled | Allows tokens to be sent to `ws(s)://[host]:3000/ws` when URL is empty. |
 
 ### JWT Secret Guidelines
 
@@ -111,6 +112,10 @@ If the session server is on a different host or port:
 
 ### URL Format
 
+The value is normalized when saved and must be an absolute `ws://` or `wss://` URL with a hostname. Sub-paths and IPv6 hosts are supported. Credentials (`user:password@`), query strings, and fragments are rejected. An HTTPS Jellyfin page requires `wss://`; browsers must never downgrade it to `ws://` mixed content.
+
+Saving a destination whose hostname or effective port differs from the Jellyfin page requires explicit confirmation. The client repeats these checks on the Token response and immediately before constructing the WebSocket, so invalid or tampered configuration fails closed.
+
 | Scheme | When to Use |
 |--------|-------------|
 | `ws://` | HTTP/unencrypted (development only) |
@@ -167,6 +172,7 @@ Plugin settings:
 - JWT Secret: (empty)
 - Allow insecure unauthenticated development: enabled explicitly
 - Session Server URL: (empty)
+- Trust automatic same-host port 3000 session server: enabled explicitly
 
 Existing installations with an empty plugin secret are intentionally blocked after upgrading. Configure the same secret in the plugin and session server, or explicitly opt into insecure mode for local development only.
 

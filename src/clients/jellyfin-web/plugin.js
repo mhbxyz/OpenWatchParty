@@ -129,6 +129,7 @@
     await load('state.js');
     await Promise.all([
       load('utils/time.js'),
+      load('utils/url.js'),
       load('utils/video.js'),
       load('utils/misc.js'),
     ]);

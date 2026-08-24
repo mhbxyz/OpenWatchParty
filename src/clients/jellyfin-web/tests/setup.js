@@ -14,6 +14,9 @@ require('../state.js');
 // Load time.js (defines OWP.utils.nowMs, getServerNow, adjustedPosition)
 require('../utils/time.js');
 
+// Load url.js (defines strict session WebSocket URL validation)
+require('../utils/url.js');
+
 // Load misc.js (defines OWP.utils.suppress and shouldSend)
 require('../utils/misc.js');
 

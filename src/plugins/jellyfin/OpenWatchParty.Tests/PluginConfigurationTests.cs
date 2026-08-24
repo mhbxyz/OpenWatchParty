@@ -65,6 +65,8 @@ public class PluginConfigurationTests
 
         Assert.Contains("BLOCKED: configure a JWT secret", page, StringComparison.Ordinal);
         Assert.Contains("AllowInsecureNoAuth", page, StringComparison.Ordinal);
+        Assert.Contains("AllowAutoDetectedSessionServer", page, StringComparison.Ordinal);
+        Assert.Contains("automatically detected same-host port 3000", page, StringComparison.Ordinal);
         Assert.Contains("Base64/Base64URL generated from at least 32 random bytes", page, StringComparison.Ordinal);
         Assert.DoesNotContain("Clear to disable authentication", page, StringComparison.Ordinal);
     }
@@ -134,6 +136,7 @@ public class PluginConfigurationTests
     {
         var config = new PluginConfiguration();
         Assert.Equal(string.Empty, config.SessionServerUrl);
+        Assert.False(config.AllowAutoDetectedSessionServer);
     }
 
 }
