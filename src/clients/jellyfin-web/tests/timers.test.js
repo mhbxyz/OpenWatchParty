@@ -10,6 +10,22 @@ require('../app/cleanup.js');
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 describe('deferred operation registry', () => {
+  it('invokes browser timer methods with the window receiver', () => {
+    const originalClearTimeout = window.clearTimeout;
+    let receiver;
+    window.clearTimeout = function(handle) {
+      receiver = this;
+      return originalClearTimeout.call(this, handle);
+    };
+    try {
+      const handle = OWP.timers.setTimeout(() => {}, 1000, 'ui');
+      OWP.timers.clear(handle);
+      assert.equal(receiver, window);
+    } finally {
+      window.clearTimeout = originalClearTimeout;
+    }
+  });
+
   beforeEach(() => {
     OWP.timers.clearAll();
     OWP.state.ws = null;

@@ -23,8 +23,8 @@
       }
       callback(...callbackArgs);
     };
-    const schedule = kind === 'timeout' ? window.setTimeout : window.setInterval;
-    const clear = kind === 'timeout' ? window.clearTimeout : window.clearInterval;
+    const schedule = (kind === 'timeout' ? window.setTimeout : window.setInterval).bind(window);
+    const clear = (kind === 'timeout' ? window.clearTimeout : window.clearInterval).bind(window);
     handle = schedule(run, delay, ...args);
     if (!completed) deferredOperations.set(handle, { kind, scope, clear });
     return handle;
