@@ -4,7 +4,7 @@ namespace OpenWatchParty.Plugin.Tests;
 
 public class FileTransformationIntegrationTests
 {
-    private const string ScriptTag = "<script src=\"/OpenWatchParty/ClientScript\" defer></script>";
+    private const string ScriptTag = "<script src=\"../OpenWatchParty/ClientScript\" defer></script>";
     private const string FallbackLoaderGuard = "__owpClientScriptInjected";
 
     private class FakePayload
@@ -50,8 +50,19 @@ public class FileTransformationIntegrationTests
         var result = FileTransformationIntegration.TransformHomeChunkScript(MakePayload(js, "home-html.a1b2.chunk.js"));
 
         Assert.Contains(FallbackLoaderGuard, result);
-        Assert.Contains("/OpenWatchParty/ClientScript", result);
+        Assert.Contains("../OpenWatchParty/ClientScript", result);
+        Assert.Contains("window.OpenWatchParty&&window.OpenWatchParty.__loaded", result);
         Assert.StartsWith(js, result, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TransformIndexHtml_IsIdempotentAcrossAbsoluteAndRelativeTags()
+    {
+        var relative = $"<html><body>{ScriptTag}</body></html>";
+        var absolute = "<html><body><script src=\"/OpenWatchParty/ClientScript\"></script></body></html>";
+
+        Assert.Equal(relative, FileTransformationIntegration.TransformIndexHtml(MakePayload(relative)));
+        Assert.Equal(absolute, FileTransformationIntegration.TransformIndexHtml(MakePayload(absolute)));
     }
 
     [Fact]

@@ -13,11 +13,11 @@ namespace OpenWatchParty.Plugin;
 /// </summary>
 public class FileTransformationIntegration : IScheduledTask
 {
-    private const string ClientScriptPath = "/OpenWatchParty/ClientScript";
+    private const string ClientScriptPath = ClientScriptInjection.Marker;
     private const string IndexPattern = "index.html";
     private const string HomeChunkPattern = @"home-html\..*\.chunk\.js";
     private const string HomeChunkInjectionGuard = "__owpClientScriptInjected";
-    private const string HomeChunkInjectionSnippet = "\n;(function(){if(window.__owpClientScriptInjected)return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='/OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
+    private const string HomeChunkInjectionSnippet = "\n;(function(){if(window.__owpClientScriptInjected||(window.OpenWatchParty&&window.OpenWatchParty.__loaded))return;window.__owpClientScriptInjected=true;var s=document.createElement('script');s.src='../OpenWatchParty/ClientScript';s.defer=true;document.head.appendChild(s);}());\n";
 
     private readonly ILogger<FileTransformationIntegration> _logger;
     private static ILogger<FileTransformationIntegration>? s_logger;
@@ -54,7 +54,7 @@ public class FileTransformationIntegration : IScheduledTask
             if (ftAssembly == null)
             {
                 _logger.LogInformation("[OpenWatchParty] File Transformation plugin not found. "
-                    + "Script injection will not be automatic — use Custom HTML instead.");
+                    + "The native response middleware will inject the client script.");
                 progress.Report(100);
                 return Task.CompletedTask;
             }
@@ -63,7 +63,7 @@ public class FileTransformationIntegration : IScheduledTask
             if (pluginInterface == null)
             {
                 _logger.LogWarning("[OpenWatchParty] File Transformation plugin found but PluginInterface type not available. "
-                    + "The installed version may be incompatible.");
+                    + "The installed version may be incompatible; native injection remains enabled.");
                 progress.Report(100);
                 return Task.CompletedTask;
             }
@@ -72,7 +72,7 @@ public class FileTransformationIntegration : IScheduledTask
             if (registerMethod == null)
             {
                 _logger.LogWarning("[OpenWatchParty] File Transformation plugin found but RegisterTransformation method not available. "
-                    + "The installed version may be incompatible.");
+                    + "The installed version may be incompatible; native injection remains enabled.");
                 progress.Report(100);
                 return Task.CompletedTask;
             }
@@ -85,7 +85,7 @@ public class FileTransformationIntegration : IScheduledTask
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[OpenWatchParty] Failed to register with File Transformation plugin. "
-                + "Script injection will not be automatic — use Custom HTML instead.");
+                + "Native response injection remains enabled.");
         }
 
         progress.Report(100);
@@ -118,16 +118,16 @@ public class FileTransformationIntegration : IScheduledTask
 
         s_logger?.LogDebug("[OpenWatchParty] TransformIndexHtml invoked for file '{FileName}'.", fileName ?? "unknown");
 
-        if (string.IsNullOrEmpty(contents) || contents.Contains(ClientScriptPath, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(contents) || contents.Contains(ClientScriptPath, StringComparison.OrdinalIgnoreCase))
         {
             return contents ?? string.Empty;
         }
 
-        var bodyEndIndex = contents.LastIndexOf("</body>", StringComparison.OrdinalIgnoreCase);
-        if (bodyEndIndex >= 0)
+        var transformed = ClientScriptInjection.InjectIntoHtml(contents);
+        if (!string.Equals(contents, transformed, StringComparison.Ordinal))
         {
             s_logger?.LogDebug("[OpenWatchParty] Injected client script tag into index payload for file '{FileName}'.", fileName ?? "unknown");
-            return contents.Insert(bodyEndIndex, "    <script src=\"/OpenWatchParty/ClientScript\" defer></script>\n");
+            return transformed;
         }
 
         s_logger?.LogWarning("[OpenWatchParty] Could not inject into file '{FileName}': '</body>' tag not found.", fileName ?? "unknown");
