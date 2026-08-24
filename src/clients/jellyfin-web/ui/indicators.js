@@ -16,7 +16,10 @@
     if (!el || state.isHost) return;
     const status = state.syncStatus || 'synced';
     let dotClass, label, showSpinner = false;
-    if (status === 'pending_play') {
+    if (status === 'blocked') {
+      dotClass = 'syncing';
+      label = 'Playback blocked - press Play';
+    } else if (status === 'pending_play') {
       dotClass = 'pending';
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
       label = `Waiting for sync... ${remaining.toFixed(1)}s`;
@@ -37,7 +40,10 @@
     if (state.isHost) return '';
     const status = state.syncStatus || 'synced';
     let dotClass, label, extra = '';
-    if (status === 'pending_play') {
+    if (status === 'blocked') {
+      dotClass = 'syncing';
+      label = 'Playback blocked - press Play';
+    } else if (status === 'pending_play') {
       dotClass = 'pending';
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
       label = `Waiting for sync... ${remaining.toFixed(1)}s`;

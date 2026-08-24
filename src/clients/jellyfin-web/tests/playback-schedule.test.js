@@ -31,6 +31,7 @@ OWP.ui = {
   showToast: () => {},
   updateSyncIndicator: () => {}
 };
+OWP.playback = { safePlay: video => video.play() };
 OWP.constants.VIDEO_ACTION_RETRY_MS = 1;
 OWP.constants.VIDEO_ACTION_MAX_WAIT_MS = 20;
 OWP.utils.getVideo = () => currentVideo;

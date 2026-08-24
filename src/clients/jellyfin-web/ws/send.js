@@ -51,7 +51,9 @@
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
-      suppressUntil: 0
+      suppressUntil: 0,
+      playbackBlocked: false,
+      playbackFailureNotified: false
     });
     state.playbackRequestAttempt++;
     state.autoJoinAttempt++;

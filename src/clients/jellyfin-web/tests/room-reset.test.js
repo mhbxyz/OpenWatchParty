@@ -42,6 +42,8 @@ const makeDirtyRoomState = () => {
     suppressUntil: Date.now() + 1000,
     currentVideoElement: video,
     playbackRequestAttempt: 4,
+    playbackBlocked: true,
+    playbackFailureNotified: true,
     pendingActionTimer: OWP.timers.setTimeout(() => {
       throw new Error('cancelled room action executed');
     }, 10000, 'room')
@@ -70,6 +72,8 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.lastSyncPlayState, '');
   assert.equal(OWP.state.pendingActionTimer, null);
   assert.equal(OWP.state.playbackRequestAttempt, 5);
+  assert.equal(OWP.state.playbackBlocked, false);
+  assert.equal(OWP.state.playbackFailureNotified, false);
   assert.equal(chatClearCount, 1);
 };
 

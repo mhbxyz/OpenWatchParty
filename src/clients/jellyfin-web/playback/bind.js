@@ -61,6 +61,7 @@
         if (wasBuffering) utils.log('VIDEO', { event: 'ready', pos: video.currentTime, readyState: video.readyState });
       },
       playing: () => {
+        if (playback.markPlaybackResumed) playback.markPlaybackResumed();
         const wasBuffering = state.isBuffering;
         state.isBuffering = false;
         if (wasBuffering) {
@@ -70,7 +71,10 @@
           }
         }
       },
-      play: () => onHostEvent('play', video),
+      play: () => {
+        if (playback.markPlaybackResumed) playback.markPlaybackResumed();
+        onHostEvent('play', video);
+      },
       pause: () => onHostEvent('pause', video),
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });

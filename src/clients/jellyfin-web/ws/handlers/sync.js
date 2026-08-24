@@ -55,7 +55,7 @@
       video.currentTime = targetPos;
     }
     if (hostPlaying) {
-      video.play().catch(() => {});
+      OWP.playback.safePlay(video, 'room synchronization');
     } else if (msg.payload.state.play_state === 'paused') {
       video.pause();
     }
@@ -119,12 +119,13 @@
 
   h.handleStateUpdate = (msg, video) => {
     if (state.isHost || !video) return;
+    state.playbackActionAttempt++;
     if (msg.payload) {
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
     }
     if (msg.payload.play_state === 'playing' && video.paused) {
       utils.startSyncing();
-      video.play().catch(() => {});
+      OWP.playback.safePlay(video, 'state update');
       state.lastSyncServerTs = utils.getServerNow();
       state.lastSyncPosition = video.currentTime;
       state.syncCooldownUntil = utils.nowMs() + 2000;

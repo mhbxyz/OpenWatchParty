@@ -167,6 +167,8 @@
     hasTimeSync: false,
     pendingActionTimer: null,
     playbackActionAttempt: 0,
+    playbackBlocked: false,
+    playbackFailureNotified: false,
     homeRoomCache: new LRUCache(50),
     lastParticipantCount: 0,
     joiningItemId: '',

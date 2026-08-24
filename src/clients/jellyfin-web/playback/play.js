@@ -64,6 +64,48 @@
     return result.success;
   };
 
+  const safePlay = async (video, context = 'synchronization') => {
+    if (!video || typeof video.play !== 'function') return false;
+    const actionAttempt = OWP.state.playbackActionAttempt;
+    const roomId = OWP.state.roomId;
+    const isCurrent = () => OWP.state.inRoom
+      && OWP.state.roomId === roomId
+      && OWP.state.playbackActionAttempt === actionAttempt;
+    try {
+      await video.play();
+      if (!isCurrent()) return false;
+      const state = OWP.state;
+      state.playbackBlocked = false;
+      state.playbackFailureNotified = false;
+      if (state.syncStatus === 'blocked') state.syncStatus = 'syncing';
+      if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+      return true;
+    } catch (err) {
+      if (!isCurrent()) return false;
+      const state = OWP.state;
+      console.error(`[OpenWatchParty] Playback failed during ${context}:`, err);
+      state.playbackBlocked = true;
+      state.syncStatus = 'blocked';
+      state.pendingPlayUntil = 0;
+      if (video.playbackRate !== 1) video.playbackRate = 1;
+      if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+      if (!state.playbackFailureNotified && OWP.ui?.showToast) {
+        state.playbackFailureNotified = true;
+        OWP.ui.showToast('Playback was blocked. Press Play in Jellyfin to continue.');
+      }
+      return false;
+    }
+  };
+
+  const markPlaybackResumed = () => {
+    const state = OWP.state;
+    if (!state.playbackBlocked) return;
+    state.playbackBlocked = false;
+    state.playbackFailureNotified = false;
+    state.syncStatus = state.inRoom && !state.isHost ? 'syncing' : 'synced';
+    if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
+  };
+
   const ensurePlayback = async (itemId, attempt = 0, expectedRequestAttempt = null, force = false) => {
     const state = OWP.state;
     if (!state.inRoom || !itemId || !window.ApiClient) return false;
@@ -99,5 +141,11 @@
     }
   };
 
-  Object.assign(playback, { tryPlayMethods, playItem, ensurePlayback });
+  Object.assign(playback, {
+    tryPlayMethods,
+    playItem,
+    safePlay,
+    markPlaybackResumed,
+    ensurePlayback
+  });
 })();

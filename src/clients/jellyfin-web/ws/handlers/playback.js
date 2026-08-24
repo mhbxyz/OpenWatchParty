@@ -38,7 +38,7 @@
         state.lastSyncPlayState = 'playing';
         state.syncCooldownUntil = utils.nowMs() + 2000;
         state.syncStatus = 'syncing';
-        video.play().catch(() => {});
+        OWP.playback.safePlay(video, 'host play command');
         if (ui.showToast) ui.showToast('Host resumed playback');
         break;
       case 'pause':
@@ -55,7 +55,7 @@
         state.syncCooldownUntil = utils.nowMs() + 2000;
         if (hostPlayState === 'playing') {
           state.syncStatus = 'syncing';
-          video.play().catch(() => {});
+          OWP.playback.safePlay(video, 'host seek command');
         } else {
           state.syncStatus = 'synced';
           video.pause();
