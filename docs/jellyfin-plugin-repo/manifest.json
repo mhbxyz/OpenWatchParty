@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "0.2.0",
+        "changelog": "## Highlights\n\n- Reliable synchronized playback with atomic room state, monotonic scheduling, reconnection recovery, and media-correlated readiness.\n- Hardened JWT authentication, WebSocket validation, resource limits, backpressure handling, and graceful shutdown.\n- Jellyfin 10.11-compatible plugin injection with embedded modular client assets and deterministic packaging.\n- Reproducible, signed supply chain with locked dependencies, SBOMs, provenance, immutable CI dependencies, secret scanning, and blocking vulnerability gates.\n\n## Compatibility\n\n- Jellyfin: 10.11.3\n- Jellyfin target ABI: 10.11.0.0\n- File Transformation: optional fallback integration 2.5.3.0\n\n## Upgrade note\n\nAuthentication and session-server destination now fail closed. Configure a strong Base64 JWT secret and explicitly select either a validated WebSocket URL or trusted same-host port 3000 auto-detection.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.2.0/OpenWatchParty-v0.2.0.zip",
+        "checksum": "b2e9efca5dbf4296bbc301664dc7501e",
+        "timestamp": "2026-08-24T19:10:49Z"
+      },
+      {
         "version": "0.1.0",
         "changelog": "**Full Changelog**: https://github.com/mhbxyz/OpenWatchParty/commits/v0.1.0\n",
         "targetAbi": "10.10.0.0",
