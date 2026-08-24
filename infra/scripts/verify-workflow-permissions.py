@@ -19,6 +19,7 @@ EXPECTED = {
     },
     "publish.yml": {
         "verify-versions": {"contents": "read"},
+        "release-security-gate": {"contents": "read"},
         "build-and-push": {"contents": "read", "packages": "write"},
         "build-plugin": {"contents": "read"},
         "create-release-assets": {"contents": "write"},

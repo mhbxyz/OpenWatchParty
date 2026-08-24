@@ -38,10 +38,27 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: infra/scripts/verify-versions.sh "$RELEASE_TAG"
 
+  release-security-gate:
+    name: Release Security Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build release image for scanning
+        run: docker build --build-arg BUILD_MODE=release -f infra/docker/server.Dockerfile -t owp-release:scan ./src/server
+      - name: Block HIGH and CRITICAL findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: owp-release:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: [verify-versions]
+    needs: [verify-versions, release-security-gate]
     permissions:
       contents: read
       packages: write
