@@ -174,7 +174,6 @@ jobs:
         run: |
           cosign sign --yes --bundle artifacts/owp-session-server.sigstore.json "$IMAGE_REF"
           cosign verify \
-            --bundle artifacts/owp-session-server.sigstore.json \
             --certificate-identity "$CERTIFICATE_IDENTITY" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "$IMAGE_REF"
