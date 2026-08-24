@@ -32,6 +32,8 @@ timestamp='2026-08-24T08:00:00Z'
 [[ $(jq -r '.[0].versions[0].sourceUrl' "$manifest") == "https://github.com/mhbxyz/OpenWatchParty/releases/download/${release_tag}/OpenWatchParty-${release_tag}.zip" ]]
 read -r expected_checksum _ < <(md5sum "$archive")
 [[ $(jq -r '.[0].versions[0].checksum' "$manifest") == "$expected_checksum" ]]
+"$script_dir/update-plugin-manifest.sh" "$manifest" "$archive" "$release_tag" "$changelog" "$timestamp"
+[[ $(jq --arg version "$version" '[.[0].versions[] | select(.version == $version)] | length' "$manifest") == 1 ]]
 
 for malicious_tag in \
     "${release_tag};touch \"$marker\"" \

@@ -19,6 +19,10 @@ env:
 
 permissions: {}
 
+concurrency:
+  group: publish-${{ github.event.release.tag_name || github.ref }}
+  cancel-in-progress: false
+
 jobs:
   verify-versions:
     name: Verify Release Versions

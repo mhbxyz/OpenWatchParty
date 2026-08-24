@@ -49,7 +49,7 @@ jq --arg version "$version" \
       "sourceUrl": $source_url,
       "checksum": $checksum,
       "timestamp": $timestamp
-    }] + .[0].versions' \
+    }] + (.[0].versions | map(select(.version != $version)))' \
    "$manifest" > "$temporary_file"
 
 mv -- "$temporary_file" "$manifest"
