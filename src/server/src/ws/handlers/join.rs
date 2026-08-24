@@ -1,11 +1,17 @@
 use super::super::constants::MAX_CLIENTS_PER_ROOM;
 use super::super::dispatch::{is_authenticated, send_error};
 use super::super::validation::sanitize_name;
-use crate::messaging::{broadcast_to_room, send_to_client};
-use crate::types::{Client, Clients, IncomingMessage, Room, Rooms, WsMessage};
+use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
+use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
+
+type JoinNotifications = (
+    Option<ClientSender>,
+    WsMessage,
+    Option<(Vec<ClientSender>, WsMessage)>,
+);
 
 fn add_client_to_room(
     client_id: &str,
@@ -25,11 +31,14 @@ fn add_client_to_room(
     }
 }
 
-fn notify_join(client_id: &str, room: &Room, locked_clients: &HashMap<String, Client>) {
-    send_to_client(
-        client_id,
-        locked_clients,
-        &WsMessage {
+fn prepare_join_notifications(
+    client_id: &str,
+    room: &Room,
+    locked_clients: &HashMap<String, Client>,
+) -> JoinNotifications {
+    (
+        locked_clients.get(client_id).map(|c| c.sender.clone()),
+        WsMessage {
             msg_type: "room_state".to_string(),
             room: Some(room.room_id.clone()),
             client: Some(client_id.to_string()),
@@ -43,30 +52,27 @@ fn notify_join(client_id: &str, room: &Room, locked_clients: &HashMap<String, Cl
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
-    );
-    broadcast_to_room(
-        room,
-        locked_clients,
-        &WsMessage {
-            msg_type: "participants_update".to_string(),
-            room: Some(room.room_id.clone()),
-            client: None,
-            payload: Some(serde_json::json!({ "participant_count": room.clients.len() })),
-            ts: now_ms(),
-            server_ts: Some(now_ms()),
-        },
-        Some(client_id),
-    );
+        Some((
+            collect_room_senders(room, locked_clients, Some(client_id)),
+            WsMessage {
+                msg_type: "participants_update".to_string(),
+                room: Some(room.room_id.clone()),
+                client: None,
+                payload: Some(serde_json::json!({ "participant_count": room.clients.len() })),
+                ts: now_ms(),
+                server_ts: Some(now_ms()),
+            },
+        )),
+    )
 }
 
 pub(in crate::ws) async fn handle_join_room(
     client_id: &str,
     parsed: &IncomingMessage,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
 ) {
-    if !is_authenticated(client_id, clients).await {
-        send_error(client_id, clients, "Authentication required").await;
+    if !is_authenticated(client_id, state).await {
+        send_error(client_id, state, "Authentication required").await;
         return;
     }
     let Some(ref room_id) = parsed.room else {
@@ -80,33 +86,48 @@ pub(in crate::ws) async fn handle_join_room(
         .and_then(|v| v.as_str())
         .and_then(sanitize_name);
 
-    let mut locked_rooms = rooms.write().await;
-    let mut locked_clients = clients.write().await;
-
-    let Some(room) = locked_rooms.get_mut(room_id) else {
-        return;
-    };
-
-    if !room.clients.contains(&client_id.to_string()) && room.clients.len() >= MAX_CLIENTS_PER_ROOM
     {
-        send_to_client(
-            client_id,
-            &locked_clients,
-            &WsMessage {
-                msg_type: "error".to_string(),
-                room: Some(room_id.clone()),
-                client: Some(client_id.to_string()),
-                payload: Some(serde_json::json!({ "message": "Room is full" })),
-                ts: now_ms(),
-                server_ts: Some(now_ms()),
-            },
-        );
-        return;
+        let mut state = state.write().await;
+        let full = state
+            .rooms
+            .get(room_id)
+            .map(|room| {
+                !room.clients.contains(&client_id.to_string())
+                    && room.clients.len() >= MAX_CLIENTS_PER_ROOM
+            })
+            .unwrap_or(false);
+        if full {
+            let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+            let notifications = (
+                sender,
+                WsMessage {
+                    msg_type: "error".to_string(),
+                    room: Some(room_id.clone()),
+                    client: Some(client_id.to_string()),
+                    payload: Some(serde_json::json!({ "message": "Room is full" })),
+                    ts: now_ms(),
+                    server_ts: Some(now_ms()),
+                },
+                None,
+            );
+            enqueue_join_notifications(client_id, notifications);
+        } else if state.rooms.contains_key(room_id) {
+            info!("Client {} joining room {}", client_id, room_id);
+            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let room = rooms.get_mut(room_id).expect("room existence checked");
+            add_client_to_room(client_id, room, clients, &payload_name);
+            let notifications = prepare_join_notifications(client_id, room, clients);
+            enqueue_join_notifications(client_id, notifications);
+        }
     }
+}
 
-    info!("Client {} joining room {}", client_id, room_id);
-    add_client_to_room(client_id, room, &mut locked_clients, &payload_name);
-    notify_join(client_id, room, &locked_clients);
+fn enqueue_join_notifications(client_id: &str, notifications: JoinNotifications) {
+    let (sender, direct_msg, broadcast) = notifications;
+    send_message(sender, &direct_msg, Some(client_id));
+    if let Some((senders, broadcast_msg)) = broadcast {
+        send_to_senders(&senders, &broadcast_msg, "participants update");
+    }
 }
 
 #[cfg(test)]

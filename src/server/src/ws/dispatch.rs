@@ -5,16 +5,16 @@ use super::handlers::{
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
-use crate::types::{ClientMessageType, Clients, IncomingMessage, Rooms, WsMessage};
+use crate::types::{ClientMessageType, IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{debug, warn};
 use std::sync::Arc;
 
-pub(super) async fn check_rate_limit(client_id: &str, clients: &Clients) -> bool {
+pub(super) async fn check_rate_limit(client_id: &str, state: &SharedState) -> bool {
     use super::constants::RATE_LIMIT_MESSAGES;
     use super::constants::RATE_LIMIT_WINDOW_MS;
-    let mut locked_clients = clients.write().await;
-    if let Some(client) = locked_clients.get_mut(client_id) {
+    let mut state = state.write().await;
+    if let Some(client) = state.clients.get_mut(client_id) {
         let now = now_ms();
         client.last_seen = now;
         if now - client.last_reset > RATE_LIMIT_WINDOW_MS {
@@ -29,11 +29,10 @@ pub(super) async fn check_rate_limit(client_id: &str, clients: &Clients) -> bool
     false
 }
 
-pub(super) async fn send_error(client_id: &str, clients: &Clients, message: &str) {
-    let locked_clients = clients.read().await;
+pub(super) async fn send_error(client_id: &str, state: &SharedState, message: &str) {
     send_to_client(
         client_id,
-        &locked_clients,
+        state,
         &WsMessage {
             msg_type: "error".to_string(),
             room: None,
@@ -42,12 +41,14 @@ pub(super) async fn send_error(client_id: &str, clients: &Clients, message: &str
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
-    );
+    )
+    .await;
 }
 
-pub(super) async fn is_authenticated(client_id: &str, clients: &Clients) -> bool {
-    let locked = clients.read().await;
-    locked
+pub(super) async fn is_authenticated(client_id: &str, state: &SharedState) -> bool {
+    let state = state.read().await;
+    state
+        .clients
         .get(client_id)
         .map(|c| c.authenticated)
         .unwrap_or(false)
@@ -56,13 +57,12 @@ pub(super) async fn is_authenticated(client_id: &str, clients: &Clients) -> bool
 pub(super) async fn client_msg(
     client_id: &str,
     msg: warp::ws::Message,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
 ) {
-    if check_rate_limit(client_id, clients).await {
+    if check_rate_limit(client_id, state).await {
         warn!("Rate limited client: {}", client_id);
-        send_error(client_id, clients, "Rate limit exceeded").await;
+        send_error(client_id, state, "Rate limit exceeded").await;
         return;
     }
 
@@ -72,7 +72,7 @@ pub(super) async fn client_msg(
             client_id,
             msg.as_bytes().len()
         );
-        send_error(client_id, clients, "Message too large").await;
+        send_error(client_id, state, "Message too large").await;
         return;
     }
 
@@ -82,7 +82,7 @@ pub(super) async fn client_msg(
         Ok(v) => v,
         Err(e) => {
             warn!("JSON parse error from {}: {}", client_id, e);
-            send_error(client_id, clients, "Invalid message format").await;
+            send_error(client_id, state, "Invalid message format").await;
             return;
         }
     };
@@ -90,23 +90,19 @@ pub(super) async fn client_msg(
     debug!("Message from {}: {:?}", client_id, parsed.msg_type);
 
     match parsed.msg_type {
-        ClientMessageType::Auth => handle_auth(client_id, &parsed, clients, jwt_config).await,
-        ClientMessageType::ListRooms => send_room_list(client_id, clients, rooms).await,
-        ClientMessageType::CreateRoom => {
-            handle_create_room(client_id, &parsed, clients, rooms).await
-        }
-        ClientMessageType::JoinRoom => handle_join_room(client_id, &parsed, clients, rooms).await,
-        ClientMessageType::Ready => handle_ready(client_id, &parsed, clients, rooms).await,
-        ClientMessageType::LeaveRoom => handle_leave_room(client_id, clients, rooms).await,
+        ClientMessageType::Auth => handle_auth(client_id, &parsed, state, jwt_config).await,
+        ClientMessageType::ListRooms => send_room_list(client_id, state).await,
+        ClientMessageType::CreateRoom => handle_create_room(client_id, &parsed, state).await,
+        ClientMessageType::JoinRoom => handle_join_room(client_id, &parsed, state).await,
+        ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
+        ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
-            handle_playback(client_id, parsed, clients, rooms).await
+            handle_playback(client_id, parsed, state).await
         }
-        ClientMessageType::Ping => handle_ping(client_id, &parsed, clients).await,
+        ClientMessageType::Ping => handle_ping(client_id, &parsed, state).await,
         ClientMessageType::ClientLog => handle_client_log(client_id, &parsed),
-        ClientMessageType::ChatMessage => {
-            handle_chat_message(client_id, &parsed, clients, rooms).await
-        }
-        ClientMessageType::Unknown => handle_unknown(client_id, clients).await,
+        ClientMessageType::ChatMessage => handle_chat_message(client_id, &parsed, state).await,
+        ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
 }
 
@@ -117,46 +113,46 @@ mod tests {
 
     #[tokio::test]
     async fn check_rate_limit_under() {
-        let clients = test_helpers::create_clients();
+        let state = test_helpers::create_state();
         let (client, _rx) = test_helpers::create_client_with_rx("u1", "User", true);
-        clients.write().await.insert("c1".to_string(), client);
-        let limited = check_rate_limit("c1", &clients).await;
+        state.write().await.clients.insert("c1".to_string(), client);
+        let limited = check_rate_limit("c1", &state).await;
         assert!(!limited);
     }
 
     #[tokio::test]
     async fn check_rate_limit_at_limit() {
         use super::super::constants::RATE_LIMIT_MESSAGES;
-        let clients = test_helpers::create_clients();
+        let state = test_helpers::create_state();
         let (client, _rx) = test_helpers::create_client_with_rx("u1", "User", true);
-        clients.write().await.insert("c1".to_string(), client);
+        state.write().await.clients.insert("c1".to_string(), client);
         for _ in 0..RATE_LIMIT_MESSAGES {
-            check_rate_limit("c1", &clients).await;
+            check_rate_limit("c1", &state).await;
         }
         // Next message should be rate limited
-        let limited = check_rate_limit("c1", &clients).await;
+        let limited = check_rate_limit("c1", &state).await;
         assert!(limited);
     }
 
     #[tokio::test]
     async fn is_authenticated_true() {
-        let clients = test_helpers::create_clients();
+        let state = test_helpers::create_state();
         let (client, _rx) = test_helpers::create_client_with_rx("u1", "User", true);
-        clients.write().await.insert("c1".to_string(), client);
-        assert!(is_authenticated("c1", &clients).await);
+        state.write().await.clients.insert("c1".to_string(), client);
+        assert!(is_authenticated("c1", &state).await);
     }
 
     #[tokio::test]
     async fn is_authenticated_false() {
-        let clients = test_helpers::create_clients();
+        let state = test_helpers::create_state();
         let (client, _rx) = test_helpers::create_client_with_rx("u1", "User", false);
-        clients.write().await.insert("c1".to_string(), client);
-        assert!(!is_authenticated("c1", &clients).await);
+        state.write().await.clients.insert("c1".to_string(), client);
+        assert!(!is_authenticated("c1", &state).await);
     }
 
     #[tokio::test]
     async fn is_authenticated_not_found() {
-        let clients = test_helpers::create_clients();
-        assert!(!is_authenticated("nonexistent", &clients).await);
+        let state = test_helpers::create_state();
+        assert!(!is_authenticated("nonexistent", &state).await);
     }
 }

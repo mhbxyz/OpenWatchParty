@@ -4,7 +4,7 @@ use super::super::constants::{
 };
 use super::super::pending_play::{all_ready, schedule_pending_play};
 use super::super::validation::{is_valid_play_state, is_valid_position};
-use crate::types::{ClientMessageType, Clients, IncomingMessage, PendingPlay, Room, Rooms};
+use crate::types::{ClientMessageType, IncomingMessage, PendingPlay, Room, SharedState};
 use crate::utils::now_ms;
 use tokio::sync::mpsc;
 
@@ -127,23 +127,22 @@ fn apply_state_changes(
 pub(in crate::ws) async fn handle_playback(
     client_id: &str,
     mut parsed: IncomingMessage,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
 ) {
     let Some(ref room_id) = parsed.room else {
         return;
     };
 
     let mut pending_schedule: Option<(String, u64)> = None;
-    let broadcast_data: Option<(Vec<mpsc::Sender<_>>, String)> = 'broadcast: {
-        let mut locked_rooms = rooms.write().await;
-        let locked_clients = clients.read().await;
+    {
+        let mut state = state.write().await;
+        let crate::types::ServerState { clients, rooms } = &mut *state;
 
-        let Some(room) = locked_rooms.get_mut(room_id) else {
-            break 'broadcast None;
+        let Some(room) = rooms.get_mut(room_id) else {
+            return;
         };
         if room.host_id != client_id {
-            break 'broadcast None;
+            return;
         }
 
         let current_ts = now_ms();
@@ -163,61 +162,61 @@ pub(in crate::ws) async fn handle_playback(
             room.pending_play = None;
         }
 
-        if is_player_event && action.as_deref() == Some("play") && !all_ready(room) {
-            let position = parsed
-                .payload
-                .as_ref()
-                .and_then(|p| p.get("position"))
-                .and_then(|v| v.as_f64())
-                .filter(|pos| is_valid_position(*pos))
-                .unwrap_or(room.state.position);
-            pending_schedule = handle_play_not_ready(room, position, current_ts);
-            break 'broadcast None;
-        }
+        let broadcast_data =
+            if is_player_event && action.as_deref() == Some("play") && !all_ready(room) {
+                let position = parsed
+                    .payload
+                    .as_ref()
+                    .and_then(|p| p.get("position"))
+                    .and_then(|v| v.as_f64())
+                    .filter(|pos| is_valid_position(*pos))
+                    .unwrap_or(room.state.position);
+                pending_schedule = handle_play_not_ready(room, position, current_ts);
+                None
+            } else if absorb_during_pending(room, &parsed, action.as_deref(), current_ts) {
+                None
+            } else {
+                if parsed.msg_type == ClientMessageType::StateUpdate {
+                    let should_process = parsed
+                        .payload
+                        .as_ref()
+                        .map(|p| should_process_state_update(room, p, current_ts))
+                        .unwrap_or(true);
+                    if !should_process {
+                        return;
+                    }
+                }
 
-        if absorb_during_pending(room, &parsed, action.as_deref(), current_ts) {
-            break 'broadcast None;
-        }
+                apply_state_changes(room, &mut parsed, action.as_deref(), current_ts);
 
-        if parsed.msg_type == ClientMessageType::StateUpdate {
-            let should_process = parsed
-                .payload
-                .as_ref()
-                .map(|p| should_process_state_update(room, p, current_ts))
-                .unwrap_or(true);
-            if !should_process {
-                break 'broadcast None;
-            }
-        }
+                let senders: Vec<mpsc::Sender<_>> = room
+                    .clients
+                    .iter()
+                    .filter(|id| *id != client_id)
+                    .filter_map(|id| clients.get(id).map(|c| c.sender.clone()))
+                    .collect();
+                Some(senders)
+            };
 
-        apply_state_changes(room, &mut parsed, action.as_deref(), current_ts);
-
-        let senders: Vec<_> = room
-            .clients
-            .iter()
-            .filter(|id| *id != client_id)
-            .filter_map(|id| locked_clients.get(id).map(|c| c.sender.clone()))
-            .collect();
-
-        match serde_json::to_string(&parsed) {
-            Ok(json) => break 'broadcast Some((senders, json)),
-            Err(e) => {
-                log::error!("Failed to serialize message: {}", e);
-                break 'broadcast None;
-            }
-        }
-    };
-
-    if let Some((senders, json)) = broadcast_data {
-        let warp_msg = warp::ws::Message::text(json);
-        for sender in senders {
-            if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
-                log::warn!("Failed to send player event (buffer full or closed): {}", e);
+        if let Some(senders) = broadcast_data {
+            match serde_json::to_string(&parsed) {
+                Ok(json) => {
+                    let warp_msg = warp::ws::Message::text(json);
+                    for sender in senders {
+                        if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
+                            log::warn!(
+                                "Failed to send player event (buffer full or closed): {}",
+                                e
+                            );
+                        }
+                    }
+                }
+                Err(e) => log::error!("Failed to serialize message: {}", e),
             }
         }
     }
     if let Some((room_id, created_at)) = pending_schedule {
-        schedule_pending_play(room_id, created_at, clients.clone(), rooms.clone());
+        std::mem::drop(schedule_pending_play(room_id, created_at, state.clone()));
     }
 }
 

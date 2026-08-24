@@ -1,14 +1,19 @@
-use crate::messaging::{broadcast_room_list, broadcast_to_room};
-use crate::types::{Client, Clients, Room, Rooms, WsMessage};
+use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
+use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
+
+enum LeaveOutcome {
+    Left(Vec<ClientSender>, WsMessage),
+    Close(String, Vec<String>),
+}
 
 fn detach_client_from_room(
     client_id: &str,
     clients: &mut HashMap<String, Client>,
     rooms: &mut HashMap<String, Room>,
-) -> Option<(String, Vec<String>)> {
+) -> Option<LeaveOutcome> {
     let client = clients.get_mut(client_id)?;
     let room_id = client.room_id.take()?;
     let room = rooms.get_mut(&room_id)?;
@@ -21,7 +26,7 @@ fn detach_client_from_room(
 
     if room.clients.is_empty() || room.host_id == client_id {
         let clients_to_notify = room.clients.clone();
-        Some((room_id, clients_to_notify))
+        Some(LeaveOutcome::Close(room_id, clients_to_notify))
     } else {
         let msg = WsMessage {
             msg_type: "client_left".to_string(),
@@ -31,8 +36,8 @@ fn detach_client_from_room(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         };
-        broadcast_to_room(room, clients, &msg, None);
-        None
+        let senders = collect_room_senders(room, clients, None);
+        Some(LeaveOutcome::Left(senders, msg))
     }
 }
 
@@ -41,7 +46,7 @@ fn close_and_notify(
     clients_to_notify: &[String],
     clients: &HashMap<String, Client>,
     rooms: &mut HashMap<String, Room>,
-) {
+) -> (Vec<ClientSender>, WsMessage) {
     info!("Closing room {}", room_id);
     rooms.remove(room_id);
     let msg = WsMessage {
@@ -52,36 +57,41 @@ fn close_and_notify(
         ts: now_ms(),
         server_ts: Some(now_ms()),
     };
-    if let Ok(msg_json) = serde_json::to_string(&msg) {
-        for cid in clients_to_notify {
-            if let Some(c) = clients.get(cid) {
-                let _ = c
-                    .sender
-                    .try_send(Ok(warp::ws::Message::text(msg_json.clone())));
-            }
-        }
-    }
+    let senders = clients_to_notify
+        .iter()
+        .filter_map(|cid| clients.get(cid).map(|client| client.sender.clone()))
+        .collect();
+    (senders, msg)
 }
 
 pub fn handle_leave(
     client_id: &str,
     clients: &mut HashMap<String, Client>,
     rooms: &mut HashMap<String, Room>,
-) {
-    if let Some((room_id, clients_to_notify)) = detach_client_from_room(client_id, clients, rooms) {
-        close_and_notify(&room_id, &clients_to_notify, clients, rooms);
+) -> Option<(Vec<ClientSender>, WsMessage)> {
+    match detach_client_from_room(client_id, clients, rooms) {
+        Some(LeaveOutcome::Left(senders, msg)) => Some((senders, msg)),
+        Some(LeaveOutcome::Close(room_id, clients_to_notify)) => Some(close_and_notify(
+            &room_id,
+            &clients_to_notify,
+            clients,
+            rooms,
+        )),
+        None => None,
     }
 }
 
-pub async fn handle_disconnect(client_id: &str, clients: &Clients, rooms: &Rooms) {
+pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
     info!("Disconnecting client {}", client_id);
     {
-        let mut locked_clients = clients.write().await;
-        let mut locked_rooms = rooms.write().await;
-        handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
-        locked_clients.remove(client_id);
+        let mut state = state.write().await;
+        let crate::types::ServerState { clients, rooms } = &mut *state;
+        if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
+            send_to_senders(&senders, &msg, "leave notification");
+        }
+        clients.remove(client_id);
     }
-    broadcast_room_list(clients, rooms).await;
+    broadcast_room_list(state).await;
 }
 
 #[cfg(test)]

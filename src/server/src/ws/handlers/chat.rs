@@ -1,6 +1,6 @@
 use super::super::constants::MAX_CHAT_MESSAGE_LENGTH;
 use super::super::dispatch::send_error;
-use crate::types::{Clients, IncomingMessage, Rooms, WsMessage};
+use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use tokio::sync::mpsc;
 
@@ -16,7 +16,7 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
 
 type BroadcastData = (
     Vec<mpsc::Sender<Result<warp::ws::Message, warp::Error>>>,
-    String,
+    WsMessage,
 );
 
 fn collect_chat_senders(
@@ -47,18 +47,16 @@ fn collect_chat_senders(
         .iter()
         .filter_map(|id| clients.get(id).map(|c| c.sender.clone()))
         .collect();
-    let json = serde_json::to_string(&msg).ok()?;
-    Some((senders, json))
+    Some((senders, msg))
 }
 
 pub(in crate::ws) async fn handle_chat_message(
     client_id: &str,
     parsed: &IncomingMessage,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
 ) {
     let Some(ref room_id) = parsed.room else {
-        send_error(client_id, clients, "Room ID required for chat").await;
+        send_error(client_id, state, "Room ID required for chat").await;
         return;
     };
 
@@ -75,37 +73,26 @@ pub(in crate::ws) async fn handle_chat_message(
         } else {
             msg.to_string()
         };
-        send_error(client_id, clients, &detail).await;
+        send_error(client_id, state, &detail).await;
         return;
     }
 
-    let username = {
-        let locked_clients = clients.read().await;
-        locked_clients
+    {
+        let state = state.read().await;
+        let username = state
+            .clients
             .get(client_id)
             .map(|c| c.user_name.clone())
-            .unwrap_or_else(|| "Anonymous".to_string())
-    };
-
-    let broadcast_data = {
-        let locked_rooms = rooms.read().await;
-        let locked_clients = clients.read().await;
-        collect_chat_senders(
+            .unwrap_or_else(|| "Anonymous".to_string());
+        if let Some((senders, msg)) = collect_chat_senders(
             room_id,
             client_id,
             &username,
             chat_text,
-            &locked_rooms,
-            &locked_clients,
-        )
-    };
-
-    if let Some((senders, json)) = broadcast_data {
-        let warp_msg = warp::ws::Message::text(json);
-        for sender in senders {
-            if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
-                log::warn!("Failed to send chat_message (buffer full or closed): {}", e);
-            }
+            &state.rooms,
+            &state.clients,
+        ) {
+            crate::messaging::send_to_senders(&senders, &msg, "chat message");
         }
     }
 }

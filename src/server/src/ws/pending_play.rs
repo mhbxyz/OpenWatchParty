@@ -1,7 +1,8 @@
 use super::constants::{MAX_READY_WAIT_MS, PLAY_SCHEDULE_MS};
-use crate::messaging::broadcast_to_room;
-use crate::types::{Clients, Room, Rooms, WsMessage};
+use crate::messaging::{collect_room_senders, send_to_senders, ClientSender};
+use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
+use std::collections::HashMap;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -9,12 +10,12 @@ pub(super) fn all_ready(room: &Room) -> bool {
     room.ready_clients.len() >= room.clients.len()
 }
 
-pub(super) async fn broadcast_scheduled_play(
+pub(super) fn prepare_scheduled_play(
     room: &mut Room,
-    clients: &Clients,
+    clients: &HashMap<String, Client>,
     position: f64,
     target_server_ts: u64,
-) {
+) -> (Vec<ClientSender>, WsMessage) {
     room.state.position = position;
     room.state.play_state = "playing".to_string();
     let msg = WsMessage {
@@ -29,29 +30,34 @@ pub(super) async fn broadcast_scheduled_play(
         ts: now_ms(),
         server_ts: Some(target_server_ts),
     };
-    let locked_clients = clients.read().await;
-    broadcast_to_room(room, &locked_clients, &msg, None);
+    let senders = collect_room_senders(room, clients, None);
+    (senders, msg)
 }
 
 pub(super) fn schedule_pending_play(
     room_id: String,
     created_at: u64,
-    clients: Clients,
-    rooms: Rooms,
-) {
+    state: SharedState,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         sleep(Duration::from_millis(MAX_READY_WAIT_MS)).await;
-        let mut locked_rooms = rooms.write().await;
-        if let Some(room) = locked_rooms.get_mut(&room_id) {
+        {
+            let mut state = state.write().await;
+            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let Some(room) = rooms.get_mut(&room_id) else {
+                return;
+            };
             let pending = match room.pending_play.clone() {
                 Some(pending) if pending.created_at == created_at => pending,
                 _ => return,
             };
             room.pending_play = None;
             let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-            broadcast_scheduled_play(room, &clients, pending.position, target_server_ts).await;
+            let (senders, msg) =
+                prepare_scheduled_play(room, clients, pending.position, target_server_ts);
+            send_to_senders(&senders, &msg, "scheduled play");
         }
-    });
+    })
 }
 
 #[cfg(test)]

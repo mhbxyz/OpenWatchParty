@@ -3,8 +3,13 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
-pub type Clients = Arc<RwLock<HashMap<String, Client>>>;
-pub type Rooms = Arc<RwLock<HashMap<String, Room>>>;
+pub type SharedState = Arc<RwLock<ServerState>>;
+
+#[derive(Debug, Default)]
+pub struct ServerState {
+    pub clients: HashMap<String, Client>,
+    pub rooms: HashMap<String, Room>,
+}
 
 #[derive(Debug, Clone)]
 pub struct Client {

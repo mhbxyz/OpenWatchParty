@@ -1,14 +1,10 @@
-use crate::types::{Client, Clients, PlaybackState, Room, Rooms, WsMessage};
+use crate::types::{Client, PlaybackState, Room, ServerState, SharedState, WsMessage};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
-pub fn create_clients() -> Clients {
-    Arc::new(RwLock::new(HashMap::new()))
-}
-
-pub fn create_rooms() -> Rooms {
-    Arc::new(RwLock::new(HashMap::new()))
+pub fn create_state() -> SharedState {
+    Arc::new(RwLock::new(ServerState::default()))
 }
 
 pub fn create_client_with_rx(

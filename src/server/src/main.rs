@@ -11,9 +11,8 @@ mod ws;
 mod test_helpers;
 
 use crate::auth::JwtConfig;
-use crate::types::{Clients, Rooms};
+use crate::types::{ServerState, SharedState};
 use log::info;
-use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -36,14 +35,12 @@ async fn main() {
         }
     );
 
-    let clients: Clients = Arc::new(RwLock::new(HashMap::new()));
-    let rooms: Rooms = Arc::new(RwLock::new(HashMap::new()));
+    let state: SharedState = Arc::new(RwLock::new(ServerState::default()));
 
-    tasks::spawn_zombie_cleanup(clients.clone(), rooms.clone());
+    tasks::spawn_zombie_cleanup(state.clone());
 
-    let routes =
-        routes::build_ws_route(clients, rooms, jwt_config.clone(), allowed_origins.clone())
-            .or(routes::build_health_route(jwt_config, allowed_origins));
+    let routes = routes::build_ws_route(state, jwt_config.clone(), allowed_origins.clone())
+        .or(routes::build_health_route(jwt_config, allowed_origins));
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port: u16 = std::env::var("PORT")

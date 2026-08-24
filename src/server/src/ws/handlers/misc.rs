@@ -1,21 +1,20 @@
 use super::super::constants::PLAY_SCHEDULE_MS;
 use super::super::dispatch::send_error;
-use super::super::pending_play::{all_ready, broadcast_scheduled_play};
-use crate::messaging::{broadcast_room_list, send_to_client};
+use super::super::pending_play::{all_ready, prepare_scheduled_play};
+use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::handle_leave;
-use crate::types::{Clients, IncomingMessage, Rooms, WsMessage};
+use crate::types::{IncomingMessage, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::{info, warn};
 
 pub(in crate::ws) async fn handle_ping(
     client_id: &str,
     parsed: &IncomingMessage,
-    clients: &Clients,
+    state: &SharedState,
 ) {
-    let locked_clients = clients.read().await;
     send_to_client(
         client_id,
-        &locked_clients,
+        state,
         &WsMessage {
             msg_type: "pong".to_string(),
             room: parsed.room.clone(),
@@ -24,7 +23,8 @@ pub(in crate::ws) async fn handle_ping(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
-    );
+    )
+    .await;
 }
 
 pub(in crate::ws) fn handle_client_log(client_id: &str, parsed: &IncomingMessage) {
@@ -42,20 +42,23 @@ pub(in crate::ws) fn handle_client_log(client_id: &str, parsed: &IncomingMessage
     }
 }
 
-pub(in crate::ws) async fn handle_unknown(client_id: &str, clients: &Clients) {
+pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) {
     warn!("Unknown message type from client {}", client_id);
-    send_error(client_id, clients, "Unknown message type").await;
+    send_error(client_id, state, "Unknown message type").await;
 }
 
 pub(in crate::ws) async fn handle_ready(
     client_id: &str,
     parsed: &IncomingMessage,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
 ) {
     if let Some(ref room_id) = parsed.room {
-        let mut locked_rooms = rooms.write().await;
-        if let Some(room) = locked_rooms.get_mut(room_id) {
+        {
+            let mut state = state.write().await;
+            let crate::types::ServerState { clients, rooms } = &mut *state;
+            let Some(room) = rooms.get_mut(room_id) else {
+                return;
+            };
             room.ready_clients.insert(client_id.to_string());
             if room.pending_play.is_some() && all_ready(room) {
                 let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
@@ -65,20 +68,24 @@ pub(in crate::ws) async fn handle_ready(
                     .map(|p| p.position)
                     .unwrap_or(room.state.position);
                 room.pending_play = None;
-                broadcast_scheduled_play(room, clients, position, target_server_ts).await;
+                let (senders, msg) =
+                    prepare_scheduled_play(room, clients, position, target_server_ts);
+                send_to_senders(&senders, &msg, "scheduled play");
             }
         }
     }
 }
 
-pub(in crate::ws) async fn handle_leave_room(client_id: &str, clients: &Clients, rooms: &Rooms) {
+pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedState) {
     info!("Client {} leaving room", client_id);
     {
-        let mut locked_clients = clients.write().await;
-        let mut locked_rooms = rooms.write().await;
-        handle_leave(client_id, &mut locked_clients, &mut locked_rooms);
+        let mut state = state.write().await;
+        let crate::types::ServerState { clients, rooms } = &mut *state;
+        if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
+            send_to_senders(&senders, &msg, "leave notification");
+        }
     }
-    broadcast_room_list(clients, rooms).await;
+    broadcast_room_list(state).await;
 }
 
 #[cfg(test)]
@@ -88,9 +95,9 @@ mod tests {
 
     #[tokio::test]
     async fn handle_ping_responds_pong() {
-        let clients = test_helpers::create_clients();
+        let state = test_helpers::create_state();
         let (client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
-        clients.write().await.insert("c1".to_string(), client);
+        state.write().await.clients.insert("c1".to_string(), client);
 
         let parsed = IncomingMessage {
             msg_type: crate::types::ClientMessageType::Ping,
@@ -100,7 +107,7 @@ mod tests {
             ts: 12345,
             server_ts: None,
         };
-        handle_ping("c1", &parsed, &clients).await;
+        handle_ping("c1", &parsed, &state).await;
 
         let msg = test_helpers::recv_msg(&mut rx).unwrap();
         assert_eq!(msg.msg_type, "pong");
@@ -111,22 +118,18 @@ mod tests {
 
     #[tokio::test]
     async fn handle_ready_adds_to_set() {
-        let clients = test_helpers::create_clients();
-        let rooms = test_helpers::create_rooms();
+        let state = test_helpers::create_state();
         let (host, _rx_h) = test_helpers::create_client_with_rx("uh", "Host", true);
         let (guest, _rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
 
         {
-            let mut lc = clients.write().await;
-            lc.insert("host".to_string(), host);
-            lc.insert("guest".to_string(), guest);
-        }
-        {
-            let mut lr = rooms.write().await;
+            let mut state = state.write().await;
+            state.clients.insert("host".to_string(), host);
+            state.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room-1", "host");
             room.clients.push("guest".to_string());
             room.ready_clients.clear();
-            lr.insert("room-1".to_string(), room);
+            state.rooms.insert("room-1".to_string(), room);
         }
 
         let parsed = IncomingMessage {
@@ -137,27 +140,23 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        handle_ready("guest", &parsed, &clients, &rooms).await;
+        handle_ready("guest", &parsed, &state).await;
 
-        let lr = rooms.read().await;
-        let room = lr.get("room-1").unwrap();
+        let state = state.read().await;
+        let room = state.rooms.get("room-1").unwrap();
         assert!(room.ready_clients.contains("guest"));
     }
 
     #[tokio::test]
     async fn handle_ready_all_ready_triggers_play() {
-        let clients = test_helpers::create_clients();
-        let rooms = test_helpers::create_rooms();
+        let state = test_helpers::create_state();
         let (host, mut rx_h) = test_helpers::create_client_with_rx("uh", "Host", true);
         let (guest, mut rx_g) = test_helpers::create_client_with_rx("ug", "Guest", true);
 
         {
-            let mut lc = clients.write().await;
-            lc.insert("host".to_string(), host);
-            lc.insert("guest".to_string(), guest);
-        }
-        {
-            let mut lr = rooms.write().await;
+            let mut state = state.write().await;
+            state.clients.insert("host".to_string(), host);
+            state.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room-1", "host");
             room.clients = vec!["host".to_string(), "guest".to_string()];
             room.ready_clients.clear();
@@ -166,7 +165,7 @@ mod tests {
                 position: 10.0,
                 created_at: crate::utils::now_ms(),
             });
-            lr.insert("room-1".to_string(), room);
+            state.rooms.insert("room-1".to_string(), room);
         }
 
         let parsed = IncomingMessage {
@@ -177,7 +176,7 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        handle_ready("guest", &parsed, &clients, &rooms).await;
+        handle_ready("guest", &parsed, &state).await;
 
         // Both should receive a player_event (play broadcast)
         let msg_h = test_helpers::recv_msg(&mut rx_h).unwrap();
@@ -186,7 +185,7 @@ mod tests {
         assert_eq!(msg_g.msg_type, "player_event");
 
         // pending_play should be cleared
-        let lr = rooms.read().await;
-        assert!(lr.get("room-1").unwrap().pending_play.is_none());
+        let state = state.read().await;
+        assert!(state.rooms.get("room-1").unwrap().pending_play.is_none());
     }
 }

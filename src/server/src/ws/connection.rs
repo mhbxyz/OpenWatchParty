@@ -1,8 +1,8 @@
 use super::constants::CLIENT_CHANNEL_BUFFER;
 use super::dispatch::client_msg;
 use crate::auth::JwtConfig;
-use crate::messaging::{send_room_list, send_to_client};
-use crate::types::{Clients, Rooms, WsMessage};
+use crate::messaging::{send_message, send_room_list};
+use crate::types::{SharedState, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
 use log::info;
@@ -34,13 +34,9 @@ fn register_client(
     }
 }
 
-fn send_client_hello(
-    client_id: &str,
-    locked_clients: &std::collections::HashMap<String, crate::types::Client>,
-) {
-    send_to_client(
-        client_id,
-        locked_clients,
+fn send_client_hello(client_id: &str, sender: Option<crate::messaging::ClientSender>) {
+    send_message(
+        sender,
         &WsMessage {
             msg_type: "client_hello".to_string(),
             room: None,
@@ -49,13 +45,13 @@ fn send_client_hello(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
+        Some(client_id),
     );
 }
 
 pub async fn client_connection(
     ws: warp::ws::WebSocket,
-    clients: Clients,
-    rooms: Rooms,
+    state: SharedState,
     jwt_config: Arc<JwtConfig>,
 ) {
     let (client_ws_sender, mut client_ws_rcv) = ws.split();
@@ -73,22 +69,22 @@ pub async fn client_connection(
     );
 
     let client = register_client(client_sender, &jwt_config);
-    clients.write().await.insert(temp_id.clone(), client);
-
     {
-        let locked_clients = clients.read().await;
-        send_client_hello(&temp_id, &locked_clients);
+        let mut state = state.write().await;
+        state.clients.insert(temp_id.clone(), client);
+        let sender = state.clients.get(&temp_id).map(|c| c.sender.clone());
+        send_client_hello(&temp_id, sender);
     }
 
-    send_room_list(&temp_id, &clients, &rooms).await;
+    send_room_list(&temp_id, &state).await;
 
     while let Some(result) = client_ws_rcv.next().await {
         if let Ok(msg) = result {
-            client_msg(&temp_id, msg, &clients, &rooms, &jwt_config).await;
+            client_msg(&temp_id, msg, &state, &jwt_config).await;
         }
     }
 
-    crate::room::handle_disconnect(&temp_id, &clients, &rooms).await;
+    crate::room::handle_disconnect(&temp_id, &state).await;
 }
 
 #[cfg(test)]

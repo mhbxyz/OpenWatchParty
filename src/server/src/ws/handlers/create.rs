@@ -1,8 +1,8 @@
 use super::super::dispatch::{is_authenticated, send_error};
 use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_name};
-use crate::messaging::{broadcast_room_list, send_to_client};
-use crate::room::close_room;
-use crate::types::{Clients, IncomingMessage, PlaybackState, Room, Rooms, WsMessage};
+use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
+use crate::room::close_room_in_state;
+use crate::types::{IncomingMessage, PlaybackState, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashSet;
@@ -72,7 +72,7 @@ fn insert_and_notify(
     payload_name: &Option<String>,
     locked_clients: &mut std::collections::HashMap<String, crate::types::Client>,
     locked_rooms: &mut std::collections::HashMap<String, Room>,
-) {
+) -> (Option<ClientSender>, WsMessage) {
     let room_id = room.room_id.clone();
     locked_rooms.insert(room_id.clone(), room.clone());
     if let Some(client) = locked_clients.get_mut(client_id) {
@@ -81,10 +81,9 @@ fn insert_and_notify(
             client.user_name = name.clone();
         }
     }
-    send_to_client(
-        client_id,
-        locked_clients,
-        &WsMessage {
+    (
+        locked_clients.get(client_id).map(|c| c.sender.clone()),
+        WsMessage {
             msg_type: "room_state".to_string(),
             room: Some(room_id),
             client: Some(client_id.to_string()),
@@ -98,53 +97,54 @@ fn insert_and_notify(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         },
-    );
+    )
 }
 
 pub(in crate::ws) async fn handle_create_room(
     client_id: &str,
     parsed: &IncomingMessage,
-    clients: &Clients,
-    rooms: &Rooms,
+    state: &SharedState,
 ) {
-    if !is_authenticated(client_id, clients).await {
-        send_error(client_id, clients, "Authentication required").await;
+    if !is_authenticated(client_id, state).await {
+        send_error(client_id, state, "Authentication required").await;
         return;
-    }
-
-    let existing_room_id = {
-        let locked_rooms = rooms.read().await;
-        locked_rooms
-            .values()
-            .find(|r| r.host_id == client_id)
-            .map(|r| r.room_id.clone())
-    };
-    if let Some(room_id) = existing_room_id {
-        close_room(&room_id, clients, rooms).await;
     }
 
     info!("create_room payload: {:?}", parsed.payload);
 
     let payload_ref = parsed.payload.as_ref();
-    let (host_name, payload_name) = {
-        let locked_clients = clients.read().await;
-        resolve_host_name(payload_ref, &locked_clients, client_id)
-    };
-    let room = build_room(client_id, &host_name, payload_ref);
-
     {
-        let mut locked_rooms = rooms.write().await;
-        let mut locked_clients = clients.write().await;
-        insert_and_notify(
-            client_id,
-            room,
-            &payload_name,
-            &mut locked_clients,
-            &mut locked_rooms,
-        );
+        let mut state = state.write().await;
+        let existing_room_id = state
+            .rooms
+            .values()
+            .find(|room| room.host_id == client_id)
+            .map(|room| room.room_id.clone());
+        let closed = existing_room_id.and_then(|room_id| {
+            close_room_in_state(&room_id, &mut state).map(|senders| (room_id, senders))
+        });
+        let (host_name, payload_name) = resolve_host_name(payload_ref, &state.clients, client_id);
+        let room = build_room(client_id, &host_name, payload_ref);
+        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
+        if let Some((closed_room_id, closed_senders)) = closed {
+            send_to_senders(
+                &closed_senders,
+                &WsMessage {
+                    msg_type: "room_closed".to_string(),
+                    room: Some(closed_room_id),
+                    client: None,
+                    payload: Some(serde_json::json!({ "reason": "Host started a new room" })),
+                    ts: now_ms(),
+                    server_ts: Some(now_ms()),
+                },
+                "room closed",
+            );
+        }
+        send_message(sender, &room_msg, Some(client_id));
     }
 
-    broadcast_room_list(clients, rooms).await;
+    broadcast_room_list(state).await;
 }
 
 #[cfg(test)]

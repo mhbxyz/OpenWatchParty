@@ -1,5 +1,5 @@
 use crate::auth::JwtConfig;
-use crate::types::{Clients, Rooms};
+use crate::types::SharedState;
 use log::warn;
 use std::sync::Arc;
 use warp::Filter;
@@ -26,13 +26,11 @@ fn is_origin_allowed(origin: &str, allowed: &Arc<Vec<String>>) -> bool {
 }
 
 pub fn build_ws_route(
-    clients: Clients,
-    rooms: Rooms,
+    state: SharedState,
     jwt_config: Arc<JwtConfig>,
     allowed_origins: Arc<Vec<String>>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    let clients_filter = warp::any().map(move || clients.clone());
-    let rooms_filter = warp::any().map(move || rooms.clone());
+    let state_filter = warp::any().map(move || state.clone());
     let jwt_filter = {
         let config = jwt_config;
         warp::any().map(move || config.clone())
@@ -61,16 +59,11 @@ pub fn build_ws_route(
     warp::path("ws")
         .and(origin_check)
         .and(warp::ws())
-        .and(clients_filter)
-        .and(rooms_filter)
+        .and(state_filter)
         .and(jwt_filter)
-        .map(
-            |ws: warp::ws::Ws, clients, rooms, jwt_config: Arc<JwtConfig>| {
-                ws.on_upgrade(move |socket| {
-                    crate::ws::client_connection(socket, clients, rooms, jwt_config)
-                })
-            },
-        )
+        .map(|ws: warp::ws::Ws, state, jwt_config: Arc<JwtConfig>| {
+            ws.on_upgrade(move |socket| crate::ws::client_connection(socket, state, jwt_config))
+        })
 }
 
 pub fn build_health_route(

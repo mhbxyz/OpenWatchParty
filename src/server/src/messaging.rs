@@ -1,6 +1,9 @@
-use crate::types::{Client, Clients, Room, Rooms, WsMessage};
+use crate::types::{Client, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
+use tokio::sync::mpsc;
+
+pub type ClientSender = mpsc::Sender<Result<warp::ws::Message, warp::Error>>;
 
 fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
     let list: Vec<serde_json::Value> = rooms
@@ -19,87 +22,77 @@ fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
     }
 }
 
-pub async fn send_room_list(client_id: &str, clients: &Clients, rooms: &Rooms) {
-    let locked_rooms = rooms.read().await;
-    let msg = build_room_list_msg(&locked_rooms);
-    let locked_clients = clients.read().await;
-    send_to_client(client_id, &locked_clients, &msg);
+pub async fn send_room_list(client_id: &str, state: &SharedState) {
+    let state = state.read().await;
+    let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+    let msg = build_room_list_msg(&state.rooms);
+    send_message(sender, &msg, Some(client_id));
 }
 
-pub async fn broadcast_room_list(clients: &Clients, rooms: &Rooms) {
-    let json = {
-        let locked_rooms = rooms.read().await;
-        let msg = build_room_list_msg(&locked_rooms);
-        match serde_json::to_string(&msg) {
-            Ok(j) => j,
-            Err(e) => {
-                log::error!("Failed to serialize room list: {}", e);
-                return;
-            }
-        }
-    };
-    let locked_clients = clients.read().await;
-    let warp_msg = warp::ws::Message::text(json);
-    for client in locked_clients.values() {
-        if let Err(e) = client.sender.try_send(Ok(warp_msg.clone())) {
-            log::warn!("Failed to send room list (buffer full or closed): {}", e);
-        }
-    }
+pub async fn broadcast_room_list(state: &SharedState) {
+    let state = state.read().await;
+    let senders = state
+        .clients
+        .values()
+        .map(|c| c.sender.clone())
+        .collect::<Vec<_>>();
+    let msg = build_room_list_msg(&state.rooms);
+    send_to_senders(&senders, &msg, "room list");
 }
 
-pub fn send_to_client(client_id: &str, clients: &HashMap<String, Client>, msg: &WsMessage) {
-    if let Some(client) = clients.get(client_id) {
-        match serde_json::to_string(msg) {
-            Ok(json) => {
-                if let Err(e) = client.sender.try_send(Ok(warp::ws::Message::text(json))) {
-                    log::warn!(
-                        "Failed to send to client {} (buffer full or closed): {}",
-                        client_id,
-                        e
-                    );
-                }
-            }
-            Err(e) => {
-                log::error!(
-                    "Failed to serialize message for client {}: {}",
-                    client_id,
+pub async fn send_to_client(client_id: &str, state: &SharedState, msg: &WsMessage) {
+    let state = state.read().await;
+    let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+    send_message(sender, msg, Some(client_id));
+}
+
+pub fn send_message(sender: Option<ClientSender>, msg: &WsMessage, client_id: Option<&str>) {
+    let Some(sender) = sender else { return };
+    match serde_json::to_string(msg) {
+        Ok(json) => {
+            if let Err(e) = sender.try_send(Ok(warp::ws::Message::text(json))) {
+                log::warn!(
+                    "Failed to send to client {} (buffer full or closed): {}",
+                    client_id.unwrap_or("unknown"),
                     e
                 );
             }
         }
-    }
-}
-
-pub fn broadcast_to_room(
-    room: &Room,
-    clients: &HashMap<String, Client>,
-    msg: &WsMessage,
-    exclude: Option<&str>,
-) {
-    let json = match serde_json::to_string(msg) {
-        Ok(j) => j,
         Err(e) => {
             log::error!(
-                "Failed to serialize broadcast message for room {}: {}",
-                room.room_id,
+                "Failed to serialize message for client {}: {}",
+                client_id.unwrap_or("unknown"),
                 e
             );
-            return;
         }
+    }
+}
+
+pub fn collect_room_senders(
+    room: &Room,
+    clients: &HashMap<String, Client>,
+    exclude: Option<&str>,
+) -> Vec<ClientSender> {
+    room.clients
+        .iter()
+        .filter(|client_id| Some(client_id.as_str()) != exclude)
+        .filter_map(|client_id| clients.get(client_id).map(|client| client.sender.clone()))
+        .collect()
+}
+
+pub fn send_to_senders(senders: &[ClientSender], msg: &WsMessage, context: &str) {
+    let Ok(json) = serde_json::to_string(msg) else {
+        log::error!("Failed to serialize {} message", context);
+        return;
     };
+    send_serialized(senders, json, context);
+}
+
+pub fn send_serialized(senders: &[ClientSender], json: String, context: &str) {
     let warp_msg = warp::ws::Message::text(json);
-    for client_id in &room.clients {
-        if Some(client_id.as_str()) == exclude {
-            continue;
-        }
-        if let Some(client) = clients.get(client_id) {
-            if let Err(e) = client.sender.try_send(Ok(warp_msg.clone())) {
-                log::warn!(
-                    "Failed to broadcast to client {} (buffer full or closed): {}",
-                    client_id,
-                    e
-                );
-            }
+    for sender in senders {
+        if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
+            log::warn!("Failed to send {} (buffer full or closed): {}", context, e);
         }
     }
 }
@@ -179,7 +172,8 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        send_to_client("c1", &clients, &msg);
+        let sender = clients.get("c1").map(|client| client.sender.clone());
+        send_message(sender, &msg, Some("c1"));
         let received = test_helpers::recv_msg(&mut rx);
         assert!(received.is_some());
         assert_eq!(received.unwrap().msg_type, "test");
@@ -187,7 +181,6 @@ mod tests {
 
     #[test]
     fn send_to_client_not_found() {
-        let clients = HashMap::new();
         let msg = WsMessage {
             msg_type: "test".to_string(),
             room: None,
@@ -197,7 +190,7 @@ mod tests {
             server_ts: None,
         };
         // Should not panic
-        send_to_client("nonexistent", &clients, &msg);
+        send_message(None, &msg, Some("nonexistent"));
     }
 
     #[test]
@@ -219,7 +212,8 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        broadcast_to_room(&room, &clients, &msg, Some("a"));
+        let senders = collect_room_senders(&room, &clients, Some("a"));
+        send_to_senders(&senders, &msg, "event");
         // a should NOT receive (excluded)
         assert!(_rx_a.try_recv().is_err());
         // b and c should receive
@@ -244,7 +238,8 @@ mod tests {
             ts: 0,
             server_ts: None,
         };
-        broadcast_to_room(&room, &clients, &msg, None);
+        let senders = collect_room_senders(&room, &clients, None);
+        send_to_senders(&senders, &msg, "event");
         assert!(test_helpers::recv_msg(&mut rx_a).is_some());
         assert!(test_helpers::recv_msg(&mut rx_b).is_some());
     }

@@ -1,25 +1,22 @@
-use crate::messaging::{broadcast_room_list, send_to_client};
-use crate::types::{Client, Clients, Rooms, WsMessage};
+use crate::messaging::ClientSender;
+#[cfg(test)]
+use crate::messaging::{broadcast_room_list, send_to_senders};
+use crate::types::{Client, ServerState};
+#[cfg(test)]
+use crate::types::{SharedState, WsMessage};
+#[cfg(test)]
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
 
 fn notify_room_closed(
-    room_id: &str,
     clients_list: &[String],
     locked_clients: &HashMap<String, Client>,
-) {
-    let msg = WsMessage {
-        msg_type: "room_closed".to_string(),
-        room: Some(room_id.to_string()),
-        client: None,
-        payload: Some(serde_json::json!({ "reason": "Host started a new room" })),
-        ts: now_ms(),
-        server_ts: Some(now_ms()),
-    };
-    for cid in clients_list {
-        send_to_client(cid, locked_clients, &msg);
-    }
+) -> Vec<ClientSender> {
+    clients_list
+        .iter()
+        .filter_map(|cid| locked_clients.get(cid).map(|client| client.sender.clone()))
+        .collect()
 }
 
 fn clear_room_from_clients(
@@ -36,27 +33,40 @@ fn clear_room_from_clients(
     }
 }
 
-pub async fn close_room(room_id: &str, clients: &Clients, rooms: &Rooms) {
-    let clients_to_notify: Vec<String>;
-
+#[cfg(test)]
+pub async fn close_room(room_id: &str, state: &SharedState) {
     {
-        let mut locked_rooms = rooms.write().await;
-        let locked_clients = clients.read().await;
-
-        let Some(room) = locked_rooms.remove(room_id) else {
+        let mut state = state.write().await;
+        let Some(senders) = close_room_in_state(room_id, &mut state) else {
             return;
         };
-        info!("Closing room {} (host creating new room)", room_id);
-        clients_to_notify = room.clients.clone();
-
-        notify_room_closed(room_id, &clients_to_notify, &locked_clients);
-
-        drop(locked_clients);
-        let mut locked_clients = clients.write().await;
-        clear_room_from_clients(room_id, &clients_to_notify, &mut locked_clients);
+        send_to_senders(
+            &senders,
+            &WsMessage {
+                msg_type: "room_closed".to_string(),
+                room: Some(room_id.to_string()),
+                client: None,
+                payload: Some(serde_json::json!({ "reason": "Host started a new room" })),
+                ts: now_ms(),
+                server_ts: Some(now_ms()),
+            },
+            "room closed",
+        );
     }
 
-    broadcast_room_list(clients, rooms).await;
+    broadcast_room_list(state).await;
+}
+
+pub(crate) fn close_room_in_state(
+    room_id: &str,
+    state: &mut ServerState,
+) -> Option<Vec<ClientSender>> {
+    let room = state.rooms.remove(room_id)?;
+    info!("Closing room {} (host creating new room)", room_id);
+    let clients_to_notify = room.clients;
+    let senders = notify_room_closed(&clients_to_notify, &state.clients);
+    clear_room_from_clients(room_id, &clients_to_notify, &mut state.clients);
+    Some(senders)
 }
 
 #[cfg(test)]
