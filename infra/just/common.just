@@ -44,6 +44,7 @@ RESET  := '\033[0m'
 
 ft_version          := `jq -er .fileTransformationVersion version.json`
 ft_abi              := `jq -er .fileTransformationAbi version.json`
+ft_sha256           := `jq -er .fileTransformationSha256 version.json`
 ft_url     := "https://github.com/IAmParadox27/jellyfin-plugin-file-transformation/releases/download/" + ft_version + "/Release-" + ft_abi + ".zip"
 ft_dir     := "infra/docker/dev/config/plugins/FileTransformation"
 ft_marker  := ft_dir + "/.version"

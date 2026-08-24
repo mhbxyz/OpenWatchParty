@@ -18,6 +18,7 @@ ft:
     tmpzip=$(mktemp /tmp/ft-plugin-XXXXXX.zip)
     trap 'rm -f "$tmpzip"' EXIT
     curl -fsSL -o "$tmpzip" "{{ft_url}}"
+    infra/scripts/verify-sha256.sh "$tmpzip" "{{ft_sha256}}"
     rm -rf "{{ft_dir}}"
     mkdir -p "{{ft_dir}}"
     unzip -qo "$tmpzip" -d "{{ft_dir}}"

@@ -45,6 +45,7 @@ release:
     @echo -e "{{GREEN}}▶ Running release script tests...{{RESET}}"
     @infra/scripts/verify-pins.sh
     @infra/scripts/tests/verify-pins.test.sh
+    @infra/scripts/tests/verify-sha256.test.sh
     @infra/scripts/tests/update-plugin-manifest.test.sh
     @infra/scripts/tests/verify-versions.test.sh
     @infra/scripts/tests/write-plugin-meta.test.sh

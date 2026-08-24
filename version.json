@@ -4,5 +4,6 @@
   "jellyfinTargetAbi": "10.11.0.0",
   "jellyfinImageVersion": "10.11.3",
   "fileTransformationVersion": "2.5.3.0",
-  "fileTransformationAbi": "10.11.3"
+  "fileTransformationAbi": "10.11.3",
+  "fileTransformationSha256": "bbab2ef0528bb9a4baa80ce0ee5f3a0cfb7ce025be26a44833051aeee04003fe"
 }
