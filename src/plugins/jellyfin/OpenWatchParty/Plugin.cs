@@ -28,10 +28,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
         _logger = logger;
 
-        if (string.IsNullOrEmpty(Configuration.JwtSecret))
+        if (string.IsNullOrWhiteSpace(Configuration.JwtSecret))
         {
-            _logger.LogWarning("[OpenWatchParty] JwtSecret is not configured. Authentication is DISABLED. " +
-                "Set a JwtSecret (min 32 characters) in the plugin configuration to enable authentication.");
+            if (Configuration.AllowInsecureNoAuth)
+            {
+                _logger.LogWarning("[OpenWatchParty] Explicit insecure development mode is enabled. "
+                    + "Configure JwtSecret and disable AllowInsecureNoAuth before production use.");
+            }
+            else
+            {
+                _logger.LogError("[OpenWatchParty] JwtSecret is not configured. Token issuance is blocked until "
+                    + "a secret is configured or insecure development mode is explicitly enabled.");
+            }
         }
         else if (Configuration.JwtSecret.Length < 32)
         {
@@ -40,6 +48,10 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         }
         else
         {
+            if (Configuration.AllowInsecureNoAuth)
+            {
+                _logger.LogWarning("[OpenWatchParty] AllowInsecureNoAuth is set but ignored while JwtSecret is configured.");
+            }
             _logger.LogInformation("[OpenWatchParty] JWT authentication is enabled.");
         }
     }

@@ -11,6 +11,7 @@
                     <!-- Authentication Settings -->
                     <div class="verticalSection">
                         <h2 class="sectionTitle">Authentication</h2>
+                        <div id="AuthStatus" style="padding:.8em;margin-bottom:1em;border-radius:.3em;font-weight:600"></div>
                         <div class="inputContainer">
                             <div style="display:flex;align-items:flex-end;gap:.5em">
                                 <div style="flex:1">
@@ -20,7 +21,14 @@
                                     <span class="material-icons" style="font-size:1.3em">visibility</span>
                                 </button>
                             </div>
-                            <div class="fieldDescription">Secret used to sign and verify session tokens (min 32 characters). Clear to disable authentication.</div>
+                            <div class="fieldDescription">Secret used to sign and verify session tokens (min 32 characters). Required for production.</div>
+                        </div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="AllowInsecureNoAuth" />
+                                <span>Allow insecure unauthenticated development</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">Explicit development-only override. Never enable this on an exposed server.</div>
                         </div>
                         <div class="inputContainer">
                             <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
@@ -71,6 +79,17 @@
                             // Fallback to hardcoded GUID if API fails
                             console.warn('OpenWatchParty: Could not fetch plugin info, using fallback GUID');
                         });
+                },
+
+                updateAuthStatus: function(page, config) {
+                    var status = $('#AuthStatus', page);
+                    if ((config.JwtSecret || '').trim()) {
+                        status.text('Authentication enabled').css({ background: '#173d2a', color: '#8ee6b5' });
+                    } else if (config.AllowInsecureNoAuth) {
+                        status.text('INSECURE DEVELOPMENT MODE').css({ background: '#573d00', color: '#ffd36a' });
+                    } else {
+                        status.text('BLOCKED: configure a JWT secret').css({ background: '#5b1d1d', color: '#ffaaaa' });
+                    }
                 }
             };
 
@@ -96,12 +115,14 @@
                 }).then(function (config) {
                     // Authentication settings
                     $('#JwtSecret', page).val(config.JwtSecret || '');
+                    $('#AllowInsecureNoAuth', page).prop('checked', config.AllowInsecureNoAuth === true);
                     $('#JwtAudience', page).val(config.JwtAudience || 'OpenWatchParty');
                     $('#JwtIssuer', page).val(config.JwtIssuer || 'Jellyfin');
                     $('#TokenTtlSeconds', page).val(config.TokenTtlSeconds || 3600);
 
                     // Server settings
                     $('#SessionServerUrl', page).val(config.SessionServerUrl || '');
+                    OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
 
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {
@@ -114,10 +135,22 @@
                 e.preventDefault();
                 Dashboard.showLoadingMsg();
                 var page = $(this).parents('.pluginConfigurationPage')[0];
+                var jwtSecret = ($('#JwtSecret', page).val() || '').trim();
+                var allowInsecure = $('#AllowInsecureNoAuth', page).prop('checked') === true;
+                if (jwtSecret) {
+                    allowInsecure = false;
+                    $('#AllowInsecureNoAuth', page).prop('checked', false);
+                }
+                if (!jwtSecret && !allowInsecure) {
+                    Dashboard.hideLoadingMsg();
+                    Dashboard.alert('Configure a JWT secret or explicitly enable insecure development mode.');
+                    return false;
+                }
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
                     // Authentication settings
-                    config.JwtSecret = $('#JwtSecret', page).val();
+                    config.JwtSecret = jwtSecret;
+                    config.AllowInsecureNoAuth = allowInsecure;
                     config.JwtAudience = $('#JwtAudience', page).val();
                     config.JwtIssuer = $('#JwtIssuer', page).val();
                     config.TokenTtlSeconds = parseInt($('#TokenTtlSeconds', page).val(), 10) || 3600;

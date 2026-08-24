@@ -14,7 +14,8 @@ Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatc
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| JWT Secret | (empty) | Secret key for signing tokens. Leave empty to disable authentication. Min 32 characters recommended. |
+| JWT Secret | (empty) | Secret key for signing tokens. Required unless insecure development is explicitly enabled. |
+| Allow insecure unauthenticated development | disabled | Explicit local-development override; never enable in production. |
 | JWT Audience | `OpenWatchParty` | Audience claim in generated tokens |
 | JWT Issuer | `Jellyfin` | Issuer claim in generated tokens |
 | Token TTL | `3600` | Token lifetime in seconds (1 hour default) |
@@ -42,7 +43,8 @@ openssl rand -base64 32
 | `PORT` | `3000` | Port to listen on |
 | `HOST` | `0.0.0.0` | Address to bind to |
 | `ALLOWED_ORIGINS` | `http://localhost:8096,https://localhost:8096` | CORS allowed origins (comma-separated) |
-| `JWT_SECRET` | (empty) | Secret for validating tokens |
+| `JWT_SECRET` | required | Secret for validating tokens |
+| `ALLOW_INSECURE_NO_AUTH` | `false` | Explicit development-only override when `JWT_SECRET` is empty |
 | `LOG_LEVEL` | `info` | Log level: `error`, `warn`, `info`, `debug`, `trace` |
 
 ### Docker Compose Example
@@ -56,6 +58,7 @@ services:
     environment:
       - ALLOWED_ORIGINS=https://jellyfin.example.com
       - JWT_SECRET=${JWT_SECRET}
+      - ALLOW_INSECURE_NO_AUTH=false
       - LOG_LEVEL=info
     restart: unless-stopped
 ```
@@ -142,11 +145,16 @@ services:
     image: owp-session-server
     ports:
       - "3000:3000"
+    environment:
+      - ALLOW_INSECURE_NO_AUTH=true
 ```
 
 Plugin settings:
 - JWT Secret: (empty)
+- Allow insecure unauthenticated development: enabled explicitly
 - Session Server URL: (empty)
+
+Existing installations with an empty plugin secret are intentionally blocked after upgrading. Configure the same secret in the plugin and session server, or explicitly opt into insecure mode for local development only.
 
 ### Production Setup
 

@@ -13,8 +13,7 @@ public class PluginConfiguration : BasePluginConfiguration
     private int _inviteTtlSeconds = 3600;
 
     /// <summary>
-    /// Gets or sets the JWT secret. If empty, authentication is disabled.
-    /// Set a value (min 32 chars) to enable authentication.
+    /// Gets or sets the JWT secret. A value is required unless insecure development mode is explicit.
     /// </summary>
     /// <remarks>
     /// For security, the secret should be at least 32 characters with high entropy.
@@ -25,6 +24,12 @@ public class PluginConfiguration : BasePluginConfiguration
         get => _jwtSecret;
         set => _jwtSecret = value ?? string.Empty;
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether unauthenticated development is explicitly allowed.
+    /// This must remain disabled in production.
+    /// </summary>
+    public bool AllowInsecureNoAuth { get; set; }
 
     /// <summary>
     /// JWT audience claim. Defaults to "OpenWatchParty".

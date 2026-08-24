@@ -44,9 +44,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
 
         // Log JWT configuration status
-        if (string.IsNullOrEmpty(Configuration.JwtSecret))
+        if (string.IsNullOrWhiteSpace(Configuration.JwtSecret))
         {
-            _logger.LogWarning("[OpenWatchParty] JwtSecret not configured. Authentication DISABLED.");
+            _logger.LogError("[OpenWatchParty] JwtSecret not configured. Token issuance blocked.");
         }
     }
 
@@ -149,9 +149,14 @@ public ActionResult GetToken()
     // Check if JWT is configured
     if (string.IsNullOrEmpty(config.JwtSecret))
     {
+        if (!config.AllowInsecureNoAuth)
+        {
+            return StatusCode(503, new { error = "JWT authentication is not configured" });
+        }
         return Ok(new {
             token = (string?)null,
             auth_enabled = false,
+            insecure_mode = true,
             user_id = userId,
             user_name = userName
         });
@@ -217,14 +222,15 @@ public class PluginConfiguration : BasePluginConfiguration
     private int _inviteTtlSeconds = 3600;
 
     /// <summary>
-    /// JWT secret. If empty, authentication is disabled.
-    /// Set a value (min 32 chars) to enable authentication.
+    /// JWT secret. Required unless insecure development is explicitly enabled.
     /// </summary>
     public string JwtSecret
     {
         get => _jwtSecret;
         set => _jwtSecret = value ?? string.Empty;
     }
+
+    public bool AllowInsecureNoAuth { get; set; }
 
     /// <summary>
     /// JWT audience claim. Defaults to "OpenWatchParty".

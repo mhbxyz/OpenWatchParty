@@ -68,6 +68,10 @@
             ts: utils.nowMs()
           }));
           console.log('[OpenWatchParty] Token refreshed and re-authenticated');
+        } else if (!newToken && state.authBlocked && state.ws) {
+          state.autoReconnect = false;
+          state.ws.close(4003, 'OpenWatchParty authentication failed');
+          state.ws = null;
         }
       }, refreshInMs);
     }
@@ -81,7 +85,9 @@
         apiAccess = await waitForApiClient();
       }
       if (!apiAccess) {
-        console.warn('[OpenWatchParty] ApiClient not available after waiting, auth disabled');
+        console.warn('[OpenWatchParty] ApiClient not available after waiting');
+        state.authBlocked = true;
+        state.authError = 'Jellyfin authentication is not available';
         state.userName = getJellyfinUsername();
         return null;
       }
@@ -91,11 +97,17 @@
         headers: { 'X-Emby-Token': accessToken }
       });
       if (!response.ok) {
+        state.authBlocked = true;
+        state.authError = response.status === 503
+          ? 'JWT authentication is not configured in the OpenWatchParty plugin'
+          : `Could not obtain an OpenWatchParty token (HTTP ${response.status})`;
         console.warn('[OpenWatchParty] Failed to fetch auth token:', response.status);
         state.userName = getJellyfinUsername();
         return null;
       }
       const data = await response.json();
+      state.authBlocked = false;
+      state.authError = '';
       state.authEnabled = data.auth_enabled || false;
       state.userId = data.user_id || '';
       state.userName = data.user_name || getJellyfinUsername() || '';
@@ -110,10 +122,17 @@
         console.log('[OpenWatchParty] Auth token obtained for user:', state.userName, 'expires in', expiresIn, 's');
         return data.token;
       }
-      console.log('[OpenWatchParty] Server auth disabled, connecting without token');
+      if (data.auth_enabled === false && data.insecure_mode === true) {
+        console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
+        return null;
+      }
+      state.authBlocked = true;
+      state.authError = 'OpenWatchParty token endpoint returned an invalid authentication response';
       return null;
     } catch (err) {
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
+      state.authBlocked = true;
+      state.authError = 'Could not reach the OpenWatchParty token endpoint';
       state.userName = getJellyfinUsername();
       return null;
     }

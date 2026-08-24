@@ -13,16 +13,20 @@ mod test_helpers;
 use crate::auth::JwtConfig;
 use crate::types::{ServerState, SharedState};
 use log::info;
+use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::Filter;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
-    let jwt_config = Arc::new(JwtConfig::from_env());
+    let jwt_config = Arc::new(
+        JwtConfig::from_env()
+            .map_err(|message| io::Error::new(io::ErrorKind::InvalidInput, message))?,
+    );
     let allowed_origins = Arc::new(routes::get_allowed_origins());
 
     info!("Allowed origins: {:?}", allowed_origins);
@@ -31,7 +35,7 @@ async fn main() {
         if jwt_config.enabled {
             "ENABLED"
         } else {
-            "DISABLED"
+            "INSECURE DEVELOPMENT MODE"
         }
     );
 
@@ -60,4 +64,5 @@ async fn main() {
 
     server.await;
     info!("Server shutdown complete");
+    Ok(())
 }

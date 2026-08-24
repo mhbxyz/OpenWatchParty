@@ -126,6 +126,8 @@
     // Authentication
     authToken: null,
     authEnabled: false,
+    authBlocked: false,
+    authError: '',
     userId: '',
     userName: '',
     tokenExpiresAt: 0,           // Timestamp when token expires

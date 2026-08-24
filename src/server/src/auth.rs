@@ -33,12 +33,11 @@ fn calculate_entropy(s: &str) -> f64 {
     entropy * len
 }
 
-fn log_disabled_warning() {
+fn log_insecure_mode_warning() {
     log::warn!("=======================================================");
-    log::warn!("SECURITY WARNING: JWT_SECRET not set!");
-    log::warn!("Authentication is DISABLED - anyone can join rooms.");
-    log::warn!("This is acceptable for development/private networks.");
-    log::warn!("For production, set JWT_SECRET environment variable.");
+    log::warn!("SECURITY WARNING: INSECURE DEVELOPMENT MODE ENABLED!");
+    log::warn!("Authentication is disabled and anyone can join rooms.");
+    log::warn!("Unset ALLOW_INSECURE_NO_AUTH and configure JWT_SECRET for production.");
     log::warn!("=======================================================");
 }
 
@@ -68,23 +67,48 @@ pub struct JwtConfig {
 }
 
 impl JwtConfig {
-    pub fn from_env() -> Self {
+    pub fn from_env() -> Result<Self, String> {
         let secret = std::env::var("JWT_SECRET").unwrap_or_default();
+        let allow_insecure = std::env::var("ALLOW_INSECURE_NO_AUTH")
+            .map(|value| parse_insecure_flag(&value))
+            .unwrap_or(false);
+        Self::from_values(
+            secret,
+            allow_insecure,
+            std::env::var("JWT_AUDIENCE").unwrap_or_else(|_| "OpenWatchParty".to_string()),
+            std::env::var("JWT_ISSUER").unwrap_or_else(|_| "Jellyfin".to_string()),
+        )
+    }
+
+    fn from_values(
+        mut secret: String,
+        allow_insecure: bool,
+        audience: String,
+        issuer: String,
+    ) -> Result<Self, String> {
+        if secret.trim().is_empty() {
+            secret.clear();
+        }
         let enabled = !secret.is_empty();
 
         if !enabled {
-            log_disabled_warning();
+            if !allow_insecure {
+                return Err(
+                    "JWT_SECRET is required unless ALLOW_INSECURE_NO_AUTH=true is explicitly set"
+                        .to_string(),
+                );
+            }
+            log_insecure_mode_warning();
         } else {
             validate_secret_quality(&secret);
         }
 
-        Self {
+        Ok(Self {
             secret,
-            audience: std::env::var("JWT_AUDIENCE")
-                .unwrap_or_else(|_| "OpenWatchParty".to_string()),
-            issuer: std::env::var("JWT_ISSUER").unwrap_or_else(|_| "Jellyfin".to_string()),
+            audience,
+            issuer,
             enabled,
-        }
+        })
     }
 
     pub fn validate_token(&self, token: &str) -> Result<Claims, String> {
@@ -114,6 +138,10 @@ impl JwtConfig {
             Err(e) => Err(format!("Invalid token: {}", e)),
         }
     }
+}
+
+fn parse_insecure_flag(value: &str) -> bool {
+    value.eq_ignore_ascii_case("true") || value == "1"
 }
 
 #[cfg(test)]
@@ -175,13 +203,54 @@ mod tests {
     }
 
     #[test]
-    fn test_jwt_config_disabled() {
-        std::env::remove_var("JWT_SECRET");
-        let config = JwtConfig::from_env();
-        assert!(
-            !config.enabled,
-            "Auth should be disabled when JWT_SECRET is empty"
+    fn test_jwt_config_rejects_implicit_disabled_auth() {
+        let result =
+            JwtConfig::from_values(String::new(), false, "test".to_string(), "test".to_string());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_jwt_config_allows_explicit_insecure_mode() {
+        let config =
+            JwtConfig::from_values(String::new(), true, "test".to_string(), "test".to_string())
+                .unwrap();
+        assert!(!config.enabled);
+    }
+
+    #[test]
+    fn test_jwt_config_enables_auth_when_secret_is_set() {
+        let config = JwtConfig::from_values(
+            "test-secret-with-at-least-32-characters".to_string(),
+            false,
+            "audience".to_string(),
+            "issuer".to_string(),
+        )
+        .unwrap();
+        assert!(config.enabled);
+        assert_eq!(config.audience, "audience");
+        assert_eq!(config.issuer, "issuer");
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_whitespace_only_secret() {
+        let result = JwtConfig::from_values(
+            "   \t".to_string(),
+            false,
+            "test".to_string(),
+            "test".to_string(),
         );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_insecure_flag_requires_an_explicit_true_value() {
+        assert!(parse_insecure_flag("true"));
+        assert!(parse_insecure_flag("TRUE"));
+        assert!(parse_insecure_flag("1"));
+        assert!(!parse_insecure_flag("false"));
+        assert!(!parse_insecure_flag("yes"));
+        assert!(!parse_insecure_flag(" true "));
+        assert!(!parse_insecure_flag(""));
     }
 
     #[test]

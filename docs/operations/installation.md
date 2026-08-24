@@ -189,12 +189,14 @@ curl http://localhost:3000/health
 2. "OpenWatchParty" should appear in the plugin list
 3. Check the logs for startup messages:
    ```
-   [OpenWatchParty] JWT authentication is enabled.
-   ```
-   or
-   ```
-   [OpenWatchParty] JwtSecret is not configured. Authentication is DISABLED.
-   ```
+    [OpenWatchParty] JWT authentication is enabled.
+    ```
+   Development only:
+    ```
+    [OpenWatchParty] Explicit insecure development mode is enabled.
+    ```
+
+   A missing secret without explicit insecure opt-in blocks token issuance and server startup.
 
 ### Test the UI
 
@@ -211,7 +213,8 @@ curl http://localhost:3000/health
 | `PORT` | `3000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
 | `ALLOWED_ORIGINS` | `*` | CORS allowed origins (comma-separated) |
-| `JWT_SECRET` | (none) | JWT secret for authentication |
+| `JWT_SECRET` | required | JWT secret for authentication |
+| `ALLOW_INSECURE_NO_AUTH` | `false` | Explicit development-only override; never enable in production |
 | `LOG_LEVEL` | `info` | Logging level |
 
 ### Example

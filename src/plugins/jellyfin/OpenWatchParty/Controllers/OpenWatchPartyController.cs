@@ -307,6 +307,26 @@ public class OpenWatchPartyController : ControllerBase
             userName = "User";  // Fallback for display name only
         }
 
+        if (string.IsNullOrWhiteSpace(config.JwtSecret))
+        {
+            if (IsAuthenticationConfigurationBlocked(config))
+            {
+                return StatusCode(503, new {
+                    error = "JWT authentication is not configured",
+                    configuration_error = true
+                });
+            }
+
+            return Ok(new {
+                token = (string?)null,
+                auth_enabled = false,
+                insecure_mode = true,
+                user_id = userId,
+                user_name = userName,
+                session_server_url = config.SessionServerUrl ?? string.Empty
+            });
+        }
+
         // Rate limiting check
         var now = DateTime.UtcNow;
         var limit = TokenRateLimits.GetOrAdd(userId, _ => (0, now.AddMinutes(1)));
@@ -325,19 +345,6 @@ public class OpenWatchPartyController : ControllerBase
             TokenRateLimits[userId] = (limit.Count + 1, limit.ResetTime);
         }
 
-        // Check if JWT is configured
-        if (string.IsNullOrEmpty(config.JwtSecret))
-        {
-            // Return a special response indicating auth is disabled
-            return Ok(new {
-                token = (string?)null,
-                auth_enabled = false,
-                user_id = userId,
-                user_name = userName,
-                session_server_url = config.SessionServerUrl ?? string.Empty
-            });
-        }
-
         var token = GenerateJwtToken(userId, userName, config);
         _logger.LogDebug("Generated token for user {UserName} ({UserId})", userName, userId);
 
@@ -349,6 +356,11 @@ public class OpenWatchPartyController : ControllerBase
             user_name = userName,
             session_server_url = config.SessionServerUrl ?? string.Empty
         });
+    }
+
+    internal static bool IsAuthenticationConfigurationBlocked(PluginConfiguration config)
+    {
+        return string.IsNullOrWhiteSpace(config.JwtSecret) && !config.AllowInsecureNoAuth;
     }
 
     /// <summary>

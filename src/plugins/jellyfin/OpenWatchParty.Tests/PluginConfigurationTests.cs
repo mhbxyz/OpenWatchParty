@@ -1,4 +1,5 @@
 using OpenWatchParty.Plugin.Configuration;
+using OpenWatchParty.Plugin.Controllers;
 using Xunit;
 
 namespace OpenWatchParty.Plugin.Tests;
@@ -21,6 +22,48 @@ public class PluginConfigurationTests
         var config = new PluginConfiguration();
         config.JwtSecret = null!;
         Assert.Equal(string.Empty, config.JwtSecret);
+    }
+
+    [Fact]
+    public void InsecureAuthentication_DefaultIsDisabled()
+    {
+        var config = new PluginConfiguration();
+        Assert.False(config.AllowInsecureNoAuth);
+    }
+
+    [Fact]
+    public void InsecureAuthentication_RequiresExplicitOptIn()
+    {
+        var config = new PluginConfiguration { AllowInsecureNoAuth = true };
+        Assert.True(config.AllowInsecureNoAuth);
+    }
+
+    [Fact]
+    public void TokenIssuance_IsBlockedWithoutSecretOrExplicitOptIn()
+    {
+        var blocked = new PluginConfiguration();
+        var whitespace = new PluginConfiguration { JwtSecret = "   " };
+        var insecure = new PluginConfiguration { AllowInsecureNoAuth = true };
+        var authenticated = new PluginConfiguration { JwtSecret = "configured-secret" };
+
+        Assert.True(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(blocked));
+        Assert.True(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(whitespace));
+        Assert.False(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(insecure));
+        Assert.False(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(authenticated));
+    }
+
+    [Fact]
+    public void ConfigurationPage_ShowsBlockingAndInsecureStates()
+    {
+        var assembly = typeof(Plugin).Assembly;
+        using var stream = assembly.GetManifestResourceStream("OpenWatchParty.Plugin.Web.configPage.html");
+        Assert.NotNull(stream);
+        using var reader = new StreamReader(stream);
+        var page = reader.ReadToEnd();
+
+        Assert.Contains("BLOCKED: configure a JWT secret", page, StringComparison.Ordinal);
+        Assert.Contains("AllowInsecureNoAuth", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Clear to disable authentication", page, StringComparison.Ordinal);
     }
 
     [Fact]

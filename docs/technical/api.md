@@ -64,11 +64,12 @@ Generates a JWT token for the authenticated user.
 }
 ```
 
-**When JWT not configured:**
+**When insecure development is explicitly enabled:**
 ```json
 {
   "token": null,
   "auth_enabled": false,
+  "insecure_mode": true,
   "user_id": "abc123",
   "user_name": "John"
 }
@@ -81,6 +82,7 @@ Generates a JWT token for the authenticated user.
 | 401 | Not authenticated or claims missing |
 | 429 | Rate limit exceeded (10 tokens/min) |
 | 500 | Plugin not configured |
+| 503 | JWT secret missing and insecure development not explicitly enabled |
 
 **Rate Limiting:**
 - Maximum 10 tokens per minute per user
@@ -235,7 +237,8 @@ curl -X POST \
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `JwtSecret` | string | `""` | Secret key for signing JWT tokens. **Must be at least 32 characters** with high entropy. When empty, authentication is disabled and any client can connect. |
+| `JwtSecret` | string | `""` | Secret key for signing JWT tokens. Required unless `AllowInsecureNoAuth` is explicitly enabled. |
+| `AllowInsecureNoAuth` | bool | `false` | Explicit local-development override. Never enable in production. |
 | `JwtAudience` | string | `"OpenWatchParty"` | The `aud` (audience) claim in generated tokens. Must match the session server's expected audience if configured. |
 | `JwtIssuer` | string | `"Jellyfin"` | The `iss` (issuer) claim in generated tokens. Must match the session server's expected issuer if configured. |
 | `TokenTtlSeconds` | int | `3600` | Token lifetime in seconds. Valid range: 60-86400 (1 min to 24 hours). Values outside this range are clamped. |

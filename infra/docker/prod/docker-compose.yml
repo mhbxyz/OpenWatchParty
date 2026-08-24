@@ -12,7 +12,8 @@ services:
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-3000}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8096,https://localhost:8096}
-      - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required in production}
+      - ALLOW_INSECURE_NO_AUTH=false
       - JWT_AUDIENCE=${JWT_AUDIENCE:-OpenWatchParty}
       - JWT_ISSUER=${JWT_ISSUER:-Jellyfin}
     deploy:

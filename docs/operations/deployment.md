@@ -55,6 +55,7 @@ services:
     environment:
       - ALLOWED_ORIGINS=https://jellyfin.example.com
       - JWT_SECRET=${JWT_SECRET}
+      - ALLOW_INSECURE_NO_AUTH=false
       - LOG_LEVEL=warn
     restart: unless-stopped
     networks:
@@ -87,6 +88,7 @@ volumes:
 ```bash
 # .env
 JWT_SECRET=your-very-secure-32-character-secret-key
+ALLOW_INSECURE_NO_AUTH=false
 ```
 
 ## Reverse Proxy Configuration

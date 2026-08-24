@@ -80,6 +80,12 @@
     if (!token) {
       token = await actions.fetchAuthToken();
     }
+    if (state.authBlocked) {
+      state.isConnecting = false;
+      if (ui.showToast) ui.showToast(state.authError || 'OpenWatchParty authentication is not configured');
+      ui.render();
+      return;
+    }
     const wsUrl = state.wsUrl || DEFAULT_WS_URL;
     console.log('[OpenWatchParty] Connecting to WebSocket:', wsUrl);
     if (wsUrl.startsWith('ws://') && window.location.protocol === 'https:') {
