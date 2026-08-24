@@ -6,8 +6,17 @@ services:
       args:
         BUILD_MODE: release
     container_name: owp-session-server
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     ports:
-      - "${SESSION_SERVER_PORT:-3000}:${PORT:-3000}"
+      - "${SESSION_SERVER_BIND:-127.0.0.1}:${SESSION_SERVER_PORT:-3000}:${PORT:-3000}"
     environment:
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-3000}
