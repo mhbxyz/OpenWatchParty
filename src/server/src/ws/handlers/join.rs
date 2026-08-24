@@ -1,5 +1,5 @@
 use super::super::constants::MAX_CLIENTS_PER_ROOM;
-use super::super::dispatch::{is_authenticated, send_error};
+use super::super::dispatch::{error_message, is_authenticated, send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
 use crate::room::handle_leave;
@@ -90,10 +90,23 @@ pub(in crate::ws) async fn handle_join_room(
     state: &SharedState,
 ) {
     if !is_authenticated(client_id, state).await {
-        send_error(client_id, state, "Authentication required").await;
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AuthenticationRequired,
+            "Authentication required",
+        )
+        .await;
         return;
     }
     let Some(ref room_id) = parsed.room else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::RoomIdRequired,
+            "Room ID is required",
+        )
+        .await;
         return;
     };
 
@@ -106,47 +119,57 @@ pub(in crate::ws) async fn handle_join_room(
 
     {
         let mut state = state.write().await;
-        let full = state
-            .rooms
-            .get(room_id)
-            .map(|room| {
-                !room.clients.contains(&client_id.to_string())
-                    && room.clients.len() >= MAX_CLIENTS_PER_ROOM
-            })
-            .unwrap_or(false);
-        if full {
+        let (notifications, previous_leave) = if !state.rooms.contains_key(room_id) {
             let sender = state.clients.get(client_id).map(|c| c.sender.clone());
-            let notifications = (
-                sender,
-                WsMessage {
-                    msg_type: "error".to_string(),
-                    room: Some(room_id.clone()),
-                    client: Some(client_id.to_string()),
-                    payload: Some(serde_json::json!({ "message": "Room is full" })),
-                    ts: now_ms(),
-                    server_ts: Some(now_ms()),
-                },
-                None,
+            let error = error_message(
+                client_id,
+                Some(room_id.clone()),
+                ErrorCode::RoomNotFound,
+                "Room not found",
             );
-            enqueue_join_notifications(client_id, notifications);
-        } else if state.rooms.contains_key(room_id) {
-            info!("Client {} joining room {}", client_id, room_id);
-            let previous_room = state
-                .clients
-                .get(client_id)
-                .and_then(|client| client.room_id.as_deref());
-            if previous_room.is_some_and(|previous| previous != room_id) {
+            ((sender, error, None), None)
+        } else {
+            let room = state.rooms.get(room_id).expect("room existence checked");
+            let full = !room.clients.iter().any(|id| id == client_id)
+                && room.clients.len() >= MAX_CLIENTS_PER_ROOM;
+            if full {
+                let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+                (
+                    (
+                        sender,
+                        error_message(
+                            client_id,
+                            Some(room_id.clone()),
+                            ErrorCode::RoomFull,
+                            "Room is full",
+                        ),
+                        None,
+                    ),
+                    None,
+                )
+            } else {
+                info!("Client {} joining room {}", client_id, room_id);
+                let previous_room = state
+                    .clients
+                    .get(client_id)
+                    .and_then(|client| client.room_id.as_deref());
+                let previous_leave = if previous_room.is_some_and(|previous| previous != room_id) {
+                    let crate::types::ServerState { clients, rooms } = &mut *state;
+                    handle_leave(client_id, clients, rooms)
+                } else {
+                    None
+                };
                 let crate::types::ServerState { clients, rooms } = &mut *state;
-                if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
-                    send_to_senders(&senders, &msg, "previous room leave");
-                }
+                let room = rooms.get_mut(room_id).expect("room existence checked");
+                add_client_to_room(client_id, room, clients, &payload_name);
+                let notifications = prepare_join_notifications(client_id, room, clients);
+                (notifications, previous_leave)
             }
-            let crate::types::ServerState { clients, rooms } = &mut *state;
-            let room = rooms.get_mut(room_id).expect("room existence checked");
-            add_client_to_room(client_id, room, clients, &payload_name);
-            let notifications = prepare_join_notifications(client_id, room, clients);
-            enqueue_join_notifications(client_id, notifications);
+        };
+        if let Some((senders, msg)) = previous_leave {
+            send_to_senders(&senders, &msg, "previous room leave");
         }
+        enqueue_join_notifications(client_id, notifications);
     }
 }
 
@@ -163,6 +186,11 @@ mod tests {
     use super::*;
     use crate::test_helpers;
     use crate::types::{ClientMessageType, IncomingMessage};
+
+    fn assert_error_code(message: WsMessage, code: &str) {
+        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.payload.unwrap()["code"], code);
+    }
 
     #[test]
     fn add_client_to_room_updates_state() {
@@ -369,6 +397,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn missing_room_id_returns_explicit_error() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("guest".to_string(), client);
+        let mut message = join_message("unused");
+        message.room = None;
+
+        handle_join_room("guest", &message, &state).await;
+
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_ID_REQUIRED");
+    }
+
+    #[tokio::test]
+    async fn missing_room_returns_explicit_error() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("guest".to_string(), client);
+
+        handle_join_room("guest", &join_message("missing"), &state).await;
+
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_NOT_FOUND");
+    }
+
+    #[tokio::test]
     async fn full_destination_preserves_previous_membership() {
         let state = state_with_guest_in_previous_room().await;
         {
@@ -383,6 +443,25 @@ mod tests {
         handle_join_room("guest", &join_message("full"), &state).await;
 
         assert_previous_membership(&state).await;
+    }
+
+    #[tokio::test]
+    async fn full_room_returns_explicit_error() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        let mut room = test_helpers::create_room("full", "host");
+        room.clients = (0..MAX_CLIENTS_PER_ROOM)
+            .map(|index| format!("member-{index}"))
+            .collect();
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("guest".to_string(), client);
+            locked.rooms.insert("full".to_string(), room);
+        }
+
+        handle_join_room("guest", &join_message("full"), &state).await;
+
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_FULL");
     }
 
     #[tokio::test]

@@ -1,4 +1,4 @@
-use super::super::dispatch::send_error;
+use super::super::dispatch::{send_error, ErrorCode};
 use super::super::validation::sanitize_name;
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list};
@@ -22,7 +22,7 @@ async fn handle_jwt_auth(
                 );
                 return false;
             };
-            {
+            let sender = {
                 let mut state = state.write().await;
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 if let Some(client) = state.clients.get_mut(client_id) {
@@ -33,19 +33,20 @@ async fn handle_jwt_auth(
                     client.authentication_version = client.authentication_version.wrapping_add(1);
                     info!("Client {} authenticated as {}", client_id, user_name);
                 }
-                send_message(
-                    sender,
-                    &WsMessage {
-                        msg_type: "auth_success".to_string(),
-                        room: None,
-                        client: Some(client_id.to_string()),
-                        payload: Some(serde_json::json!({ "user_name": user_name })),
-                        ts: now_ms(),
-                        server_ts: Some(now_ms()),
-                    },
-                    Some(client_id),
-                );
-            }
+                sender
+            };
+            send_message(
+                sender,
+                &WsMessage {
+                    msg_type: "auth_success".to_string(),
+                    room: None,
+                    client: Some(client_id.to_string()),
+                    payload: Some(serde_json::json!({ "user_name": user_name })),
+                    ts: now_ms(),
+                    server_ts: Some(now_ms()),
+                },
+                Some(client_id),
+            );
             send_room_list(client_id, state).await;
             true
         }
@@ -85,7 +86,13 @@ pub(in crate::ws) async fn handle_auth(
             if handle_jwt_auth(client_id, token, state, jwt_config).await {
                 return;
             }
-            send_error(client_id, state, "Authentication failed").await;
+            send_error(
+                client_id,
+                state,
+                ErrorCode::AuthenticationFailed,
+                "Authentication failed",
+            )
+            .await;
             return;
         }
         if !jwt_config.enabled {
@@ -98,6 +105,7 @@ pub(in crate::ws) async fn handle_auth(
             send_error(
                 client_id,
                 state,
+                ErrorCode::AuthenticationRequired,
                 "Authentication required: no token provided",
             )
             .await;
@@ -110,6 +118,7 @@ pub(in crate::ws) async fn handle_auth(
         send_error(
             client_id,
             state,
+            ErrorCode::AuthenticationRequired,
             "Authentication required: no token provided",
         )
         .await;
@@ -122,6 +131,11 @@ mod tests {
     use crate::auth::Claims;
     use crate::test_helpers;
     use jsonwebtoken::{encode, EncodingKey, Header};
+
+    fn assert_error_code(message: WsMessage, code: &str) {
+        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.payload.unwrap()["code"], code);
+    }
 
     #[tokio::test]
     async fn successful_auth_sends_success_before_room_list() {
@@ -267,6 +281,47 @@ mod tests {
                 &jwt_config,
             )
             .await
+        );
+    }
+
+    #[tokio::test]
+    async fn authentication_failures_have_stable_codes() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "", false);
+        state
+            .write()
+            .await
+            .clients
+            .insert("client".to_string(), client);
+        let jwt_config = Arc::new(JwtConfig {
+            secret: "test-secret-with-at-least-32-characters".to_string(),
+            audience: "OpenWatchParty".to_string(),
+            issuer: "Jellyfin".to_string(),
+            enabled: true,
+        });
+
+        let invalid = IncomingMessage {
+            msg_type: crate::types::ClientMessageType::Auth,
+            room: None,
+            client: None,
+            payload: Some(serde_json::json!({ "token": "invalid" })),
+            ts: 0,
+            server_ts: None,
+        };
+        handle_auth("client", &invalid, &state, &jwt_config).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut rx).unwrap(),
+            "AUTHENTICATION_FAILED",
+        );
+
+        let missing = IncomingMessage {
+            payload: Some(serde_json::json!({})),
+            ..invalid
+        };
+        handle_auth("client", &missing, &state, &jwt_config).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut rx).unwrap(),
+            "AUTHENTICATION_REQUIRED",
         );
     }
 }

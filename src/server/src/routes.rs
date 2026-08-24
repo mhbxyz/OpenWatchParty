@@ -545,6 +545,9 @@ mod tests {
             .unwrap()["type"],
             "client_hello"
         );
+        let error: serde_json::Value =
+            serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
+        assert_eq!(error["payload"]["code"], "AUTHENTICATION_TIMEOUT");
         tokio::time::timeout(Duration::from_secs(1), client.recv_closed())
             .await
             .unwrap()
@@ -680,6 +683,9 @@ mod tests {
 
         wall_clock.store(expiration * 1000, Ordering::SeqCst);
         tokio::time::advance(Duration::from_secs(1)).await;
+        let error: serde_json::Value =
+            serde_json::from_str(client.recv().await.unwrap().to_str().unwrap()).unwrap();
+        assert_eq!(error["payload"]["code"], "AUTHENTICATION_EXPIRED");
         client.recv_closed().await.unwrap();
         tokio::task::yield_now().await;
 

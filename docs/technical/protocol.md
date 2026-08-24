@@ -468,12 +468,39 @@ Error response.
 {
   "type": "error",
   "payload": {
+    "code": "ROOM_NOT_FOUND",
     "message": "Error description"
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
 }
 ```
+
+`payload.code` is a stable machine-readable identifier in `SCREAMING_SNAKE_CASE`.
+`payload.message` remains present for display and compatibility with existing clients.
+
+| Code | Meaning |
+|------|---------|
+| `AUTHENTICATION_REQUIRED` | Authentication is required or the token is missing |
+| `AUTHENTICATION_FAILED` | Token validation failed |
+| `AUTHENTICATION_EXPIRED` | The authenticated session expired; the WebSocket is then closed |
+| `AUTHENTICATION_TIMEOUT` | Authentication was not completed in time; the WebSocket is then closed |
+| `RATE_LIMITED` | The message rate limit was exceeded; the WebSocket is then closed |
+| `MESSAGE_TOO_LARGE` | The WebSocket message exceeds the protocol size limit |
+| `UNSUPPORTED_MESSAGE_FORMAT` | The client sent a non-text message, including a binary message |
+| `INVALID_JSON` | The text message is not a valid protocol JSON envelope |
+| `UNKNOWN_MESSAGE_TYPE` | The message `type` is unknown |
+| `ROOM_ID_REQUIRED` | A room-scoped operation omitted `room` |
+| `ROOM_NOT_FOUND` | The requested room does not exist |
+| `ROOM_FULL` | The requested room reached its participant limit |
+| `NOT_ROOM_MEMBER` | The client is not a member of the requested room |
+| `HOST_PERMISSION_REQUIRED` | A non-host client attempted to control playback |
+| `INVALID_PLAYBACK_PAYLOAD` | A playback payload is absent, malformed, or outside accepted bounds |
+| `NOT_IN_ROOM` | `leave_room` was requested while the client had no room |
+| `INVALID_READY` | A `ready` transition is missing required room context |
+| `INVALID_CHAT_PAYLOAD` | The chat payload does not contain a string `text` field |
+| `CHAT_MESSAGE_EMPTY` | Chat text is empty |
+| `CHAT_MESSAGE_TOO_LONG` | Chat text exceeds the configured limit |
 
 ## Sequence Diagram: Complete Session
 

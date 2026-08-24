@@ -1,11 +1,11 @@
 use super::constants::CLIENT_CHANNEL_BUFFER;
-use super::dispatch::{client_msg, close_with_policy, is_authenticated};
+use super::dispatch::{client_msg, close_with_policy, is_authenticated, send_error, ErrorCode};
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list, ClientSender};
 use crate::types::{SharedState, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
-use log::info;
+use log::{info, warn};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::Instant;
@@ -149,26 +149,39 @@ pub async fn client_connection(
         tokio::select! {
             result = client_ws_rcv.next() => {
                 let Some(result) = result else { break };
-                if let Ok(msg) = result {
-                    if client_msg(&temp_id, msg, &state, &jwt_config, &tasks).await {
-                        break;
-                    }
-                    if authentication_pending && is_authenticated(&temp_id, &state).await {
-                        authentication_pending = false;
-                    }
-                    let expiration = session_expiration(&temp_id, &state).await;
-                    if expiration != scheduled_expiration {
-                        scheduled_expiration = expiration;
-                        if let Some(expiration) = expiration.0 {
-                            session_expiration_timer.as_mut().reset(
-                                Instant::now() + expiration_delay(expiration, session_clock())
-                            );
+                match result {
+                    Ok(msg) => {
+                        if client_msg(&temp_id, msg, &state, &jwt_config, &tasks).await {
+                            info!("Terminating WebSocket session for client {}", temp_id);
+                            break;
                         }
+                        if authentication_pending && is_authenticated(&temp_id, &state).await {
+                            authentication_pending = false;
+                        }
+                        let expiration = session_expiration(&temp_id, &state).await;
+                        if expiration != scheduled_expiration {
+                            scheduled_expiration = expiration;
+                            if let Some(expiration) = expiration.0 {
+                                session_expiration_timer.as_mut().reset(
+                                    Instant::now() + expiration_delay(expiration, session_clock())
+                                );
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        warn!("WebSocket receive failed for client {}", temp_id);
+                        break;
                     }
                 }
             }
             _ = &mut authentication_timeout, if authentication_pending => {
                 info!("Authentication timed out for client {}", temp_id);
+                send_error(
+                    &temp_id,
+                    &state,
+                    ErrorCode::AuthenticationTimeout,
+                    "Authentication timeout",
+                ).await;
                 close_with_policy(&temp_id, &state, "Authentication timeout").await;
                 break;
             }
@@ -179,6 +192,12 @@ pub async fn client_connection(
                     let delay = expiration_delay(expiration, session_clock());
                     if delay.is_zero() {
                         info!("Authentication expired for client {}", temp_id);
+                        send_error(
+                            &temp_id,
+                            &state,
+                            ErrorCode::AuthenticationExpired,
+                            "Authentication expired",
+                        ).await;
                         close_with_policy(&temp_id, &state, "Authentication expired").await;
                         break;
                     }

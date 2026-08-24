@@ -2,6 +2,7 @@ use super::super::constants::{
     COMMAND_COOLDOWN_MS, CONTROL_SCHEDULE_MS, MIN_STATE_UPDATE_INTERVAL_MS, PLAY_SCHEDULE_MS,
     POSITION_JITTER_THRESHOLD,
 };
+use super::super::dispatch::{send_error, ErrorCode};
 use super::super::pending_play::{all_ready, schedule_pending_play};
 use super::super::validation::is_valid_position;
 use crate::messaging::{collect_room_senders, send_to_senders};
@@ -65,6 +66,12 @@ struct StateUpdatePayload {
 enum PlaybackMessage {
     PlayerEvent(PlayerEventPayload),
     StateUpdate(StateUpdatePayload),
+}
+
+enum PlaybackOutcome {
+    Accepted,
+    Schedule(String, u64),
+    Error(ErrorCode, &'static str),
 }
 
 impl PlaybackMessage {
@@ -248,61 +255,95 @@ pub(in crate::ws) async fn handle_playback(
     tasks: &crate::tasks::AppTasks,
 ) {
     let Some(room_id) = parsed.room.clone() else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::RoomIdRequired,
+            "Room ID is required for playback",
+        )
+        .await;
         return;
     };
     let Some(message) = PlaybackMessage::parse(&parsed) else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::InvalidPlaybackPayload,
+            "Invalid playback payload",
+        )
+        .await;
         return;
     };
 
-    let mut pending_schedule: Option<(String, u64)> = None;
-    {
+    let outcome = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
 
-        let Some(room) = rooms.get_mut(&room_id) else {
-            return;
-        };
-        if room.host_id != client_id {
-            return;
-        }
+        if let Some(room) = rooms.get_mut(&room_id) {
+            if !room.clients.iter().any(|id| id == client_id) {
+                PlaybackOutcome::Error(
+                    ErrorCode::NotRoomMember,
+                    "Client is not a member of this room",
+                )
+            } else if room.host_id != client_id {
+                PlaybackOutcome::Error(
+                    ErrorCode::HostPermissionRequired,
+                    "Only the room host can control playback",
+                )
+            } else {
+                let current_ts = now_ms();
+                let now = Instant::now();
+                let action = message.action();
 
-        let current_ts = now_ms();
-        let now = Instant::now();
-        let action = message.action();
+                if action == Some(PlaybackAction::Pause) {
+                    room.pending_play = None;
+                }
 
-        if action == Some(PlaybackAction::Pause) {
-            room.pending_play = None;
-        }
-
-        let broadcast_data = if action == Some(PlaybackAction::Play) && !all_ready(room) {
-            let position = message.position().unwrap_or(room.state.position);
-            pending_schedule = handle_play_not_ready(room, position, current_ts, now);
-            None
-        } else if absorb_during_pending(room, &message, current_ts, now) {
-            None
-        } else {
-            if let PlaybackMessage::StateUpdate(payload) = &message {
-                if !should_process_state_update(room, payload, now) {
-                    return;
+                if action == Some(PlaybackAction::Play) && !all_ready(room) {
+                    let position = message.position().unwrap_or(room.state.position);
+                    match handle_play_not_ready(room, position, current_ts, now) {
+                        Some((room_id, generation)) => {
+                            PlaybackOutcome::Schedule(room_id, generation)
+                        }
+                        None => PlaybackOutcome::Accepted,
+                    }
+                } else if absorb_during_pending(room, &message, current_ts, now) {
+                    PlaybackOutcome::Accepted
+                } else {
+                    let filtered = match &message {
+                        PlaybackMessage::StateUpdate(payload) => {
+                            !should_process_state_update(room, payload, now)
+                        }
+                        PlaybackMessage::PlayerEvent(_) => false,
+                    };
+                    if filtered {
+                        PlaybackOutcome::Accepted
+                    } else {
+                        let outgoing =
+                            apply_state_changes(room, &message, client_id, current_ts, now);
+                        let senders = collect_room_senders(room, clients, Some(client_id));
+                        send_to_senders(&senders, &outgoing, "playback");
+                        PlaybackOutcome::Accepted
+                    }
                 }
             }
-
-            let outgoing = apply_state_changes(room, &message, client_id, current_ts, now);
-            let senders = collect_room_senders(room, clients, Some(client_id));
-            Some((senders, outgoing))
-        };
-
-        if let Some((senders, outgoing)) = broadcast_data {
-            send_to_senders(&senders, &outgoing, "playback");
+        } else {
+            PlaybackOutcome::Error(ErrorCode::RoomNotFound, "Room not found")
         }
-    }
-    if let Some((room_id, generation)) = pending_schedule {
-        std::mem::drop(schedule_pending_play(
-            room_id,
-            generation,
-            state.clone(),
-            tasks,
-        ));
+    };
+    match outcome {
+        PlaybackOutcome::Accepted => {}
+        PlaybackOutcome::Schedule(room_id, generation) => {
+            std::mem::drop(schedule_pending_play(
+                room_id,
+                generation,
+                state.clone(),
+                tasks,
+            ));
+        }
+        PlaybackOutcome::Error(code, message) => {
+            send_error(client_id, state, code, message).await;
+        }
     }
 }
 
@@ -336,9 +377,10 @@ mod tests {
     async fn setup_room() -> (
         SharedState,
         mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
+        mpsc::Receiver<Result<warp::ws::Message, warp::Error>>,
     ) {
         let state = test_helpers::create_state();
-        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut host, host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
         let (mut guest, guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
         host.room_id = Some("r1".to_string());
         guest.room_id = Some("r1".to_string());
@@ -350,7 +392,12 @@ mod tests {
         locked.clients.insert("guest".to_string(), guest);
         locked.rooms.insert("r1".to_string(), room);
         drop(locked);
-        (state, guest_rx)
+        (state, host_rx, guest_rx)
+    }
+
+    fn assert_error_code(message: WsMessage, code: &str) {
+        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.payload.unwrap()["code"], code);
     }
 
     #[test]
@@ -668,7 +715,7 @@ mod tests {
 
     #[tokio::test]
     async fn forged_envelope_fields_are_replaced_in_broadcast() {
-        let (state, mut guest_rx) = setup_room().await;
+        let (state, _host_rx, mut guest_rx) = setup_room().await;
         let parsed = incoming(
             ClientMessageType::PlayerEvent,
             Some(serde_json::json!({
@@ -689,7 +736,7 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_message_does_not_mutate_or_broadcast() {
-        let (state, mut guest_rx) = setup_room().await;
+        let (state, mut host_rx, mut guest_rx) = setup_room().await;
         let parsed = incoming(
             ClientMessageType::StateUpdate,
             Some(serde_json::json!({ "position": -1.0, "play_state": "playing" })),
@@ -701,5 +748,57 @@ mod tests {
         assert_eq!(locked.rooms["r1"].state.position, 0.0);
         assert_eq!(locked.rooms["r1"].state.play_state, "paused");
         assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+        assert_error_code(
+            test_helpers::recv_msg(&mut host_rx).unwrap(),
+            "INVALID_PLAYBACK_PAYLOAD",
+        );
+    }
+
+    #[tokio::test]
+    async fn playback_requires_room_id() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        let mut parsed = incoming(
+            ClientMessageType::PlayerEvent,
+            Some(serde_json::json!({ "action": "pause" })),
+        );
+        parsed.room = None;
+
+        handle_playback("host", parsed, &state, &crate::tasks::AppTasks::new()).await;
+
+        assert_error_code(
+            test_helpers::recv_msg(&mut host_rx).unwrap(),
+            "ROOM_ID_REQUIRED",
+        );
+    }
+
+    #[tokio::test]
+    async fn playback_rejects_non_member_and_non_host() {
+        let (state, _host_rx, mut guest_rx) = setup_room().await;
+        let valid = || {
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "pause" })),
+            )
+        };
+
+        handle_playback("guest", valid(), &state, &crate::tasks::AppTasks::new()).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut guest_rx).unwrap(),
+            "HOST_PERMISSION_REQUIRED",
+        );
+
+        let (mut outsider, mut outsider_rx) =
+            test_helpers::create_client_with_rx("outsider", "Outsider", true);
+        outsider.room_id = Some("r1".to_string());
+        state
+            .write()
+            .await
+            .clients
+            .insert("outsider".to_string(), outsider);
+        handle_playback("outsider", valid(), &state, &crate::tasks::AppTasks::new()).await;
+        assert_error_code(
+            test_helpers::recv_msg(&mut outsider_rx).unwrap(),
+            "NOT_ROOM_MEMBER",
+        );
     }
 }

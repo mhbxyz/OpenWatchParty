@@ -1,4 +1,4 @@
-use super::super::dispatch::{is_authenticated, send_error};
+use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_name};
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
@@ -114,7 +114,13 @@ pub(in crate::ws) async fn handle_create_room(
     state: &SharedState,
 ) {
     if !is_authenticated(client_id, state).await {
-        send_error(client_id, state, "Authentication required").await;
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AuthenticationRequired,
+            "Authentication required",
+        )
+        .await;
         return;
     }
 
@@ -129,12 +135,12 @@ pub(in crate::ws) async fn handle_create_room(
             .and_then(|client| client.room_id.as_ref())
             .and_then(|room_id| state.rooms.get(room_id))
             .is_some_and(|room| room.host_id != client_id);
-        if should_leave_guest_room {
+        let previous_leave = if should_leave_guest_room {
             let crate::types::ServerState { clients, rooms } = &mut *state;
-            if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
-                send_to_senders(&senders, &msg, "previous room leave");
-            }
-        }
+            handle_leave(client_id, clients, rooms)
+        } else {
+            None
+        };
         let existing_room_id = state
             .rooms
             .values()
@@ -147,6 +153,9 @@ pub(in crate::ws) async fn handle_create_room(
         let room = build_room(client_id, &host_name, payload_ref);
         let crate::types::ServerState { clients, rooms } = &mut *state;
         let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
+        if let Some((senders, msg)) = previous_leave {
+            send_to_senders(&senders, &msg, "previous room leave");
+        }
         if let Some((closed_room_id, closed_senders)) = closed {
             send_to_senders(
                 &closed_senders,

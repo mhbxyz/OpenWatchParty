@@ -1,5 +1,5 @@
 use super::super::constants::PLAY_SCHEDULE_MS;
-use super::super::dispatch::{is_authenticated, send_error};
+use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
 use super::super::pending_play::{all_ready, prepare_scheduled_play};
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::handle_leave;
@@ -81,7 +81,13 @@ fn format_client_log(client_id: &str, entry: &ClientLogEntry) -> String {
 
 pub(in crate::ws) async fn handle_unknown(client_id: &str, state: &SharedState) {
     warn!("Unknown message type from client {}", client_id);
-    send_error(client_id, state, "Unknown message type").await;
+    send_error(
+        client_id,
+        state,
+        ErrorCode::UnknownMessageType,
+        "Unknown message type",
+    )
+    .await;
 }
 
 pub(in crate::ws) async fn handle_ready(
@@ -90,10 +96,23 @@ pub(in crate::ws) async fn handle_ready(
     state: &SharedState,
 ) {
     if !is_authenticated(client_id, state).await {
-        send_error(client_id, state, "Authentication required").await;
+        send_error(
+            client_id,
+            state,
+            ErrorCode::AuthenticationRequired,
+            "Authentication required",
+        )
+        .await;
         return;
     }
     let Some(ref room_id) = parsed.room else {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::InvalidReady,
+            "Ready message requires a room ID",
+        )
+        .await;
         return;
     };
 
@@ -142,18 +161,37 @@ pub(in crate::ws) async fn handle_ready(
     };
 
     if !accepted {
-        send_error(client_id, state, "Client is not a member of this room").await;
+        send_error(
+            client_id,
+            state,
+            ErrorCode::NotRoomMember,
+            "Client is not a member of this room",
+        )
+        .await;
     }
 }
 
 pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedState) {
     info!("Client {} leaving room", client_id);
-    {
+    let left = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
         if let Some((senders, msg)) = handle_leave(client_id, clients, rooms) {
             send_to_senders(&senders, &msg, "leave notification");
+            true
+        } else {
+            false
         }
+    };
+    if !left {
+        send_error(
+            client_id,
+            state,
+            ErrorCode::NotInRoom,
+            "Client is not in a room",
+        )
+        .await;
+        return;
     }
     broadcast_room_list(state).await;
 }
@@ -162,6 +200,11 @@ pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedStat
 mod tests {
     use super::*;
     use crate::test_helpers;
+
+    fn assert_error_code(message: WsMessage, code: &str) {
+        assert_eq!(message.msg_type, "error");
+        assert_eq!(message.payload.unwrap()["code"], code);
+    }
 
     #[tokio::test]
     async fn handle_ping_responds_pong() {
@@ -271,7 +314,10 @@ mod tests {
         let locked = state.read().await;
         assert!(!locked.rooms["room-1"].ready_clients.contains("guest"));
         drop(locked);
-        assert_eq!(test_helpers::recv_msg(&mut rx).unwrap().msg_type, "error");
+        assert_error_code(
+            test_helpers::recv_msg(&mut rx).unwrap(),
+            "AUTHENTICATION_REQUIRED",
+        );
     }
 
     #[tokio::test]
@@ -283,7 +329,39 @@ mod tests {
         let locked = state.read().await;
         assert!(!locked.rooms["room-1"].ready_clients.contains("guest"));
         drop(locked);
-        assert_eq!(test_helpers::recv_msg(&mut rx).unwrap().msg_type, "error");
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "NOT_ROOM_MEMBER");
+    }
+
+    #[tokio::test]
+    async fn handle_ready_rejects_missing_room_id() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("guest".to_string(), client);
+        let mut message = ready_message("unused");
+        message.room = None;
+
+        handle_ready("guest", &message, &state).await;
+
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "INVALID_READY");
+    }
+
+    #[tokio::test]
+    async fn leave_without_room_returns_explicit_error() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        state
+            .write()
+            .await
+            .clients
+            .insert("guest".to_string(), client);
+
+        handle_leave_room("guest", &state).await;
+
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "NOT_IN_ROOM");
     }
 
     #[tokio::test]
