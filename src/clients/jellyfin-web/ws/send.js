@@ -8,10 +8,11 @@
     if (!state.ws || state.ws.readyState !== 1) return;
     const message = {
       type,
-      room: roomOverride || state.roomId,
       payload,
       ts: utils.nowMs()
     };
+    const room = roomOverride || state.roomId;
+    if (room) message.room = room;
     if (state.clientId) message.client = state.clientId;
     state.ws.send(JSON.stringify(message));
   };

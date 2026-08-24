@@ -144,7 +144,7 @@
 
   const handleMessage = (msg) => {
     const video = utils.getVideo();
-    console.log('[OpenWatchParty] Received:', msg.type, msg);
+    console.log('[OpenWatchParty] Received:', msg.type);
     const h = OWP._wsHandlers;
     switch (msg.type) {
       case 'room_list': h.handleRoomList(msg); break;
@@ -225,8 +225,20 @@
     socket.onclose = (event) => onWsClose(event, socket);
     socket.onmessage = (e) => {
       if (socket !== state.ws) return;
+      let msg;
       try {
-        const msg = JSON.parse(e.data);
+        msg = JSON.parse(e.data);
+      } catch {
+        console.error('[OpenWatchParty] Invalid WebSocket JSON');
+        return;
+      }
+      const validation = OWP.wsValidation.validateMessage(msg);
+      if (!validation.valid) {
+        const type = OWP.wsValidation.isKnownType(msg?.type) ? msg.type : 'unknown';
+        console.warn('[OpenWatchParty] Invalid WebSocket message schema:', type, validation.error);
+        return;
+      }
+      try {
         if (msg.type === 'room_state') {
           if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) {
             console.warn('[OpenWatchParty] Ignoring room_state for unexpected room:', msg.room);
@@ -241,7 +253,7 @@
           handleMessage(msg);
         }
       } catch (err) {
-        console.error('[OpenWatchParty] Failed to parse message:', err.message, 'Data:', e.data?.substring?.(0, 100));
+        console.error('[OpenWatchParty] WebSocket handler failed:', msg.type, err?.name || 'Error');
       }
     };
   };

@@ -42,6 +42,7 @@ public class OpenWatchPartyController : ControllerBase
         "chat/input.js",
         "ws/send.js",
         "ws/auth.js",
+        "ws/validation.js",
         "ws/handlers/room.js",
         "ws/handlers/sync.js",
         "ws/handlers/playback.js",

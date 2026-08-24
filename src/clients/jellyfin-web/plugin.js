@@ -157,6 +157,7 @@
     ]);
     await load('ws/send.js');
     await load('ws/auth.js');
+    await load('ws/validation.js');
     await Promise.all([
       load('ws/handlers/room.js'),
       load('ws/handlers/sync.js'),

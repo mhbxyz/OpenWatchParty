@@ -25,7 +25,18 @@ class FakeWebSocket {
   }
 
   receive(message) {
-    this.onmessage({ data: JSON.stringify(message) });
+    const normalized = {
+      ts: Date.now(),
+      server_ts: Date.now(),
+      ...message
+    };
+    if (normalized.type === 'auth_success' && !normalized.payload?.user_name) {
+      normalized.payload = { ...normalized.payload, user_name: 'Guest' };
+    }
+    if (normalized.type === 'error' && !normalized.payload?.code) {
+      normalized.payload = { ...normalized.payload, code: 'TEST_ERROR' };
+    }
+    this.onmessage({ data: JSON.stringify(normalized) });
   }
 
   serverClose() {
@@ -54,6 +65,7 @@ OWP.ui = {
 OWP.utils.getVideo = () => null;
 
 require('../ws/send.js');
+require('../ws/validation.js');
 require('../ws/handlers/room.js');
 require('../ws/handlers/sync.js');
 require('../ws/connection.js');
@@ -63,6 +75,7 @@ const roomState = (room = 'room-a') => ({
   type: 'room_state',
   room,
   client: 'new-client',
+  ts: Date.now(),
   server_ts: Date.now(),
   payload: {
     name: 'Room A',
@@ -170,9 +183,9 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
 
-    second.receive({ type: 'error', payload: { message: 'Room not found' } });
+    second.receive({ type: 'error', payload: { code: 'ROOM_NOT_FOUND', message: 'Room not found' } });
     second.receive(roomState('deleted-room'));
 
     assert.equal(OWP.state.rejoinPending, false);
@@ -190,7 +203,7 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
 
     await new Promise(resolve => setTimeout(resolve, 30));
 
@@ -223,7 +236,7 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
     second.serverClose();
     await new Promise(resolve => setTimeout(resolve, 30));
 
@@ -231,7 +244,7 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.desiredRoomId, 'room-a');
     const third = sockets[2];
     third.open();
-    third.receive({ type: 'auth_success', payload: {} });
+    third.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
     third.receive(roomState('room-a'));
     assert.equal(OWP.state.inRoom, true);
   });
@@ -245,7 +258,7 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
 
     second.receive(roomState('room-b'));
     assert.equal(OWP.state.inRoom, false);
@@ -264,7 +277,7 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
 
     OWP.actions.leaveRoom();
     second.receive(roomState('room-a'));
@@ -283,7 +296,7 @@ describe('room reconnection lifecycle', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     const second = sockets[1];
     second.open();
-    second.receive({ type: 'auth_success', payload: {} });
+    second.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
 
     OWP.actions.joinRoom('room-b');
     second.receive(roomState('room-a'));
@@ -364,5 +377,35 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.inRoom, false);
     assert.equal(sockets.length, 2);
     assert.equal(OWP.state.ws, second);
+  });
+
+  it('logs JSON, schema, and handler failures separately without message contents', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    const errors = [];
+    const warnings = [];
+    const originalError = console.error;
+    const originalWarn = console.warn;
+    const originalHandler = OWP._wsHandlers.handleAuthSuccess;
+    console.error = (...args) => errors.push(args);
+    console.warn = (...args) => warnings.push(args);
+
+    try {
+      socket.onmessage({ data: '{"secret":"raw-message"' });
+      socket.receive({ type: 'future_message', payload: { secret: 'schema-message' } });
+      OWP._wsHandlers.handleAuthSuccess = () => { throw new Error('handler boom'); };
+      socket.receive({ type: 'auth_success', payload: { user_name: 'handler-message' } });
+    } finally {
+      console.error = originalError;
+      console.warn = originalWarn;
+      OWP._wsHandlers.handleAuthSuccess = originalHandler;
+    }
+
+    assert.equal(errors[0][0], '[OpenWatchParty] Invalid WebSocket JSON');
+    assert.equal(warnings[0][0], '[OpenWatchParty] Invalid WebSocket message schema:');
+    assert.equal(errors[1][0], '[OpenWatchParty] WebSocket handler failed:');
+    const logged = JSON.stringify({ errors, warnings });
+    assert.doesNotMatch(logged, /raw-message|schema-message|handler-message/);
   });
 });

@@ -24,7 +24,7 @@ public sealed class ClientAssetPublicationTests
         var assembly = typeof(OpenWatchPartyController).Assembly;
         var resources = assembly.GetManifestResourceNames();
 
-        Assert.Equal(26, modules.Count);
+        Assert.Equal(27, modules.Count);
         Assert.Equal(modules.Count, modules.Distinct(StringComparer.Ordinal).Count());
 
         var loaderResult = Assert.IsType<ContentResult>(CreateController().GetClientScript());
