@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'src/server/**'
+      - 'infra/docker/server.Dockerfile'
+      - 'infra/docker/dev/docker-compose.yml'
+      - 'infra/docker/prod/docker-compose.yml'
+      - '.github/workflows/publish.yml'
+      - 'version.json'
   release:
     types: [published]
 
