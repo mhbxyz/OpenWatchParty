@@ -64,11 +64,12 @@ public class OpenWatchPartyController : ControllerBase
     private static readonly Lazy<(string Content, string ETag)> _scriptCache = new(LoadScriptFromResource, LazyThreadSafetyMode.ExecutionAndPublication);
 
     // P-CS02 fix: Cache JWT signing credentials and handler to avoid repeated allocations
-    private static SigningCredentials? _cachedSigningCredentials;
-    private static string? _cachedJwtSecret;
+    private static readonly object SigningCredentialsLock = new();
+    private static SigningCredentialCache? _signingCredentialCache;
     private static readonly JwtSecurityTokenHandler _tokenHandler = new();
 
     private sealed record EmbeddedAsset(byte[] Content, string ETag);
+    private sealed record SigningCredentialCache(string Secret, SigningCredentials Credentials);
 
     /// <summary>
     /// Initializes a new instance of the controller with logging support.
@@ -380,18 +381,21 @@ public class OpenWatchPartyController : ControllerBase
     /// </summary>
     private static SigningCredentials GetSigningCredentials(string jwtSecret)
     {
-        if (_cachedSigningCredentials != null && _cachedJwtSecret == jwtSecret)
+        lock (SigningCredentialsLock)
         {
-            return _cachedSigningCredentials;
-        }
+            if (_signingCredentialCache?.Secret == jwtSecret)
+            {
+                return _signingCredentialCache.Credentials;
+            }
 
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
-        _cachedSigningCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-        _cachedJwtSecret = jwtSecret;
-        return _cachedSigningCredentials;
+            var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret));
+            var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+            _signingCredentialCache = new SigningCredentialCache(jwtSecret, credentials);
+            return credentials;
+        }
     }
 
-    private static string GenerateJwtToken(string userId, string userName, PluginConfiguration config)
+    internal static string GenerateJwtToken(string userId, string userName, PluginConfiguration config)
     {
         // P-CS02 fix: Use cached signing credentials instead of creating new ones each time
         var credentials = GetSigningCredentials(config.JwtSecret);
