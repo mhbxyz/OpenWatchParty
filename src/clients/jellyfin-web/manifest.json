@@ -2,7 +2,7 @@
   "id": "openwatchparty",
   "name": "OpenWatchParty",
   "description": "Watch Party controls for Jellyfin Web.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "author": "mhbxyz (https://github.com/mhbxyz)",
   "repository": "https://github.com/mhbxyz/OpenWatchParty",
   "entryPoint": "plugin.js"
