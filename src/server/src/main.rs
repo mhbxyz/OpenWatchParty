@@ -21,7 +21,9 @@ use warp::Filter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    let default_log_level = std::env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(default_log_level))
+        .init();
 
     let jwt_config = Arc::new(
         JwtConfig::from_env()

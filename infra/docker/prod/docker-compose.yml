@@ -7,10 +7,11 @@ services:
         BUILD_MODE: release
     container_name: owp-session-server
     ports:
-      - "${SESSION_SERVER_PORT:-3000}:3000"
+      - "${SESSION_SERVER_PORT:-3000}:${PORT:-3000}"
     environment:
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-3000}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8096,https://localhost:8096}
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required in production}
       - ALLOW_INSECURE_NO_AUTH=false
@@ -28,7 +29,7 @@ services:
         reservations:
           memory: 64M
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      test: ["CMD-SHELL", "curl -sf http://localhost:$${PORT:-3000}/health"]
       interval: 30s
       timeout: 3s
       retries: 3
