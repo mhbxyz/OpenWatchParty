@@ -2,56 +2,93 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
-  const utils = OWP.utils;
   const { PANEL_ID, BTN_ID, DEFAULT_WS_URL } = OWP.constants;
 
+  const createElement = (tag, className, text) => {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = String(text);
+    return element;
+  };
+
   const renderLobby = (panel) => {
-    panel.innerHTML = `
-      <div class="owp-header"><span>OpenWatchParty</span> <span id="owp-ws-indicator"></span></div>
-      <div class="owp-lobby-container">
-          <div class="owp-section">
-            <div class="owp-label">Available Rooms</div>
-            <div id="owp-room-list"></div>
-          </div>
-          <div class="owp-section" style="border-top: 1px solid #333; padding-top: 15px;">
-            <button class="owp-btn" style="width:100%" id="owp-btn-create">Create Room</button>
-          </div>
-      </div>
-      <div class="owp-footer">Server: ${DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', '')}</div>
-    `;
-    const btn = panel.querySelector('#owp-btn-create');
-    if (btn) btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
+    const header = createElement('div', 'owp-header');
+    header.append(createElement('span', '', 'OpenWatchParty'), document.createTextNode(' '));
+    const status = createElement('span');
+    status.id = 'owp-ws-indicator';
+    header.appendChild(status);
+
+    const lobby = createElement('div', 'owp-lobby-container');
+    const roomSection = createElement('div', 'owp-section');
+    roomSection.appendChild(createElement('div', 'owp-label', 'Available Rooms'));
+    const roomList = createElement('div');
+    roomList.id = 'owp-room-list';
+    roomSection.appendChild(roomList);
+    const createSection = createElement('div', 'owp-section');
+    createSection.style.cssText = 'border-top: 1px solid #333; padding-top: 15px;';
+    const btn = createElement('button', 'owp-btn', 'Create Room');
+    btn.id = 'owp-btn-create';
+    btn.style.width = '100%';
+    btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
+    createSection.appendChild(btn);
+    lobby.append(roomSection, createSection);
+
+    const footer = createElement('div', 'owp-footer');
+    footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
+    panel.replaceChildren(header, lobby, footer);
     ui.updateRoomListUI();
   };
 
   const renderRoom = (panel) => {
     const syncIndicator = ui.buildSyncStatusIndicator();
-    panel.innerHTML = `
-      <div class="owp-header">
-        <span style="color:#69f0ae">\u25CF</span>
-        <span style="flex-grow:1; margin-left:8px;">${utils.escapeHtml(state.roomName)}</span>
-        <button class="owp-btn danger" id="owp-btn-leave">${state.isHost ? 'Close' : 'Leave'}</button>
-      </div>
-      <div class="owp-section" style="flex-shrink:0;">
-        <div class="owp-label">Participants</div>
-        <div id="owp-participants-list" style="font-size:13px;">Online: ${state.participantCount || 1}</div>
-        ${syncIndicator}
-      </div>
-      <div id="owp-chat-section">
-        <div class="owp-label">Chat <span id="owp-chat-badge" class="owp-chat-badge"></span></div>
-        <div id="owp-chat-messages"></div>
-        <div id="owp-chat-input-container">
-          <input type="text" id="owp-chat-input" placeholder="Type a message..." maxlength="500">
-          <button id="owp-chat-send">Send</button>
-        </div>
-      </div>
-      <div class="owp-meta" style="font-size:10px; color:#666; display:flex; justify-content:space-between; flex-shrink:0; padding-top:8px;">
-          <span>RTT: <span class="owp-latency">-</span></span>
-          <span>ID: ${state.clientId.split('-')[1] || '...'}</span>
-      </div>
-    `;
-    const leaveBtn = panel.querySelector('#owp-btn-leave');
-    if (leaveBtn) leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+    const header = createElement('div', 'owp-header');
+    const online = createElement('span', '', '\u25CF');
+    online.style.color = '#69f0ae';
+    const roomName = createElement('span', '', state.roomName);
+    roomName.style.cssText = 'flex-grow:1; margin-left:8px;';
+    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close' : 'Leave');
+    leaveBtn.id = 'owp-btn-leave';
+    leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
+    header.append(online, roomName, leaveBtn);
+
+    const participantSection = createElement('div', 'owp-section');
+    participantSection.style.flexShrink = '0';
+    participantSection.appendChild(createElement('div', 'owp-label', 'Participants'));
+    const participantList = createElement('div', '', `Online: ${String(state.participantCount || 1)}`);
+    participantList.id = 'owp-participants-list';
+    participantList.style.fontSize = '13px';
+    participantSection.appendChild(participantList);
+    if (syncIndicator) participantSection.appendChild(syncIndicator);
+
+    const chatSection = createElement('div');
+    chatSection.id = 'owp-chat-section';
+    const chatLabel = createElement('div', 'owp-label');
+    chatLabel.appendChild(document.createTextNode('Chat '));
+    const badge = createElement('span', 'owp-chat-badge');
+    badge.id = 'owp-chat-badge';
+    chatLabel.appendChild(badge);
+    const messages = createElement('div');
+    messages.id = 'owp-chat-messages';
+    const inputContainer = createElement('div');
+    inputContainer.id = 'owp-chat-input-container';
+    const input = createElement('input');
+    input.id = 'owp-chat-input';
+    input.type = 'text';
+    input.placeholder = 'Type a message...';
+    input.maxLength = 500;
+    const send = createElement('button', '', 'Send');
+    send.id = 'owp-chat-send';
+    inputContainer.append(input, send);
+    chatSection.append(chatLabel, messages, inputContainer);
+
+    const meta = createElement('div', 'owp-meta');
+    meta.style.cssText = 'font-size:10px; color:#666; display:flex; justify-content:space-between; flex-shrink:0; padding-top:8px;';
+    const latencyContainer = createElement('span');
+    latencyContainer.appendChild(document.createTextNode('RTT: '));
+    latencyContainer.appendChild(createElement('span', 'owp-latency', '-'));
+    const clientId = String(state.clientId).split('-')[1] || '...';
+    meta.append(latencyContainer, createElement('span', '', `ID: ${clientId}`));
+    panel.replaceChildren(header, participantSection, chatSection, meta);
   };
 
   const setupChatInput = (panel) => {

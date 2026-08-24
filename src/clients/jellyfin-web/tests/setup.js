@@ -14,7 +14,7 @@ require('../state.js');
 // Load time.js (defines OWP.utils.nowMs, getServerNow, adjustedPosition)
 require('../utils/time.js');
 
-// Load misc.js (defines OWP.utils.escapeHtml, suppress, shouldSend)
+// Load misc.js (defines OWP.utils.suppress and shouldSend)
 require('../utils/misc.js');
 
 module.exports = globalThis.OpenWatchParty;

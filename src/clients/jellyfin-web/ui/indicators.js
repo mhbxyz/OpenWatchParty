@@ -31,15 +31,17 @@
       dotClass = 'synced';
       label = 'In sync';
     }
-    el.innerHTML = showSpinner
-      ? `<div class="owp-sync-spinner"></div><span>${label}</span>`
-      : `<div class="owp-sync-dot ${dotClass}"></div><span>${label}</span>`;
+    const marker = document.createElement('div');
+    marker.className = showSpinner ? 'owp-sync-spinner' : `owp-sync-dot ${dotClass}`;
+    const text = document.createElement('span');
+    text.textContent = label;
+    el.replaceChildren(marker, text);
   };
 
   const buildSyncStatusIndicator = () => {
-    if (state.isHost) return '';
+    if (state.isHost) return null;
     const status = state.syncStatus || 'synced';
-    let dotClass, label, extra = '';
+    let dotClass, label, showSpinner = false;
     if (status === 'blocked') {
       dotClass = 'syncing';
       label = 'Playback blocked - press Play';
@@ -47,7 +49,7 @@
       dotClass = 'pending';
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
       label = `Waiting for sync... ${remaining.toFixed(1)}s`;
-      extra = '<div class="owp-sync-spinner"></div>';
+      showSpinner = true;
     } else if (status === 'syncing') {
       dotClass = 'syncing';
       label = 'Out of sync';
@@ -55,12 +57,15 @@
       dotClass = 'synced';
       label = 'In sync';
     }
-    return `
-      <div class="owp-sync-status" id="owp-sync-indicator">
-        ${extra || `<div class="owp-sync-dot ${dotClass}"></div>`}
-        <span>${label}</span>
-      </div>
-    `;
+    const indicator = document.createElement('div');
+    indicator.className = 'owp-sync-status';
+    indicator.id = 'owp-sync-indicator';
+    const marker = document.createElement('div');
+    marker.className = showSpinner ? 'owp-sync-spinner' : `owp-sync-dot ${dotClass}`;
+    const text = document.createElement('span');
+    text.textContent = label;
+    indicator.append(marker, text);
+    return indicator;
   };
 
   const stopPlayerCapture = (input) => {

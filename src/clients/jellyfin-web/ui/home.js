@@ -19,18 +19,25 @@
     }
     let itemsContainer = section.querySelector('.itemsContainer');
     if (!itemsContainer) {
-      section.innerHTML = `
-        <div class="sectionTitleContainer sectionTitleContainer-cards padded-left padded-right">
-          <h2 class="sectionTitle sectionTitle-cards">
-            <span class="material-icons sectionTitleIcon" style="margin-right:8px;">groups</span>
-            Watch Parties
-          </h2>
-        </div>
-        <div class="emby-scroller" data-horizontal="true" data-centerfocus="true">
-          <div is="emby-itemscontainer" class="itemsContainer scrollSlider focuscontainer-x padded-left padded-right"></div>
-        </div>
-      `;
-      itemsContainer = section.querySelector('.itemsContainer');
+      const titleContainer = document.createElement('div');
+      titleContainer.className = 'sectionTitleContainer sectionTitleContainer-cards padded-left padded-right';
+      const title = document.createElement('h2');
+      title.className = 'sectionTitle sectionTitle-cards';
+      const icon = document.createElement('span');
+      icon.className = 'material-icons sectionTitleIcon';
+      icon.style.marginRight = '8px';
+      icon.textContent = 'groups';
+      title.append(icon, document.createTextNode(' Watch Parties'));
+      titleContainer.appendChild(title);
+      const scroller = document.createElement('div');
+      scroller.className = 'emby-scroller';
+      scroller.dataset.horizontal = 'true';
+      scroller.dataset.centerfocus = 'true';
+      itemsContainer = document.createElement('div', 'emby-itemscontainer');
+      itemsContainer.setAttribute('is', 'emby-itemscontainer');
+      itemsContainer.className = 'itemsContainer scrollSlider focuscontainer-x padded-left padded-right';
+      scroller.appendChild(itemsContainer);
+      section.replaceChildren(titleContainer, scroller);
     }
     return itemsContainer;
   };
@@ -50,10 +57,14 @@
       const existing = existingCards.get(room.id);
       if (existing) {
         if (existing.dataset.count !== String(room.count)) {
-          existing.dataset.count = room.count;
+          existing.dataset.count = String(room.count);
           const countEl = existing.querySelector('.innerCardFooter .cardText');
           if (countEl) {
-            countEl.innerHTML = `<span class="material-icons" style="font-size:14px;vertical-align:middle;">groups</span> ${room.count} watching`;
+            const icon = document.createElement('span');
+            icon.className = 'material-icons';
+            icon.style.cssText = 'font-size:14px;vertical-align:middle;';
+            icon.textContent = 'groups';
+            countEl.replaceChildren(icon, document.createTextNode(` ${String(room.count)} watching`));
           }
         }
       } else {

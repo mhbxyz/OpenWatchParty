@@ -1,8 +1,6 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
-  const utils = OWP.utils;
-
   const showToast = (message) => {
     const toast = document.createElement('div');
     toast.className = 'owp-toast-system';
@@ -35,7 +33,13 @@
     const container = getToastContainer();
     const toast = document.createElement('div');
     toast.className = 'owp-toast';
-    toast.innerHTML = `<span class="owp-toast-username">${utils.escapeHtml(username)}</span><span class="owp-toast-text">${utils.escapeHtml(text)}</span>`;
+    const usernameEl = document.createElement('span');
+    usernameEl.className = 'owp-toast-username';
+    usernameEl.textContent = String(username);
+    const textEl = document.createElement('span');
+    textEl.className = 'owp-toast-text';
+    textEl.textContent = String(text);
+    toast.append(usernameEl, textEl);
     toast.onclick = () => {
       toast.classList.add('owp-toast-out');
       OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');

@@ -1,8 +1,6 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const chat = OWP.chat = OWP.chat || { messages: [], unreadCount: 0 };
-  const utils = OWP.utils;
-
   const MAX_MESSAGES = 100;
 
   const formatTime = (ts) => {
@@ -15,13 +13,19 @@
     if (!container) return;
     const msgEl = document.createElement('div');
     msgEl.className = 'owp-chat-message' + (message.isOwn ? ' owp-chat-own' : '');
-    msgEl.innerHTML = `
-      <div class="owp-chat-meta">
-        <span class="owp-chat-username">${utils.escapeHtml(message.username)}</span>
-        <span class="owp-chat-time">${formatTime(message.timestamp)}</span>
-      </div>
-      <div class="owp-chat-text">${utils.escapeHtml(message.text)}</div>
-    `;
+    const meta = document.createElement('div');
+    meta.className = 'owp-chat-meta';
+    const username = document.createElement('span');
+    username.className = 'owp-chat-username';
+    username.textContent = String(message.username);
+    const time = document.createElement('span');
+    time.className = 'owp-chat-time';
+    time.textContent = formatTime(message.timestamp);
+    meta.append(username, time);
+    const text = document.createElement('div');
+    text.className = 'owp-chat-text';
+    text.textContent = String(message.text);
+    msgEl.append(meta, text);
     container.appendChild(msgEl);
     container.scrollTop = container.scrollHeight;
   };
@@ -29,7 +33,7 @@
   const renderAllMessages = () => {
     const container = document.getElementById('owp-chat-messages');
     if (!container) return;
-    container.innerHTML = '';
+    container.replaceChildren();
     chat.messages.forEach(msg => renderMessage(msg));
   };
 
@@ -61,7 +65,7 @@
     chat.unreadCount = 0;
     chat.updateBadge();
     const container = document.getElementById('owp-chat-messages');
-    if (container) container.innerHTML = '';
+    if (container) container.replaceChildren();
   };
 
   Object.assign(chat, { renderMessage, renderAllMessages, receive, clear });

@@ -2,20 +2,34 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
-  const utils = OWP.utils;
+
+  const createElement = (tag, className, text) => {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    if (text !== undefined) element.textContent = String(text);
+    return element;
+  };
 
   const updateRoomListUI = () => {
     const roomList = document.getElementById('owp-room-list');
     if (!roomList) return;
     if (state.rooms.length === 0) {
-      roomList.innerHTML = '<div style="font-size:12px; color:#555; padding: 10px; text-align:center;">No active rooms.</div>';
+      const empty = createElement('div', '', 'No active rooms.');
+      empty.style.cssText = 'font-size:12px; color:#555; padding: 10px; text-align:center;';
+      roomList.replaceChildren(empty);
       return;
     }
-    roomList.innerHTML = '';
+    roomList.replaceChildren();
     state.rooms.forEach(room => {
-      const item = document.createElement('div');
-      item.className = 'owp-room-item';
-      item.innerHTML = `<div><div style="font-weight:bold">${utils.escapeHtml(room.name)}</div><div style="font-size:10px; color:#888">${room.count} users</div></div><button class="owp-btn secondary">Join</button>`;
+      const item = createElement('div', 'owp-room-item');
+      const details = createElement('div');
+      const name = createElement('div', '', room.name);
+      name.style.fontWeight = 'bold';
+      const count = createElement('div', '', `${String(room.count)} users`);
+      count.style.cssText = 'font-size:10px; color:#888';
+      details.append(name, count);
+      const join = createElement('button', 'owp-btn secondary', 'Join');
+      item.append(details, join);
       item.onclick = () => {
         if (OWP.actions && OWP.actions.joinRoom) OWP.actions.joinRoom(room.id);
       };
@@ -23,35 +37,39 @@
     });
   };
 
-  const buildCardHtml = (room) => {
-    return `
-      <div class="cardBox cardBox-bottompadded">
-        <div class="cardScalable">
-          <div class="cardPadder cardPadder-overflowPortrait">
-            <span class="cardImageIcon material-icons groups owp-card-icon" aria-hidden="true"></span>
-          </div>
-          <div class="cardImageContainer coveredImage cardContent owp-card-image-container" style="background-color:#1a1a1a;">
-            <div class="innerCardFooter">
-              <div class="cardText" style="color:#69f0ae;font-weight:600;">
-                <span class="material-icons" style="font-size:14px;vertical-align:middle;">groups</span>
-                ${room.count} watching
-              </div>
-            </div>
-          </div>
-          <div class="cardOverlayContainer itemAction">
-            <button class="cardOverlayButton cardOverlayButton-hover cardOverlayFab-primary owp-join-btn paper-icon-button-light">
-              <span class="material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow" aria-hidden="true"></span>
-            </button>
-          </div>
-        </div>
-        <div class="cardText cardTextCentered cardText-first owp-card-name">
-          <bdi>${utils.escapeHtml(room.name)}</bdi>
-        </div>
-        <div class="cardText cardTextCentered cardText-secondary owp-card-media">
-          <bdi class="owp-media-title">${room.media_id ? 'Loading...' : 'No media'}</bdi>
-        </div>
-      </div>
-    `;
+  const buildCardContent = (room) => {
+    const box = createElement('div', 'cardBox cardBox-bottompadded');
+    const scalable = createElement('div', 'cardScalable');
+    const padder = createElement('div', 'cardPadder cardPadder-overflowPortrait');
+    const cardIcon = createElement('span', 'cardImageIcon material-icons groups owp-card-icon');
+    cardIcon.setAttribute('aria-hidden', 'true');
+    padder.appendChild(cardIcon);
+
+    const image = createElement('div', 'cardImageContainer coveredImage cardContent owp-card-image-container');
+    image.style.backgroundColor = '#1a1a1a';
+    const footer = createElement('div', 'innerCardFooter');
+    const count = createElement('div', 'cardText');
+    count.style.cssText = 'color:#69f0ae;font-weight:600;';
+    const countIcon = createElement('span', 'material-icons', 'groups');
+    countIcon.style.cssText = 'font-size:14px;vertical-align:middle;';
+    count.append(countIcon, document.createTextNode(` ${String(room.count)} watching`));
+    footer.appendChild(count);
+    image.appendChild(footer);
+
+    const overlay = createElement('div', 'cardOverlayContainer itemAction');
+    const join = createElement('button', 'cardOverlayButton cardOverlayButton-hover cardOverlayFab-primary owp-join-btn paper-icon-button-light');
+    const playIcon = createElement('span', 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow');
+    playIcon.setAttribute('aria-hidden', 'true');
+    join.appendChild(playIcon);
+    overlay.appendChild(join);
+    scalable.append(padder, image, overlay);
+
+    const name = createElement('div', 'cardText cardTextCentered cardText-first owp-card-name');
+    name.appendChild(createElement('bdi', '', room.name));
+    const media = createElement('div', 'cardText cardTextCentered cardText-secondary owp-card-media');
+    media.appendChild(createElement('bdi', 'owp-media-title', room.media_id ? 'Loading...' : 'No media'));
+    box.append(scalable, name, media);
+    return box;
   };
 
   const attachMediaInfo = (card, mediaId) => {
@@ -127,11 +145,11 @@
   const createRoomCard = (room, index) => {
     const card = document.createElement('div');
     card.className = 'card overflowPortraitCard card-hoverable card-withuserdata owp-room-card';
-    card.dataset.index = index;
-    card.dataset.roomId = room.id;
-    card.dataset.mediaId = room.media_id || '';
-    card.dataset.count = room.count;
-    card.innerHTML = buildCardHtml(room);
+    card.dataset.index = String(index);
+    card.dataset.roomId = String(room.id);
+    card.dataset.mediaId = String(room.media_id || '');
+    card.dataset.count = String(room.count);
+    card.replaceChildren(buildCardContent(room));
     attachMediaInfo(card, room.media_id);
     attachCardHandlers(card, room);
     return card;
