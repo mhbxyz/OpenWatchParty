@@ -47,7 +47,8 @@
   };
 
   const retryConnectionAfterLogin = () => {
-    if (!state.authBlocked || state.isConnecting || state.ws?.readyState === WebSocket.OPEN) return false;
+    const socketOpen = typeof WebSocket !== 'undefined' && state.ws?.readyState === WebSocket.OPEN;
+    if (!state.authBlocked || state.isConnecting || socketOpen) return false;
     const accessToken = window.ApiClient?.accessToken?.()
       || window.ApiClient?._accessToken
       || window.ApiClient?._serverInfo?.AccessToken;
