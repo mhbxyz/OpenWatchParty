@@ -60,7 +60,7 @@ Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/je
 ### 4. Configure the Plugin (Optional)
 
 1. Go to **Dashboard** > **Plugins** > **OpenWatchParty**
-2. Set a JWT Secret (min 32 characters) for authentication
+2. Set a JWT Secret generated with `openssl rand -base64 32` for authentication
 3. Click **Save**
 
 ## Manual Installation
@@ -223,7 +223,7 @@ curl http://localhost:3000/health
 docker run -d \
   -p 3000:3000 \
   -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
-  -e JWT_SECRET="your-32-character-secret-key-here" \
+  -e JWT_SECRET="$(openssl rand -base64 32)" \
   -e LOG_LEVEL="debug" \
   ghcr.io/mhbxyz/owp-session-server:latest
 ```

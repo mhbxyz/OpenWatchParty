@@ -436,7 +436,7 @@ For local development, create `.env` file:
 
 ```bash
 # .env
-JWT_SECRET=dev-secret-at-least-32-characters-long
+JWT_SECRET=<output-of-openssl-rand-base64-32>
 ALLOWED_ORIGINS=http://localhost:8096
 LOG_LEVEL=debug
 ```

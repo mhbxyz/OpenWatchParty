@@ -44,11 +44,13 @@ public class PluginConfigurationTests
         var blocked = new PluginConfiguration();
         var whitespace = new PluginConfiguration { JwtSecret = "   " };
         var insecure = new PluginConfiguration { AllowInsecureNoAuth = true };
-        var authenticated = new PluginConfiguration { JwtSecret = "configured-secret" };
+        var weak = new PluginConfiguration { JwtSecret = "configured-secret" };
+        var authenticated = new PluginConfiguration { JwtSecret = "B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=" };
 
         Assert.True(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(blocked));
         Assert.True(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(whitespace));
         Assert.False(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(insecure));
+        Assert.True(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(weak));
         Assert.False(OpenWatchPartyController.IsAuthenticationConfigurationBlocked(authenticated));
     }
 
@@ -63,6 +65,7 @@ public class PluginConfigurationTests
 
         Assert.Contains("BLOCKED: configure a JWT secret", page, StringComparison.Ordinal);
         Assert.Contains("AllowInsecureNoAuth", page, StringComparison.Ordinal);
+        Assert.Contains("Base64/Base64URL generated from at least 32 random bytes", page, StringComparison.Ordinal);
         Assert.DoesNotContain("Clear to disable authentication", page, StringComparison.Ordinal);
     }
 

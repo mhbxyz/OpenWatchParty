@@ -41,10 +41,9 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     + "a secret is configured or insecure development mode is explicitly enabled.");
             }
         }
-        else if (Configuration.JwtSecret.Length < 32)
+        else if (!JwtSecretValidator.TryValidate(Configuration.JwtSecret, out var validationError))
         {
-            _logger.LogWarning("[OpenWatchParty] JwtSecret is too short ({Length} chars). " +
-                "Use at least 32 characters for secure authentication.", Configuration.JwtSecret.Length);
+            _logger.LogError("[OpenWatchParty] Token issuance is blocked: {ValidationError}", validationError);
         }
         else
         {

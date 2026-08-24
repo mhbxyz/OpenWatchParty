@@ -1,3 +1,5 @@
+use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
+use base64::Engine;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,16 +15,17 @@ pub struct Claims {
 }
 
 const MIN_ENTROPY_BITS: f64 = 80.0;
+const MIN_SECRET_LENGTH: usize = 32;
 
-fn calculate_entropy(s: &str) -> f64 {
-    if s.is_empty() {
+fn calculate_entropy(data: &[u8]) -> f64 {
+    if data.is_empty() {
         return 0.0;
     }
-    let mut freq: HashMap<char, usize> = HashMap::new();
-    for c in s.chars() {
-        *freq.entry(c).or_insert(0) += 1;
+    let mut freq: HashMap<u8, usize> = HashMap::new();
+    for byte in data {
+        *freq.entry(*byte).or_insert(0) += 1;
     }
-    let len = s.len() as f64;
+    let len = data.len() as f64;
     let entropy: f64 = freq
         .values()
         .map(|&count| {
@@ -41,21 +44,41 @@ fn log_insecure_mode_warning() {
     log::warn!("=======================================================");
 }
 
-fn validate_secret_quality(secret: &str) {
-    if secret.len() < 32 {
-        log::warn!(
-            "JWT_SECRET is too short. Use at least 32 characters for secure authentication."
-        );
+fn validate_secret_quality(secret: &str) -> Result<(), String> {
+    if secret.chars().any(char::is_whitespace) {
+        return Err("JWT_SECRET must not contain whitespace".to_string());
     }
-    let entropy = calculate_entropy(secret);
+    let character_count = secret.chars().count();
+    if character_count < MIN_SECRET_LENGTH {
+        return Err(format!(
+            "JWT_SECRET must contain at least {MIN_SECRET_LENGTH} Unicode characters"
+        ));
+    }
+    let decoded = STANDARD
+        .decode(secret)
+        .or_else(|_| URL_SAFE.decode(secret))
+        .or_else(|_| URL_SAFE_NO_PAD.decode(secret))
+        .map_err(|_| "JWT_SECRET must be Base64 or Base64URL encoded".to_string())?;
+    if decoded.len() < 32 {
+        return Err("JWT_SECRET must encode at least 32 random bytes".to_string());
+    }
+    let entropy = calculate_entropy(&decoded);
     if entropy < MIN_ENTROPY_BITS {
-        log::warn!(
-            "JWT_SECRET has low entropy ({:.1} bits, minimum recommended: {:.0} bits). \
-             Use a cryptographically random secret for secure authentication.",
-            entropy,
-            MIN_ENTROPY_BITS
-        );
+        return Err(format!(
+            "JWT_SECRET has {entropy:.1} bits of estimated diversity; at least {MIN_ENTROPY_BITS:.0} bits are required"
+        ));
     }
+    if has_obvious_sequence(secret.as_bytes()) || has_obvious_sequence(&decoded) {
+        return Err("JWT_SECRET contains an obvious sequential pattern".to_string());
+    }
+    Ok(())
+}
+
+fn has_obvious_sequence(decoded: &[u8]) -> bool {
+    decoded.windows(4).any(|window| {
+        window.windows(2).all(|pair| pair[1] == pair[0] + 1)
+            || window.windows(2).all(|pair| pair[0] == pair[1] + 1)
+    })
 }
 
 #[derive(Clone)]
@@ -100,7 +123,7 @@ impl JwtConfig {
             }
             log_insecure_mode_warning();
         } else {
-            validate_secret_quality(&secret);
+            validate_secret_quality(&secret)?;
         }
 
         Ok(Self {
@@ -150,12 +173,12 @@ mod tests {
 
     #[test]
     fn test_entropy_empty_string() {
-        assert_eq!(calculate_entropy(""), 0.0);
+        assert_eq!(calculate_entropy(b""), 0.0);
     }
 
     #[test]
     fn test_entropy_single_char() {
-        let entropy = calculate_entropy("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let entropy = calculate_entropy(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert!(
             entropy < 1.0,
             "Repeated single char should have near-zero entropy"
@@ -164,7 +187,7 @@ mod tests {
 
     #[test]
     fn test_entropy_two_chars() {
-        let entropy = calculate_entropy("abababababababababababababababab");
+        let entropy = calculate_entropy(b"abababababababababababababababab");
         assert!(
             entropy > 10.0 && entropy < 40.0,
             "Two char alternating should have low entropy: {}",
@@ -174,7 +197,7 @@ mod tests {
 
     #[test]
     fn test_entropy_random_looking() {
-        let entropy = calculate_entropy("aB3$xY9!pQ2@wE5#rT8^uI1&oP4*");
+        let entropy = calculate_entropy(b"aB3$xY9!pQ2@wE5#rT8^uI1&oP4*");
         assert!(
             entropy > MIN_ENTROPY_BITS,
             "Random-looking string should have high entropy: {}",
@@ -184,7 +207,7 @@ mod tests {
 
     #[test]
     fn test_entropy_uuid() {
-        let entropy = calculate_entropy("550e8400e29b41d4a716446655440000");
+        let entropy = calculate_entropy(b"550e8400e29b41d4a716446655440000");
         assert!(
             entropy > 60.0,
             "UUID should have reasonable entropy: {}",
@@ -194,7 +217,7 @@ mod tests {
 
     #[test]
     fn test_entropy_weak_password() {
-        let entropy = calculate_entropy("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb");
+        let entropy = calculate_entropy(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaabb");
         assert!(
             entropy < MIN_ENTROPY_BITS,
             "Weak pattern should have low entropy: {}",
@@ -220,7 +243,7 @@ mod tests {
     #[test]
     fn test_jwt_config_enables_auth_when_secret_is_set() {
         let config = JwtConfig::from_values(
-            "test-secret-with-at-least-32-characters".to_string(),
+            "B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=".to_string(),
             false,
             "audience".to_string(),
             "issuer".to_string(),
@@ -229,6 +252,103 @@ mod tests {
         assert!(config.enabled);
         assert_eq!(config.audience, "audience");
         assert_eq!(config.issuer, "issuer");
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_short_secret() {
+        let result = JwtConfig::from_values(
+            "short-but-varied-123!".to_string(),
+            false,
+            "test".to_string(),
+            "test".to_string(),
+        );
+        assert!(result.err().unwrap().contains("at least 32"));
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_low_entropy_secret() {
+        let result = JwtConfig::from_values(
+            "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=".to_string(),
+            false,
+            "test".to_string(),
+            "test".to_string(),
+        );
+        assert!(result.err().unwrap().contains("diversity"));
+    }
+
+    #[test]
+    fn test_jwt_config_accepts_strong_base64url_secret() {
+        let secret = "B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow";
+        let config = JwtConfig::from_values(
+            secret.to_string(),
+            false,
+            "test".to_string(),
+            "test".to_string(),
+        )
+        .unwrap();
+        assert_eq!(config.secret, secret);
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_predictable_high_diversity_secret() {
+        for secret in [
+            "abcdefghijklmnopqrstuvwxyzABCDEF",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr",
+            "your-32-character-secret-key-here",
+            "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=",
+            "B0vL    hmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=",
+        ] {
+            let result = JwtConfig::from_values(
+                secret.to_string(),
+                false,
+                "test".to_string(),
+                "test".to_string(),
+            );
+            assert!(result.is_err(), "predictable secret was accepted: {secret}");
+        }
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_surrounding_whitespace() {
+        let result = JwtConfig::from_values(
+            " B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=".to_string(),
+            false,
+            "test".to_string(),
+            "test".to_string(),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_jwt_config_accepts_standard_and_url_safe_alphabets() {
+        for secret in [
+            "98WPRKE6UmMf3yz96/mQPgkiEnDw4mIo1BPYNUA45rQ=",
+            "98WPRKE6UmMf3yz96_mQPgkiEnDw4mIo1BPYNUA45rQ",
+        ] {
+            assert!(JwtConfig::from_values(
+                secret.to_string(),
+                false,
+                "test".to_string(),
+                "test".to_string(),
+            )
+            .is_ok());
+        }
+    }
+
+    #[test]
+    fn test_jwt_config_rejects_unpadded_standard_and_mixed_alphabets() {
+        for secret in [
+            "98WPRKE6UmMf3yz96/mQPgkiEnDw4mIo1BPYNUA45rQ",
+            "d1wVY4zF4kyG84jG/NshZg0ypQTurZv-7+jzya6ZF70=",
+        ] {
+            assert!(JwtConfig::from_values(
+                secret.to_string(),
+                false,
+                "test".to_string(),
+                "test".to_string(),
+            )
+            .is_err());
+        }
     }
 
     #[test]

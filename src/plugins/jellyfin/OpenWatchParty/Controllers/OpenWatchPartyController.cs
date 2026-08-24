@@ -307,16 +307,17 @@ public class OpenWatchPartyController : ControllerBase
             userName = "User";  // Fallback for display name only
         }
 
+        var authenticationError = GetAuthenticationConfigurationError(config);
+        if (authenticationError != null)
+        {
+            return StatusCode(503, new {
+                error = authenticationError,
+                configuration_error = true
+            });
+        }
+
         if (string.IsNullOrWhiteSpace(config.JwtSecret))
         {
-            if (IsAuthenticationConfigurationBlocked(config))
-            {
-                return StatusCode(503, new {
-                    error = "JWT authentication is not configured",
-                    configuration_error = true
-                });
-            }
-
             return Ok(new {
                 token = (string?)null,
                 auth_enabled = false,
@@ -360,7 +361,17 @@ public class OpenWatchPartyController : ControllerBase
 
     internal static bool IsAuthenticationConfigurationBlocked(PluginConfiguration config)
     {
-        return string.IsNullOrWhiteSpace(config.JwtSecret) && !config.AllowInsecureNoAuth;
+        return GetAuthenticationConfigurationError(config) != null;
+    }
+
+    internal static string? GetAuthenticationConfigurationError(PluginConfiguration config)
+    {
+        if (string.IsNullOrWhiteSpace(config.JwtSecret))
+        {
+            return config.AllowInsecureNoAuth ? null : "JWT authentication is not configured";
+        }
+
+        return JwtSecretValidator.TryValidate(config.JwtSecret, out var error) ? null : error;
     }
 
     /// <summary>

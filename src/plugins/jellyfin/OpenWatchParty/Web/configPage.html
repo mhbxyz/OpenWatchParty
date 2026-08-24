@@ -21,7 +21,7 @@
                                     <span class="material-icons" style="font-size:1.3em">visibility</span>
                                 </button>
                             </div>
-                            <div class="fieldDescription">Secret used to sign and verify session tokens (min 32 characters). Required for production.</div>
+                            <div class="fieldDescription">Required for production: Base64/Base64URL generated from at least 32 random bytes.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -83,13 +83,74 @@
 
                 updateAuthStatus: function(page, config) {
                     var status = $('#AuthStatus', page);
-                    if ((config.JwtSecret || '').trim()) {
+                    var validationError = this.validateJwtSecret(config.JwtSecret || '');
+                    if ((config.JwtSecret || '').trim() && validationError) {
+                        status.text('BLOCKED: ' + validationError).css({ background: '#5b1d1d', color: '#ffaaaa' });
+                    } else if ((config.JwtSecret || '').trim()) {
                         status.text('Authentication enabled').css({ background: '#173d2a', color: '#8ee6b5' });
                     } else if (config.AllowInsecureNoAuth) {
                         status.text('INSECURE DEVELOPMENT MODE').css({ background: '#573d00', color: '#ffd36a' });
                     } else {
                         status.text('BLOCKED: configure a JWT secret').css({ background: '#5b1d1d', color: '#ffaaaa' });
                     }
+                },
+
+                validateJwtSecret: function(secret) {
+                    var symbols = Array.from(secret || '');
+                    if (/\s/.test(secret)) {
+                        return 'JWT secret must not contain whitespace';
+                    }
+                    if (symbols.length < 32) {
+                        return 'JWT secret must contain at least 32 Unicode characters';
+                    }
+                    var hasStandardSymbols = /[+/]/.test(secret);
+                    var hasUrlSafeSymbols = /[-_]/.test(secret);
+                    if (hasStandardSymbols && hasUrlSafeSymbols) {
+                        return 'JWT secret must be valid Base64 or Base64URL';
+                    }
+                    var normalized = hasUrlSafeSymbols ? secret.replace(/-/g, '+').replace(/_/g, '/') : secret;
+                    var remainder = normalized.length % 4;
+                    if (remainder === 1 || (hasStandardSymbols && remainder !== 0)) {
+                        return 'JWT secret must be valid Base64 or Base64URL';
+                    }
+                    while ((normalized.length % 4) !== 0) normalized += '=';
+                    var decoded;
+                    try {
+                        decoded = atob(normalized);
+                        if (decoded.length < 32) {
+                            return 'JWT secret must encode at least 32 random bytes';
+                        }
+                    } catch (err) {
+                        return 'JWT secret must be valid Base64 or Base64URL';
+                    }
+                    var frequencies = new Map();
+                    Array.from(decoded).forEach(function(symbol) {
+                        frequencies.set(symbol, (frequencies.get(symbol) || 0) + 1);
+                    });
+                    var entropyPerSymbol = 0;
+                    frequencies.forEach(function(count) {
+                        var probability = count / decoded.length;
+                        entropyPerSymbol -= probability * Math.log2(probability);
+                    });
+                    if ((entropyPerSymbol * decoded.length) < 80) {
+                        return 'JWT secret must contain at least 80 bits of estimated diversity';
+                    }
+                    var hasSequence = function(value) {
+                        for (var index = 0; index <= value.length - 4; index++) {
+                            var ascending = true;
+                            var descending = true;
+                            for (var offset = 1; offset < 4; offset++) {
+                                ascending = ascending && value.charCodeAt(index + offset) === value.charCodeAt(index + offset - 1) + 1;
+                                descending = descending && value.charCodeAt(index + offset - 1) === value.charCodeAt(index + offset) + 1;
+                            }
+                            if (ascending || descending) return true;
+                        }
+                        return false;
+                    };
+                    if (hasSequence(secret) || hasSequence(decoded)) {
+                        return 'JWT secret contains an obvious sequential pattern';
+                    }
+                    return '';
                 }
             };
 
@@ -135,9 +196,15 @@
                 e.preventDefault();
                 Dashboard.showLoadingMsg();
                 var page = $(this).parents('.pluginConfigurationPage')[0];
-                var jwtSecret = ($('#JwtSecret', page).val() || '').trim();
+                var jwtSecret = $('#JwtSecret', page).val() || '';
                 var allowInsecure = $('#AllowInsecureNoAuth', page).prop('checked') === true;
                 if (jwtSecret) {
+                    var validationError = OpenWatchPartyConfigurationPage.validateJwtSecret(jwtSecret);
+                    if (validationError) {
+                        Dashboard.hideLoadingMsg();
+                        Dashboard.alert(validationError);
+                        return false;
+                    }
                     allowInsecure = false;
                     $('#AllowInsecureNoAuth', page).prop('checked', false);
                 }

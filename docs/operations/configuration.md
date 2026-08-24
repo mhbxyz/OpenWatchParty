@@ -25,7 +25,7 @@ Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatc
 ### JWT Secret Guidelines
 
 For production use:
-- **Minimum 32 characters**
+- **Base64/Base64URL generated from at least 32 random bytes**
 - Use a cryptographically random string
 - Never reuse secrets across environments
 

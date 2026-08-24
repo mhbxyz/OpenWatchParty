@@ -206,7 +206,7 @@ The server validates:
 ### Production Checklist
 
 - [ ] JWT authentication enabled
-- [ ] Strong JWT secret (32+ characters)
+- [ ] JWT secret generated with `openssl rand -base64 32`
 - [ ] CORS restricted to specific origins
 - [ ] HTTPS enabled (via reverse proxy)
 - [ ] Session server not directly exposed to internet

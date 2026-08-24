@@ -82,7 +82,7 @@ Generates a JWT token for the authenticated user.
 | 401 | Not authenticated or claims missing |
 | 429 | Rate limit exceeded (10 tokens/min) |
 | 500 | Plugin not configured |
-| 503 | JWT secret missing and insecure development not explicitly enabled |
+| 503 | JWT authentication configuration missing or secret rejected by the quality policy |
 
 **Rate Limiting:**
 - Maximum 10 tokens per minute per user
@@ -218,7 +218,7 @@ curl -X POST \
   -H "X-Emby-Token: $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "JwtSecret": "your-secret-key-at-least-32-characters",
+    "JwtSecret": "<output-of-openssl-rand-base64-32>",
     "JwtAudience": "OpenWatchParty",
     "JwtIssuer": "Jellyfin",
     "TokenTtlSeconds": 3600,
@@ -237,7 +237,7 @@ curl -X POST \
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `JwtSecret` | string | `""` | Secret key for signing JWT tokens. Required unless `AllowInsecureNoAuth` is explicitly enabled. |
+| `JwtSecret` | string | `""` | Base64/Base64URL secret generated from at least 32 random bytes. Required unless `AllowInsecureNoAuth` is explicitly enabled. |
 | `AllowInsecureNoAuth` | bool | `false` | Explicit local-development override. Never enable in production. |
 | `JwtAudience` | string | `"OpenWatchParty"` | The `aud` (audience) claim in generated tokens. Must match the session server's expected audience if configured. |
 | `JwtIssuer` | string | `"Jellyfin"` | The `iss` (issuer) claim in generated tokens. Must match the session server's expected issuer if configured. |

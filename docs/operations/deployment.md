@@ -87,7 +87,8 @@ volumes:
 
 ```bash
 # .env
-JWT_SECRET=your-very-secure-32-character-secret-key
+# Paste the output of: openssl rand -base64 32
+JWT_SECRET=<generated-base64-value>
 ALLOW_INSECURE_NO_AUTH=false
 ```
 
