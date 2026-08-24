@@ -6,9 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <ClientSourceDir>$(MSBuildProjectDirectory)\..\..\..\clients\jellyfin-web</ClientSourceDir>
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
@@ -27,5 +29,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OpenWatchParty\OpenWatchPartyPlugin.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="$(ClientSourceDir)\plugin.js"
+                      Condition="Exists('$(ClientSourceDir)')"
+                      LogicalName="OpenWatchParty.Plugin.Tests.Fixtures.plugin.js" />
+    <EmbeddedResource Include="..\OpenWatchParty\Web\plugin.js"
+                      Condition="!Exists('$(ClientSourceDir)')"
+                      LogicalName="OpenWatchParty.Plugin.Tests.Fixtures.plugin.js" />
   </ItemGroup>
 </Project>

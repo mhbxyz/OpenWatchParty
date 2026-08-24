@@ -13,7 +13,7 @@
   }
   if (!cacheBust) cacheBust = String(Date.now());
 
-  const base = '/web/plugins/openwatchparty';
+  const base = '/OpenWatchParty/Client';
 
   const SCRIPT_TIMEOUT_MS = 10000;  // 10 seconds timeout per script
 

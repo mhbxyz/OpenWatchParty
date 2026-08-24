@@ -19,6 +19,9 @@ server:
 [doc('Run .NET plugin tests')]
 plugin:
     @echo -e "{{GREEN}}▶ Running plugin tests...{{RESET}}"
+    @mkdir -p {{plugin_dir}}/Web
+    @cp {{client_dir}}/plugin.js {{plugin_dir}}/Web/plugin.js
+    @for f in {{client_js_files}}; do mkdir -p "$(dirname {{plugin_dir}}/Web/$f)" && cp {{client_dir}}/$f {{plugin_dir}}/Web/$f; done
     @docker run --rm \
         -v "$(pwd)/src/plugins/jellyfin:/src" \
         -w /src \

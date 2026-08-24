@@ -19,6 +19,40 @@ namespace OpenWatchParty.Plugin.Controllers;
 public class OpenWatchPartyController : ControllerBase
 {
     private readonly ILogger<OpenWatchPartyController> _logger;
+    private const string JavaScriptContentType = "text/javascript; charset=utf-8";
+
+    private static readonly HashSet<string> AllowedClientModules = new(StringComparer.Ordinal)
+    {
+        "state.js",
+        "utils/time.js",
+        "utils/video.js",
+        "utils/misc.js",
+        "utils/media.js",
+        "utils/log.js",
+        "ui/styles.js",
+        "ui/indicators.js",
+        "ui/toasts.js",
+        "ui/cards.js",
+        "ui/home.js",
+        "ui/render.js",
+        "playback/play.js",
+        "playback/bind.js",
+        "playback/sync.js",
+        "chat/messages.js",
+        "chat/input.js",
+        "ws/send.js",
+        "ws/auth.js",
+        "ws/handlers/room.js",
+        "ws/handlers/sync.js",
+        "ws/handlers/playback.js",
+        "ws/handlers/clock.js",
+        "ws/connection.js",
+        "app/lifecycle.js",
+        "app/cleanup.js"
+    };
+
+    private static readonly ConcurrentDictionary<string, Lazy<EmbeddedAsset?>> ClientAssetCache =
+        new(StringComparer.Ordinal);
 
     // Rate limiting: max 30 tokens per minute per user (allows for reconnections)
     private const int MaxTokensPerMinute = 30;
@@ -33,6 +67,8 @@ public class OpenWatchPartyController : ControllerBase
     private static SigningCredentials? _cachedSigningCredentials;
     private static string? _cachedJwtSecret;
     private static readonly JwtSecurityTokenHandler _tokenHandler = new();
+
+    private sealed record EmbeddedAsset(byte[] Content, string ETag);
 
     /// <summary>
     /// Initializes a new instance of the controller with logging support.
@@ -86,6 +122,107 @@ public class OpenWatchPartyController : ControllerBase
         Response.Headers["ETag"] = etag;
 
         return Content(content, "text/javascript");
+    }
+
+    /// <summary>
+    /// Returns an allow-listed JavaScript module embedded in the plugin assembly.
+    /// </summary>
+    /// <param name="path">Module path relative to the client root.</param>
+    /// <returns>The requested JavaScript module.</returns>
+    [HttpGet("Client/{**path}")]
+    [AllowAnonymous]
+    [Produces(JavaScriptContentType)]
+    public ActionResult GetClientModule([FromRoute] string? path)
+    {
+        if (IsInvalidClientModulePath(path))
+        {
+            return BadRequest();
+        }
+
+        if (!AllowedClientModules.Contains(path!))
+        {
+            return NotFound();
+        }
+
+        var lazyAsset = ClientAssetCache.GetOrAdd(
+            path!,
+            static modulePath => new Lazy<EmbeddedAsset?>(
+                () => LoadClientAsset(modulePath),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+        var asset = lazyAsset.Value;
+        if (asset == null)
+        {
+            _logger.LogError("Embedded client module {ModulePath} is missing", path);
+            return StatusCode(500);
+        }
+
+        Response.Headers.CacheControl = "public, max-age=3600";
+        Response.Headers.ETag = asset.ETag;
+        Response.Headers.XContentTypeOptions = "nosniff";
+
+        if (RequestMatchesETag(asset.ETag))
+        {
+            return StatusCode(304);
+        }
+
+        return File(asset.Content, JavaScriptContentType);
+    }
+
+    private static bool IsInvalidClientModulePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path)
+            || path.StartsWith("/", StringComparison.Ordinal)
+            || path.Contains('\\')
+            || path.Contains('%')
+            || path.Any(char.IsControl))
+        {
+            return true;
+        }
+
+        return path.Split('/').Any(segment => segment.Length == 0 || segment is "." or "..");
+    }
+
+    private static EmbeddedAsset? LoadClientAsset(string path)
+    {
+        var assembly = typeof(OpenWatchPartyController).Assembly;
+        var resourceName = "OpenWatchParty.Plugin.Web." + path.Replace('/', '.');
+        using var stream = assembly.GetManifestResourceStream(resourceName);
+        if (stream == null)
+        {
+            return null;
+        }
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        var content = buffer.ToArray();
+        var hash = System.Security.Cryptography.SHA256.HashData(content);
+        var etag = $"\"{Convert.ToBase64String(hash)}\"";
+        return new EmbeddedAsset(content, etag);
+    }
+
+    private bool RequestMatchesETag(string etag)
+    {
+        var value = Request.Headers.IfNoneMatch.ToString();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return value.Split(',').Any(candidate =>
+        {
+            var normalized = candidate.Trim();
+            if (normalized == "*")
+            {
+                return true;
+            }
+
+            if (normalized.StartsWith("W/", StringComparison.Ordinal))
+            {
+                normalized = normalized[2..].TrimStart();
+            }
+
+            return string.Equals(normalized, etag, StringComparison.Ordinal);
+        });
     }
 
     /// <summary>

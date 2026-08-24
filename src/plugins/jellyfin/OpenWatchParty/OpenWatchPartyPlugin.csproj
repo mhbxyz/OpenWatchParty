@@ -12,6 +12,7 @@
     <RepositoryUrl>https://github.com/mhbxyz/OpenWatchParty</RepositoryUrl>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>CS1591</NoWarn>
+    <ClientSourceDir>$(MSBuildProjectDirectory)\..\..\..\clients\jellyfin-web</ClientSourceDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,13 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Web\configPage.html" />
-    <EmbeddedResource Include="Web\plugin.js" />
+    <EmbeddedResource Include="$(ClientSourceDir)\**\*.js"
+                      Exclude="$(ClientSourceDir)\tests\**\*.js"
+                      Condition="Exists('$(ClientSourceDir)')">
+      <Link>Web\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Web\**\*.js"
+                      Exclude="Web\tests\**\*.js"
+                      Condition="!Exists('$(ClientSourceDir)')" />
   </ItemGroup>
 </Project>
