@@ -81,6 +81,20 @@ describe('Jellyfin playback API fallbacks', () => {
     assert.equal(await OWP.playback.playItem({ Id: 'item' }), false);
   });
 
+  it('uses the official Jellyfin play button when PlaybackManager is unavailable', async () => {
+    let clicked = 0;
+    OWP.state.inRoom = true;
+    OWP.utils.getVideo = () => null;
+    document.querySelector = selector => selector === '.btnPlay:not(.hide)'
+      ? { click: () => { clicked++; } }
+      : null;
+
+    assert.equal(await OWP.playback.playItem({ Id: 'item-fallback' }), true);
+    assert.match(window.location.hash, /details\?id=item-fallback/);
+    assert.equal(clicked, 1);
+    OWP.state.inRoom = false;
+  });
+
   it('does not continue fallbacks after request invalidation', async () => {
     let rejectFirst;
     let current = true;

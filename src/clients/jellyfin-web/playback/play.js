@@ -48,13 +48,40 @@
     return { success: false, errors };
   };
 
+  const launchViaDetailsPage = (item, isCurrent = () => true) => {
+    const itemId = item?.Id || item?.id;
+    if (!itemId || !OWP.state.inRoom || !isCurrent() || !window.location || !document.querySelector) {
+      return false;
+    }
+    const encodedId = encodeURIComponent(itemId);
+    if (!(window.location.hash || '').includes(`/details?id=${encodedId}`)) {
+      window.location.hash = `#/details?id=${encodedId}`;
+    }
+    let attempts = 0;
+    const clickOfficialPlay = () => {
+      if (!OWP.state.inRoom || !isCurrent()) return;
+      const video = OWP.utils.getVideo?.();
+      if (video && OWP.utils.getCurrentItemId?.() === itemId) return;
+      const button = document.querySelector('.btnPlay:not(.hide)');
+      if (button) {
+        button.click();
+        return;
+      }
+      if (++attempts < 50) OWP.timers.setTimeout(clickOfficialPlay, 100, 'media');
+    };
+    clickOfficialPlay();
+    return true;
+  };
+
   const playItem = async (item, { isCurrent = () => true, silent = false } = {}) => {
     const pm = utils.getPlaybackManager();
     if (!pm) {
-      console.warn('[OpenWatchParty] Playback failed: PlaybackManager not available');
-      return false;
+      return launchViaDetailsPage(item, isCurrent);
     }
     const result = await tryPlayMethods(pm, item, isCurrent);
+    if (!result.success && !result.cancelled && launchViaDetailsPage(item, isCurrent)) {
+      return true;
+    }
     if (!result.success && !result.cancelled && !silent) {
       console.error('[OpenWatchParty] All playback methods failed:', result.errors);
       if (OWP.ui && OWP.ui.showToast) {
@@ -143,6 +170,7 @@
 
   Object.assign(playback, {
     tryPlayMethods,
+    launchViaDetailsPage,
     playItem,
     safePlay,
     markPlaybackResumed,
