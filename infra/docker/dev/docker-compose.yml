@@ -36,7 +36,8 @@ services:
       start_period: 5s
 
   jellyfin-dev:
-    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-10.11.3}
+    # The tag follows version.json; update this digest when that version changes.
+    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-10.11.3}@sha256:1edf3f17997acbe139718f252a7d2ded2706762390d787a34204668498dbc5f6
     container_name: jellyfin-dev
     environment:
       - PUID=${UID:-1000}
@@ -56,7 +57,7 @@ services:
     entrypoint: /jellyfin-entrypoint.sh
 
   plugin-builder:
-    image: mcr.microsoft.com/dotnet/sdk:9.0
+    image: mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30
     working_dir: /workspace/OpenWatchParty
     network_mode: host
     profiles:
