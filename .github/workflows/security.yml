@@ -12,6 +12,19 @@ on:
 permissions: {}
 
 jobs:
+  secret-scan:
+    name: Repository Secret Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        run: infra/scripts/scan-secrets.sh
+
   cargo-audit:
     name: Cargo Audit
     runs-on: ubuntu-latest

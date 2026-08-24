@@ -151,6 +151,9 @@ jobs:
       - name: Test immutable dependency verifier
         run: infra/scripts/tests/verify-pins.test.sh
 
+      - name: Test repository secret scanning
+        run: infra/scripts/tests/secret-scan.test.sh
+
       - name: Test checksum and SBOM validation
         run: infra/scripts/tests/supply-chain.test.sh
 

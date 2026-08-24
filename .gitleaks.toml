@@ -1,0 +1,21 @@
+title = "OpenWatchParty secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Synthetic credentials used by secret-scanner integration tests"
+paths = [
+  '''^infra/scripts/tests/secret-scan\.test\.sh$''',
+]
+
+[[allowlists]]
+description = "Documented placeholders and synthetic JWT test keys"
+regexTarget = "secret"
+regexes = [
+  '''^B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=?$''',
+  '''^98WPRKE6UmMf3yz96/mQPgkiEnDw4mIo1BPYNUA45rQ=$''',
+  '''^K7xR9mPqN2wLhVbE4cT8fY0jU5sA3dG1$''',
+  '''^YOUR_API_KEY$''',
+  '''^eyJhbGciOiJIUzI1NiIs(\.\.\.|InR5cCI6IkpXVCJ9\.\.\.)$''',
+]

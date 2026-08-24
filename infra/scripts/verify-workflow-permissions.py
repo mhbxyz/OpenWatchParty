@@ -41,6 +41,7 @@ EXPECTED = {
         "deploy": {"pages": "write", "id-token": "write"},
     },
     "security.yml": {
+        "secret-scan": {"contents": "read"},
         "cargo-audit": {"contents": "read"},
         "nuget-audit": {"contents": "read"},
         "bundler-audit": {"contents": "read"},
