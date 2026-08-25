@@ -24,7 +24,7 @@ fn root_override_keeps_tests_out_of_system_paths() {
 
 #[test]
 fn state_never_contains_the_secret_itself() {
-    let state = InstallationState::new("0.3.1");
+    let state = InstallationState::new("0.3.2");
     let json = serde_json::to_string(&state).unwrap();
     assert!(!json.contains("jwt_secret"));
 }

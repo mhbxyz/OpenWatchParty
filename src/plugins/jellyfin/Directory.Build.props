@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <!-- Generated values mirrored from version.json and checked by CI. -->
-    <OpenWatchPartyVersion>0.3.1</OpenWatchPartyVersion>
+    <OpenWatchPartyVersion>0.3.2</OpenWatchPartyVersion>
     <JellyfinPackageVersion>10.11.3</JellyfinPackageVersion>
     <JellyfinTargetAbi>10.11.0.0</JellyfinTargetAbi>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
