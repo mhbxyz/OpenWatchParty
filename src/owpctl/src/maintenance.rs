@@ -21,7 +21,23 @@ pub fn apply_values(config: &mut DesiredConfig, values: &[String]) -> anyhow::Re
                 config.session_server.public_websocket_url = url::Url::parse(value)?
             }
             "session.log-level" => config.session_server.log_level = value.to_string(),
-            "session.published-port" => config.session_server.published_port = value.parse()?,
+            "session.published-port" => {
+                let previous = config.session_server.published_port;
+                let next = value.parse()?;
+                if config
+                    .session_server
+                    .public_websocket_url
+                    .port_or_known_default()
+                    == Some(previous)
+                {
+                    config
+                        .session_server
+                        .public_websocket_url
+                        .set_port(Some(next))
+                        .map_err(|_| anyhow::anyhow!("cannot update WebSocket port"))?;
+                }
+                config.session_server.published_port = next;
+            }
             "session.max-connections" => config.session_server.max_connections = value.parse()?,
             "session.max-connections-per-ip" => {
                 config.session_server.max_connections_per_ip = value.parse()?
@@ -151,8 +167,19 @@ mod tests {
     fn configuration_keys_are_allowlisted() {
         let mut config =
             DesiredConfig::local(url::Url::parse("http://localhost:8096").unwrap()).unwrap();
-        apply_values(&mut config, &["session.max-connections=512".to_string()]).unwrap();
+        apply_values(
+            &mut config,
+            &[
+                "session.max-connections=512".to_string(),
+                "session.published-port=39010".to_string(),
+            ],
+        )
+        .unwrap();
         assert_eq!(config.session_server.max_connections, 512);
+        assert_eq!(
+            config.session_server.public_websocket_url.port(),
+            Some(39010)
+        );
         assert!(apply_values(&mut config, &["jwt.secret=leak".to_string()]).is_err());
     }
 }
