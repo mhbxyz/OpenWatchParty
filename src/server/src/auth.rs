@@ -205,7 +205,16 @@ impl JwtConfig {
         let kid = kid.ok_or_else(|| "RS256 token has no kid".to_string())?;
         let path = std::env::var("JWT_TRUST_STORE_PATH")
             .map_err(|_| "JWT_TRUST_STORE_PATH is not configured".to_string())?;
-        let store = crate::trust::TrustStore::load(std::path::Path::new(&path))?;
+        self.validate_rs256_with_path(token, kid, std::path::Path::new(&path))
+    }
+
+    fn validate_rs256_with_path(
+        &self,
+        token: &str,
+        kid: &str,
+        path: &std::path::Path,
+    ) -> Result<Claims, String> {
+        let store = crate::trust::TrustStore::load(path)?;
         let key = store.active_key(kid)?;
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_audience(&[&key.audience]);
@@ -491,5 +500,65 @@ mod tests {
         .unwrap();
 
         assert!(config.validate_token(&token).is_err());
+    }
+
+    #[test]
+    fn rs256_token_is_validated_against_trusted_3072_bit_jwk() {
+        use jsonwebtoken::{encode, EncodingKey, Header};
+        use rsa::{
+            pkcs8::{EncodePrivateKey, LineEnding},
+            traits::PublicKeyParts,
+            RsaPrivateKey,
+        };
+
+        let private = RsaPrivateKey::new(&mut rsa::rand_core::OsRng, 3072).unwrap();
+        let kid = "trusted_key";
+        let issuer = "urn:openwatchparty:jellyfin:test";
+        let audience = "OpenWatchParty";
+        let store = crate::trust::TrustStore {
+            version: 1,
+            keys: vec![crate::trust::TrustedKey {
+                kid: kid.to_string(),
+                issuer: issuer.to_string(),
+                audience: audience.to_string(),
+                n: URL_SAFE_NO_PAD.encode(private.n().to_bytes_be()),
+                e: URL_SAFE_NO_PAD.encode(private.e().to_bytes_be()),
+                status: crate::trust::KeyStatus::Active,
+            }],
+        };
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("trust.json");
+        std::fs::write(&path, serde_json::to_vec(&store).unwrap()).unwrap();
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(kid.to_string());
+        let token = encode(
+            &header,
+            &Claims {
+                sub: "user".into(),
+                name: "User".into(),
+                aud: audience.into(),
+                iss: issuer.into(),
+                iat: now,
+                exp: now + 3600,
+            },
+            &EncodingKey::from_rsa_pem(private.to_pkcs8_pem(LineEnding::LF).unwrap().as_bytes())
+                .unwrap(),
+        )
+        .unwrap();
+        let config = JwtConfig {
+            secret: String::new(),
+            audience: audience.into(),
+            issuer: issuer.into(),
+            enabled: true,
+        };
+
+        assert_eq!(
+            config
+                .validate_rs256_with_path(&token, kid, &path)
+                .unwrap()
+                .sub,
+            "user"
+        );
     }
 }

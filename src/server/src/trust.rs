@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,12 +48,20 @@ impl TrustStore {
         {
             return Err("invalid RSA key id".to_string());
         }
-        self.keys
+        let key = self
+            .keys
             .iter()
             .find(|key| {
                 key.kid == kid && matches!(key.status, KeyStatus::Active | KeyStatus::Retiring)
             })
-            .ok_or_else(|| "unknown or revoked RSA key".to_string())
+            .ok_or_else(|| "unknown or revoked RSA key".to_string())?;
+        let modulus = URL_SAFE_NO_PAD
+            .decode(&key.n)
+            .map_err(|_| "invalid RSA modulus encoding".to_string())?;
+        if modulus.len() < 384 {
+            return Err("RSA modulus must contain at least 3072 bits".to_string());
+        }
+        Ok(key)
     }
 }
 
