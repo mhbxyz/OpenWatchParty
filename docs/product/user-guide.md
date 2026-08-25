@@ -11,12 +11,12 @@ nav_order: 3
 Before using OpenWatchParty, ensure your Jellyfin administrator has:
 1. Installed the OpenWatchParty plugin
 2. Started the session server
-3. Enabled the client script in Jellyfin settings
+3. Confirmed that the plugin dashboard reports the client and session server as ready
 
 ## Creating a Watch Party
 
 1. **Start playing a video** - Open any movie or TV episode in Jellyfin
-2. **Find the Watch Party button** - Look for the group icon in the top header bar (right side)
+2. **Find the Watch Party button** - Open the player controls and select **Watch Party**
 3. **Click to open the panel** - A slide-out panel appears
 4. **Enter a room name** - Give your party a descriptive name
 5. **Click "Start Room"** - You are now the host
@@ -170,7 +170,8 @@ When the chat panel is closed, incoming messages appear as toasts in the top-rig
 ## Troubleshooting
 
 ### "Watch Party button not visible"
-- Ensure the client script is enabled in Jellyfin Dashboard > General > Custom HTML
+- Open Dashboard > Plugins > OpenWatchParty and verify client injection
+- Restart Jellyfin after installing or upgrading the plugin
 - Try refreshing the page (Ctrl+F5)
 
 ### "Cannot connect to server"

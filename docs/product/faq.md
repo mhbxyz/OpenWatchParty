@@ -31,8 +31,8 @@ Yes, you can run Jellyfin and the session server on the same machine. They use d
 ### Is Docker required?
 No, but it's recommended. You can build and run the Rust session server manually if preferred.
 
-### Why do I need to add a script tag manually?
-Since Jellyfin 10.9, plugins cannot automatically inject scripts for security reasons. The manual step ensures administrators explicitly approve script injection.
+### Do I need to add a script tag manually?
+No in the supported Jellyfin environment. OpenWatchParty includes native client injection. File Transformation and Custom HTML remain compatibility fallbacks for unusual Jellyfin Web deployments.
 
 ## Usage
 
@@ -84,7 +84,7 @@ Optional JWT tokens can be configured. When enabled, clients must authenticate w
 
 ### The Watch Party button doesn't appear
 1. Check that the plugin is installed (Dashboard > Plugins)
-2. Verify the script tag is in Custom HTML (Dashboard > General)
+2. Open the OpenWatchParty plugin dashboard and verify client injection
 3. Hard refresh the page (Ctrl+F5)
 
 See [Troubleshooting Guide](../operations/troubleshooting.md#watch-party-button-not-visible) for detailed solutions.

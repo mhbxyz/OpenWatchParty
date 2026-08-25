@@ -18,34 +18,65 @@ nav_order: 1
 - **OpenWatchParty `0.2.1`** targets Jellyfin ABI `10.11.0.0`
 - **Validated environment**: Jellyfin packages and image `10.11.3`
 
-## Quick Start (Docker)
+## Choose Your Installation Path
 
-The easiest way to run OpenWatchParty is with Docker Compose.
+| You are... | Recommended path |
+|------------|------------------|
+| Running an existing Jellyfin server | Install the plugin repository, then deploy the pre-built session-server image |
+| Evaluating OpenWatchParty locally | Use the development stack documented under Development |
+| Contributing code | Clone the repository and use `just up` |
 
-### 1. Clone the Repository
+> `just up` is a development command. It starts a separate Jellyfin test instance and must not be used to install OpenWatchParty into an existing Jellyfin deployment.
 
-```bash
-git clone https://github.com/mhbxyz/OpenWatchParty.git
-cd OpenWatchParty
+## Quick Start For An Existing Jellyfin Server
+
+### 1. Install The Jellyfin Plugin
+
+1. Open **Dashboard** > **Plugins** > **Repositories**.
+2. Add:
+
+```text
+https://mhbxyz.github.io/OpenWatchParty/jellyfin-plugin-repo/manifest.json
 ```
 
-### 2. Start Services
+3. Open **Catalog**, install **OpenWatchParty**, and restart Jellyfin.
+
+The plugin includes native client-script injection. File Transformation and Custom HTML are optional compatibility fallbacks, not required installation steps.
+
+### 2. Start The Session Server
 
 ```bash
-just up
+JWT_SECRET="$(openssl rand -base64 32)"
+docker run -d \
+  --name owp-session \
+  --restart unless-stopped \
+  -p 127.0.0.1:3000:3000 \
+  -e ALLOWED_ORIGINS="https://jellyfin.example.com" \
+  -e JWT_SECRET="$JWT_SECRET" \
+  ghcr.io/mhbxyz/owp-session-server:0.2.1
 ```
 
-This starts:
-- Jellyfin on `http://localhost:8096`
-- Session server on `http://localhost:3000`
+Keep the generated value temporarily. It must be entered in the plugin configuration in the next step.
 
-### 3. Enable the Client Script
+### 3. Configure And Verify
 
-#### Option A: Automatic Injection (Recommended)
+1. Open **Dashboard** > **Plugins** > **OpenWatchParty**.
+2. Paste the same JWT secret.
+3. Set the session WebSocket URL, or explicitly trust same-host port 3000 auto-detection.
+4. Save, reload Jellyfin Web, and open a movie.
+5. Confirm that the **Watch Party** button appears in the video player.
 
-Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) version `2.5.3.0` and restart Jellyfin. OpenWatchParty will automatically register a transformation that injects the client script into `index.html` — no configuration needed.
+Use the verification and troubleshooting sections below if any status remains blocked.
 
-#### Option B: Manual (Custom HTML)
+## Client Injection Compatibility Fallbacks
+
+Native injection is enabled by the plugin and is the recommended mode. If another Jellyfin Web build prevents it, use one fallback only.
+
+### File Transformation
+
+Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) version `2.5.3.0`. OpenWatchParty registers its transformation automatically.
+
+### Custom HTML
 
 1. Log in to Jellyfin as an administrator
 2. Go to **Dashboard** > **General**
@@ -56,12 +87,6 @@ Install [jellyfin-plugin-file-transformation](https://github.com/IAmParadox27/je
    ```
 5. Click **Save**
 6. Hard refresh your browser (Ctrl+F5)
-
-### 4. Configure the Plugin (Optional)
-
-1. Go to **Dashboard** > **Plugins** > **OpenWatchParty**
-2. Set a JWT Secret generated with `openssl rand -base64 32` for authentication
-3. Click **Save**
 
 ## Manual Installation
 
@@ -144,7 +169,7 @@ Install directly from Jellyfin's plugin interface:
 3. Go to **Catalog** tab
 4. Find **OpenWatchParty** and click **Install**
 5. Restart Jellyfin
-6. Enable the client script (see Quick Start step 3)
+6. Open the plugin dashboard and verify native client injection
 
 This method provides automatic update notifications when new versions are released.
 
@@ -186,9 +211,9 @@ This method provides automatic update notifications when new versions are releas
    sudo systemctl restart jellyfin
    ```
 
-4. **Enable the Client Script**
+4. **Verify Client Injection**
 
-   Follow step 3 from the Quick Start section above.
+   Open the OpenWatchParty plugin dashboard, run diagnostics, then reload Jellyfin Web.
 
 ## Verification
 
