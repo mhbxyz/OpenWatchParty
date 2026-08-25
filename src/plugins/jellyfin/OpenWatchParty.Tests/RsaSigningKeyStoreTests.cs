@@ -9,6 +9,24 @@ namespace OpenWatchParty.Plugin.Tests;
 public sealed class RsaSigningKeyStoreTests
 {
     [Fact]
+    public void ConcurrentStoreInstancesReuseOneKey()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"owp-rsa-race-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "signing-key.json");
+        try
+        {
+            var keys = ParallelEnumerable.Range(0, 16)
+                .Select(_ => new RsaSigningKeyStore(path).GetOrCreate().Jwk.kid)
+                .ToArray();
+            Assert.Single(keys.Distinct(StringComparer.Ordinal));
+        }
+        finally
+        {
+            if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
     public void KeyPersistsActivatesAndSignsVerifiableRs256Tokens()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"owp-rsa-{Guid.NewGuid():N}");

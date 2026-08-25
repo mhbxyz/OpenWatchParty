@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Collections.Concurrent;
 using Microsoft.IdentityModel.Tokens;
 
 namespace OpenWatchParty.Plugin;
@@ -10,11 +11,16 @@ public sealed record SigningKeyInfo(string Issuer, PublicRsaJwk Jwk, bool Active
 
 internal sealed class RsaSigningKeyStore
 {
+    private static readonly ConcurrentDictionary<string, object> PathLocks = new(StringComparer.Ordinal);
     private sealed record StoredKey(int Version, string Issuer, string Kid, string PrivateKeyPem, bool Active);
     private readonly string _path;
-    private readonly object _lock = new();
+    private readonly object _lock;
 
-    internal RsaSigningKeyStore(string path) => _path = path;
+    internal RsaSigningKeyStore(string path)
+    {
+        _path = path;
+        _lock = PathLocks.GetOrAdd(Path.GetFullPath(path), _ => new object());
+    }
 
     internal static RsaSigningKeyStore? ForPlugin() => Plugin.Instance == null
         ? null
