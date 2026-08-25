@@ -33,6 +33,11 @@ EXPECTED = {
             "contents": "read",
             "id-token": "write",
         },
+        "secure-owpctl": {
+            "attestations": "write",
+            "contents": "read",
+            "id-token": "write",
+        },
         "create-release-assets": {"contents": "write"},
         "update-plugin-manifest": {"contents": "write"},
     },

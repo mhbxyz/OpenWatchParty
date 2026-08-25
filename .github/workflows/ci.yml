@@ -40,7 +40,8 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             src/server/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('src/server/Cargo.lock') }}
+            src/owpctl/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src/server/Cargo.lock', 'src/owpctl/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -51,6 +52,18 @@ jobs:
         run: cargo clippy --locked -- -D warnings
 
       - name: Run tests
+        run: cargo test --locked --verbose
+
+      - name: Check owpctl formatting
+        working-directory: src/owpctl
+        run: cargo fmt --check
+
+      - name: Run owpctl clippy
+        working-directory: src/owpctl
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run owpctl tests
+        working-directory: src/owpctl
         run: cargo test --locked --verbose
 
   dotnet-tests:

@@ -42,8 +42,9 @@ jobs:
         run: cargo install cargo-audit --version 0.22.2 --locked
 
       - name: Run cargo audit
-        working-directory: src/server
-        run: cargo audit
+        run: |
+          cargo audit --file src/server/Cargo.lock
+          cargo audit --file src/owpctl/Cargo.lock
 
   nuget-audit:
     name: NuGet Audit

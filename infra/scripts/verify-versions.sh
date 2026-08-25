@@ -47,6 +47,12 @@ cargo_version=$(cargo metadata \
     --format-version 1 | jq -er '.packages[] | select(.name == "session-server") | .version')
 assert_equal 'Cargo package version' "$version" "$cargo_version"
 
+owpctl_version=$(cargo metadata \
+    --manifest-path "$repository_root/src/owpctl/Cargo.toml" \
+    --no-deps \
+    --format-version 1 | jq -er '.packages[] | select(.name == "owpctl") | .version')
+assert_equal 'owpctl package version' "$version" "$owpctl_version"
+
 client_version=$(jq -er '.version' "$repository_root/src/clients/jellyfin-web/manifest.json")
 assert_equal 'Client manifest version' "$version" "$client_version"
 

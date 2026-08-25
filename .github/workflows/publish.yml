@@ -328,10 +328,61 @@ jobs:
           path: artifacts/*
           if-no-files-found: error
 
+  secure-owpctl:
+    name: Build, Sign & Attest owpctl
+    runs-on: ubuntu-latest
+    needs: [verify-versions]
+    if: github.event_name == 'release'
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    env:
+      CERTIFICATE_IDENTITY: https://github.com/${{ github.workflow_ref }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: 1.88.0
+      - name: Build owpctl
+        run: |
+          cargo build --release --locked --manifest-path src/owpctl/Cargo.toml
+          mkdir -p artifacts
+          cp src/owpctl/target/release/owpctl artifacts/owpctl-linux-x86_64
+          chmod 0755 artifacts/owpctl-linux-x86_64
+          infra/scripts/write-sha256.sh artifacts/owpctl-linux-x86_64 artifacts/owpctl-linux-x86_64.sha256
+      - name: Attest owpctl provenance
+        id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: artifacts/owpctl-linux-x86_64
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+      - name: Sign and verify owpctl
+        run: |
+          cosign sign-blob --yes --bundle artifacts/owpctl-linux-x86_64.sigstore.json artifacts/owpctl-linux-x86_64
+          cosign verify-blob --bundle artifacts/owpctl-linux-x86_64.sigstore.json \
+            --certificate-identity "$CERTIFICATE_IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            artifacts/owpctl-linux-x86_64
+      - name: Preserve provenance
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: cp "$PROVENANCE_BUNDLE" artifacts/owpctl-linux-x86_64.provenance.jsonl
+      - name: Upload owpctl supply-chain assets
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: owpctl-supply-chain
+          path: artifacts/*
+          if-no-files-found: error
+
   create-release-assets:
     name: Upload Release Assets
     runs-on: ubuntu-latest
-    needs: [secure-image, secure-plugin]
+    needs: [secure-image, secure-plugin, secure-owpctl]
     if: github.event_name == 'release'
     permissions:
       contents: write
@@ -346,6 +397,12 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: plugin-supply-chain
+          path: artifacts
+
+      - name: Download owpctl supply-chain assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: owpctl-supply-chain
           path: artifacts
 
       - name: Upload to Release

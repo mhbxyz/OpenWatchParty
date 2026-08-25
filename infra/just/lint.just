@@ -14,6 +14,7 @@ default: server client
 server:
     @echo -e "{{CYAN}}▶ Linting Rust code...{{RESET}}"
     @cd {{server_dir}} && cargo clippy -- -D warnings
+    @cd src/owpctl && cargo clippy --all-targets --all-features -- -D warnings
     @echo -e "{{GREEN}}✓ Rust lint passed{{RESET}}"
 
 [doc('Lint JavaScript code')]

@@ -8,7 +8,7 @@ import "common.just"
 
 [default]
 [doc('Run all tests (Rust + .NET + JS)')]
-default: server plugin client release
+default: server plugin client owpctl release
 
 [doc('Run Rust server tests')]
 server:
@@ -56,3 +56,9 @@ release:
     @infra/scripts/tests/package-plugin.test.sh
     @infra/scripts/tests/docs-operations.test.sh
     @echo -e "{{GREEN}}✓ Release script tests passed{{RESET}}"
+
+[doc('Run owpctl tests')]
+owpctl:
+    @echo -e "{{GREEN}}▶ Running owpctl tests...{{RESET}}"
+    @cd src/owpctl && cargo test --locked
+    @echo -e "{{GREEN}}✓ owpctl tests passed{{RESET}}"
