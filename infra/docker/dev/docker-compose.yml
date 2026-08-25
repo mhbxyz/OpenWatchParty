@@ -15,6 +15,8 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:8096,https://localhost:8096}
       - JWT_SECRET=${JWT_SECRET:-}
+      - JWT_AUTH_MODE=${JWT_AUTH_MODE:-hs256}
+      - JWT_TRUST_STORE_PATH=${JWT_TRUST_STORE_PATH:-/var/lib/openwatchparty/trust-store.json}
       - ALLOW_INSECURE_NO_AUTH=${ALLOW_INSECURE_NO_AUTH:-true}
       - JWT_AUDIENCE=${JWT_AUDIENCE:-OpenWatchParty}
       - JWT_ISSUER=${JWT_ISSUER:-Jellyfin}
