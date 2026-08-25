@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "0.3.3",
+        "changelog": "## Reliability and security hardening\n\n- Trust stores are mounted by directory so atomic key rotation and revocation are immediately visible inside Docker.\n- Unknown JWT authentication modes now fail closed at startup.\n- Jellyfin base paths are preserved by owpctl API requests.\n- Upgrading an adopted plugin no longer claims ownership for uninstall.\n- Installation persists recoverable ownership state before external mutations.\n- Configuration and JWT rotation attempt automatic rollback across plugin, files and Compose.\n- The graphical wizard keeps Jellyfin admin tokens in memory only.\n\n## Validation\n\nAll server, plugin, client and owpctl suites pass. The installer completed real install, authenticated doctor, RS256 pairing, asymmetric restart, backup and ownership-safe uninstall against Jellyfin 10.11.3.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.3.3/OpenWatchParty-v0.3.3.zip",
+        "checksum": "1d24bb01d1f7084b802b55f3718b99e3",
+        "timestamp": "2026-08-25T06:01:16Z"
+      },
+      {
         "version": "0.3.2",
         "changelog": "## owpctl usability fix\n\n- Changing `session.published-port` now automatically updates the managed public WebSocket URL when it still points to the previous managed port.\n\n## Validation\n\nVerified with the signed release installer flow, isolated session-server port configuration, Jellyfin plugin upgrade, authenticated doctor, RS256 pairing, asymmetric restart, backup and ownership-safe uninstall.",
         "targetAbi": "10.11.0.0",
