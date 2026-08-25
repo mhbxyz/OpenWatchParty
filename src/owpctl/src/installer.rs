@@ -57,8 +57,11 @@ pub fn install(
     let system = jellyfin.public_info()?;
 
     let repository_changed = jellyfin.ensure_repository()?;
-    let plugin_ready = jellyfin.plugin_info().is_ok();
-    if !plugin_ready {
+    let installed_plugin = jellyfin.plugin_info().ok();
+    let plugin_needs_install = installed_plugin
+        .as_ref()
+        .is_none_or(|plugin| plugin.version != version);
+    if plugin_needs_install {
         jellyfin.install_plugin(version)?;
         restart_jellyfin(&config.jellyfin.runtime, &jellyfin)?;
         wait_for_jellyfin(&jellyfin)?;
@@ -108,7 +111,7 @@ pub fn install(
     state.secret_fingerprint = secrets::fingerprint(&secret);
     state.ownership = Ownership {
         session_server: true,
-        plugin: !plugin_ready,
+        plugin: plugin_needs_install,
         configuration: true,
     };
     crate::storage::write_json(&paths.state_file, &state)?;
