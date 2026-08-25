@@ -69,6 +69,8 @@ pub struct ConfigureArgs {
 pub struct DiagnosticArgs {
     #[arg(long)]
     pub quiet: bool,
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
