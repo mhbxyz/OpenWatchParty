@@ -3,6 +3,7 @@ mod messaging;
 mod room;
 mod routes;
 mod tasks;
+mod trust;
 mod types;
 mod utils;
 mod ws;

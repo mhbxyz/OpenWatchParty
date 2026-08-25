@@ -1,6 +1,6 @@
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine;
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -97,12 +97,27 @@ impl JwtConfig {
         let allow_insecure = std::env::var("ALLOW_INSECURE_NO_AUTH")
             .map(|value| parse_insecure_flag(&value))
             .unwrap_or(false);
-        Self::from_values(
-            secret,
-            allow_insecure,
-            std::env::var("JWT_AUDIENCE").unwrap_or_else(|_| "OpenWatchParty".to_string()),
-            std::env::var("JWT_ISSUER").unwrap_or_else(|_| "Jellyfin".to_string()),
-        )
+        let audience =
+            std::env::var("JWT_AUDIENCE").unwrap_or_else(|_| "OpenWatchParty".to_string());
+        let issuer = std::env::var("JWT_ISSUER").unwrap_or_else(|_| "Jellyfin".to_string());
+        if auth_mode() == "asymmetric" {
+            let path = std::env::var("JWT_TRUST_STORE_PATH")
+                .map_err(|_| "JWT_TRUST_STORE_PATH is required in asymmetric mode".to_string())?;
+            crate::trust::TrustStore::load(std::path::Path::new(&path))?;
+            return Ok(Self {
+                secret: String::new(),
+                audience,
+                issuer,
+                enabled: true,
+            });
+        }
+        let config = Self::from_values(secret, allow_insecure, audience, issuer)?;
+        if auth_mode() == "hybrid" {
+            let path = std::env::var("JWT_TRUST_STORE_PATH")
+                .map_err(|_| "JWT_TRUST_STORE_PATH is required in hybrid mode".to_string())?;
+            crate::trust::TrustStore::load(std::path::Path::new(&path))?;
+        }
+        Ok(config)
     }
 
     fn from_values(
@@ -148,6 +163,21 @@ impl JwtConfig {
             });
         }
 
+        let header =
+            decode_header(token).map_err(|error| format!("Invalid token header: {error}"))?;
+        let mode = auth_mode();
+        if header.alg == Algorithm::RS256 {
+            if mode == "hs256" {
+                return Err("RS256 token rejected in hs256 mode".to_string());
+            }
+            return self.validate_rs256(token, header.kid.as_deref());
+        }
+        if header.alg != Algorithm::HS256 {
+            return Err("Unsupported JWT algorithm".to_string());
+        }
+        if mode == "asymmetric" {
+            return Err("HS256 token rejected in asymmetric mode".to_string());
+        }
         let mut validation = Validation::new(Algorithm::HS256);
         validation.set_audience(&[&self.audience]);
         validation.set_issuer(&[&self.issuer]);
@@ -170,6 +200,37 @@ impl JwtConfig {
             Err(e) => Err(format!("Invalid token: {e}")),
         }
     }
+
+    fn validate_rs256(&self, token: &str, kid: Option<&str>) -> Result<Claims, String> {
+        let kid = kid.ok_or_else(|| "RS256 token has no kid".to_string())?;
+        let path = std::env::var("JWT_TRUST_STORE_PATH")
+            .map_err(|_| "JWT_TRUST_STORE_PATH is not configured".to_string())?;
+        let store = crate::trust::TrustStore::load(std::path::Path::new(&path))?;
+        let key = store.active_key(kid)?;
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.set_audience(&[&key.audience]);
+        validation.set_issuer(&[&key.issuer]);
+        validation.leeway = JWT_EXPIRATION_LEEWAY_SECONDS;
+        let decoding_key = DecodingKey::from_rsa_components(&key.n, &key.e)
+            .map_err(|error| format!("invalid trusted RSA key: {error}"))?;
+        let claims = decode::<Claims>(token, &decoding_key, &validation)
+            .map_err(|error| format!("Invalid token: {error}"))?
+            .claims;
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        if claims.exp <= now
+            || claims.iat > now.saturating_add(30)
+            || claims.exp.saturating_sub(claims.iat) > 86_400
+        {
+            return Err("Invalid token lifetime".to_string());
+        }
+        Ok(claims)
+    }
+}
+
+fn auth_mode() -> String {
+    std::env::var("JWT_AUTH_MODE")
+        .unwrap_or_else(|_| "hs256".to_string())
+        .to_ascii_lowercase()
 }
 
 fn parse_insecure_flag(value: &str) -> bool {
