@@ -17,6 +17,7 @@ public sealed class ScriptInjectionMiddleware
     private readonly RequestDelegate _next;
     private readonly string _baseUrl;
     private readonly ILogger<ScriptInjectionMiddleware> _logger;
+    private readonly InjectionDiagnostics _diagnostics;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ScriptInjectionMiddleware"/> class.
@@ -24,19 +25,22 @@ public sealed class ScriptInjectionMiddleware
     public ScriptInjectionMiddleware(
         RequestDelegate next,
         IServerConfigurationManager configurationManager,
-        ILogger<ScriptInjectionMiddleware> logger)
-        : this(next, configurationManager.GetNetworkConfiguration().BaseUrl, logger)
+        ILogger<ScriptInjectionMiddleware> logger,
+        InjectionDiagnostics diagnostics)
+        : this(next, configurationManager.GetNetworkConfiguration().BaseUrl, logger, diagnostics)
     {
     }
 
     internal ScriptInjectionMiddleware(
         RequestDelegate next,
         string? baseUrl,
-        ILogger<ScriptInjectionMiddleware> logger)
+        ILogger<ScriptInjectionMiddleware> logger,
+        InjectionDiagnostics? diagnostics = null)
     {
         _next = next;
         _baseUrl = NormalizeBaseUrl(baseUrl);
         _logger = logger;
+        _diagnostics = diagnostics ?? new InjectionDiagnostics();
     }
 
     /// <summary>
@@ -51,6 +55,7 @@ public sealed class ScriptInjectionMiddleware
         }
 
         var originalBody = context.Response.Body;
+        _diagnostics.RecordIndexObserved();
         var temporaryPath = Path.Combine(Path.GetTempPath(), $"owp-index-{Guid.NewGuid():N}.tmp");
         await using var bufferedBody = new FileStream(
             temporaryPath,
@@ -87,6 +92,10 @@ public sealed class ScriptInjectionMiddleware
                 var originalBytes = new byte[checked((int)bufferedBody.Length)];
                 await bufferedBody.ReadExactlyAsync(originalBytes, context.RequestAborted).ConfigureAwait(false);
                 var outputBytes = TryInject(context.Response, originalBytes);
+                if (!ReferenceEquals(outputBytes, originalBytes))
+                {
+                    _diagnostics.RecordNativeInjection();
+                }
                 await originalBody.WriteAsync(outputBytes, context.RequestAborted).ConfigureAwait(false);
             }
             else

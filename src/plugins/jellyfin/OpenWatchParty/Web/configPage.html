@@ -7,10 +7,23 @@
     <div data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
         <div data-role="content">
             <div class="content-primary">
+                <div class="verticalSection">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:1em">
+                        <h2 class="sectionTitle">OpenWatchParty</h2>
+                        <span id="OverallHealthBadge" style="padding:.35em .7em;border-radius:999px;background:#374151">Unknown</span>
+                    </div>
+                    <p id="OverallHealthSummary" class="fieldDescription">Run diagnostics to verify the complete installation.</p>
+                    <div style="display:flex;gap:1.5em;flex-wrap:wrap;margin:1em 0">
+                        <span>Plugin: <strong id="PluginVersion">—</strong></span>
+                        <span>Session: <strong id="SessionVersion">—</strong></span>
+                        <span>Jellyfin: <strong id="JellyfinVersion">—</strong></span>
+                    </div>
+                    <button is="emby-button" type="button" id="RunDiagnosticsButton" class="raised">Run diagnostics</button>
+                </div>
                 <form class="openwatchpartyConfigurationForm">
                     <!-- Authentication Settings -->
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Authentication</h2>
+                        <h2 class="sectionTitle">Setup</h2>
                         <div id="AuthStatus" style="padding:.8em;margin-bottom:1em;border-radius:.3em;font-weight:600"></div>
                         <div class="inputContainer">
                             <div style="display:flex;align-items:flex-end;gap:.5em">
@@ -22,6 +35,7 @@
                                 </button>
                             </div>
                             <div class="fieldDescription">Required for production: Base64/Base64URL generated from at least 32 random bytes.</div>
+                            <button is="emby-button" type="button" id="GenerateSecretButton" class="raised" style="margin-top:.5em">Generate secure secret</button>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -30,6 +44,8 @@
                             </label>
                             <div class="fieldDescription checkboxFieldDescription">Explicit development-only override. Never enable this on an exposed server.</div>
                         </div>
+                        <details id="AdvancedSettings" style="margin-top:1.5em">
+                        <summary class="sectionTitle">Advanced</summary>
                         <div class="inputContainer">
                             <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
                             <div class="fieldDescription">Audience claim for JWT tokens. Must match the session server configuration.</div>
@@ -42,6 +58,7 @@
                             <input is="emby-input" type="number" id="TokenTtlSeconds" label="Token TTL (seconds)" min="60" max="86400" step="60" />
                             <div class="fieldDescription">How long tokens remain valid (60-86400 seconds). Default: 3600 (1 hour).</div>
                         </div>
+                        </details>
                     </div>
 
                     <!-- Server Settings -->
@@ -66,6 +83,16 @@
                         </button>
                     </div>
                 </form>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Health checks</h2>
+                    <div id="HealthChecks" aria-live="polite"></div>
+                </div>
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Support</h2>
+                    <p class="fieldDescription">The support report excludes secrets, tokens, user IDs, room IDs and hostnames.</p>
+                    <button is="emby-button" type="button" id="CopySupportReportButton" class="raised">Copy support report</button>
+                    <button is="emby-button" type="button" id="DownloadSupportReportButton" class="raised">Download JSON</button>
+                </div>
             </div>
         </div>
 
@@ -192,6 +219,79 @@
                         target: url.host,
                         thirdParty: url.hostname.toLowerCase() !== window.location.hostname.toLowerCase() || targetPort !== pagePort
                     };
+                },
+
+                lastDiagnostics: null,
+
+                runDiagnostics: function(active) {
+                    var self = this;
+                    var button = document.getElementById('RunDiagnosticsButton');
+                    button.disabled = true;
+                    button.textContent = 'Checking…';
+                    return fetch(ApiClient.getUrl('OpenWatchParty/Diagnostics/' + (active ? 'Run' : 'Status')), {
+                        method: active ? 'POST' : 'GET',
+                        headers: { 'X-Emby-Token': ApiClient.accessToken() },
+                        credentials: 'same-origin'
+                    }).then(function(response) {
+                        if (!response.ok) throw new Error('Diagnostics returned HTTP ' + response.status);
+                        return response.json();
+                    }).then(function(result) {
+                        self.lastDiagnostics = result;
+                        self.renderDiagnostics(result);
+                        return result;
+                    }).catch(function(error) {
+                        self.renderDiagnostics({ OverallStatus: 'blocked', Checks: [{ Id: 'diagnostics', Status: 'fail', Summary: error.message }] });
+                    }).finally(function() {
+                        button.disabled = false;
+                        button.textContent = 'Run diagnostics';
+                    });
+                },
+
+                renderDiagnostics: function(result) {
+                    var status = (result.OverallStatus || 'unknown').toLowerCase();
+                    var badge = document.getElementById('OverallHealthBadge');
+                    badge.textContent = status.toUpperCase();
+                    badge.style.background = status === 'ready' ? '#166534' : status === 'degraded' ? '#854d0e' : '#7f1d1d';
+                    document.getElementById('OverallHealthSummary').textContent = status === 'ready'
+                        ? 'Plugin, injection and session server are ready.'
+                        : 'Review the checks below before using OpenWatchParty.';
+                    document.getElementById('PluginVersion').textContent = result.PluginVersion || '—';
+                    document.getElementById('JellyfinVersion').textContent = result.JellyfinVersion || '—';
+                    var sessionCheck = (result.Checks || []).find(function(check) { return check.Id === 'session_http'; });
+                    document.getElementById('SessionVersion').textContent = sessionCheck ? sessionCheck.Summary : '—';
+                    var container = document.getElementById('HealthChecks');
+                    container.replaceChildren();
+                    (result.Checks || []).forEach(function(check) {
+                        var row = document.createElement('div');
+                        row.style.padding = '.65em 0';
+                        row.style.borderBottom = '1px solid rgba(255,255,255,.12)';
+                        var title = document.createElement('strong');
+                        title.textContent = (check.Status || 'unknown').toUpperCase() + ' · ' + check.Id;
+                        var summary = document.createElement('div');
+                        summary.className = 'fieldDescription';
+                        summary.textContent = check.Summary || '';
+                        row.append(title, summary);
+                        container.appendChild(row);
+                    });
+                },
+
+                supportReport: function() {
+                    var result = this.lastDiagnostics || {};
+                    return {
+                        schema_version: 1,
+                        generated_utc: new Date().toISOString(),
+                        plugin_version: result.PluginVersion || null,
+                        jellyfin_version: result.JellyfinVersion || null,
+                        target_abi: result.JellyfinTargetAbi || null,
+                        protocol_version: result.ProtocolVersion || null,
+                        authentication_mode: result.AuthenticationMode || null,
+                        destination_mode: result.SessionDestinationMode || null,
+                        browser_loader: window.OpenWatchParty && window.OpenWatchParty.loader
+                            ? window.OpenWatchParty.loader.state : 'not_loaded',
+                        checks: (result.Checks || []).map(function(check) {
+                            return { id: check.Id, status: check.Status, code: check.Code || null, summary: check.Summary };
+                        })
+                    };
                 }
             };
 
@@ -205,6 +305,30 @@
                     input.type = 'password';
                     icon.textContent = 'visibility';
                 }
+            });
+
+            $('#GenerateSecretButton').on('click', function() {
+                var bytes = new Uint8Array(32);
+                crypto.getRandomValues(bytes);
+                var binary = Array.from(bytes, function(value) { return String.fromCharCode(value); }).join('');
+                $('#JwtSecret').val(btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''));
+            });
+
+            $('#RunDiagnosticsButton').on('click', function() {
+                OpenWatchPartyConfigurationPage.runDiagnostics(true);
+            });
+
+            $('#CopySupportReportButton').on('click', function() {
+                navigator.clipboard.writeText(JSON.stringify(OpenWatchPartyConfigurationPage.supportReport(), null, 2));
+            });
+
+            $('#DownloadSupportReportButton').on('click', function() {
+                var blob = new Blob([JSON.stringify(OpenWatchPartyConfigurationPage.supportReport(), null, 2)], { type: 'application/json' });
+                var link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'openwatchparty-support.json';
+                link.click();
+                URL.revokeObjectURL(link.href);
             });
 
             $('.pluginConfigurationPage').on('pageshow', function () {
@@ -226,6 +350,7 @@
                     $('#SessionServerUrl', page).val(config.SessionServerUrl || '');
                     $('#AllowAutoDetectedSessionServer', page).prop('checked', config.AllowAutoDetectedSessionServer === true);
                     OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
+                    OpenWatchPartyConfigurationPage.runDiagnostics(false);
 
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {

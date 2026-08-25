@@ -69,6 +69,12 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     /// </summary>
     public static string PluginVersion => typeof(Plugin).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
+    public static string TargetAbi => typeof(Plugin).Assembly
+        .GetCustomAttributes(typeof(System.Reflection.AssemblyMetadataAttribute), false)
+        .OfType<System.Reflection.AssemblyMetadataAttribute>()
+        .FirstOrDefault(attribute => attribute.Key == "JellyfinTargetAbi")?.Value
+        ?? "unknown";
+
     public IEnumerable<PluginPageInfo> GetPages()
     {
         return new[]

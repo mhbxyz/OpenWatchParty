@@ -14,6 +14,8 @@ public sealed class ServiceRegistrator : IPluginServiceRegistrator
     /// <inheritdoc />
     public void RegisterServices(IServiceCollection serviceCollection, IServerApplicationHost applicationHost)
     {
+        serviceCollection.TryAddSingleton<InjectionDiagnostics>();
+        serviceCollection.TryAddSingleton<OpenWatchPartyDiagnosticsService>();
         serviceCollection.TryAddEnumerable(
             ServiceDescriptor.Singleton<IStartupFilter, ScriptInjectionStartupFilter>());
     }
