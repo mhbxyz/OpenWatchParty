@@ -1,6 +1,11 @@
-use std::{path::Path, process::Command, time::Duration};
+use std::{
+    path::Path,
+    process::Command,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use serde::Serialize;
+use tungstenite::{client::IntoClientRequest, Message};
 
 use crate::{config::DesiredConfig, jellyfin::JellyfinClient, state::InstallationState};
 
@@ -67,15 +72,24 @@ pub fn run(
         }
 
         if let Some(path) = api_token_file {
-            let check = JellyfinClient::token_from_file(path)
+            let deep = JellyfinClient::token_from_file(path)
                 .and_then(|token| {
                     JellyfinClient::new(config.jellyfin.base_url.clone())
                         .map(|client| client.with_token(token))
                 })
-                .and_then(|client| client.plugin_info())
-                .map(|info| pass("plugin", format!("OpenWatchParty {}", info.version)))
-                .unwrap_or_else(|error| fail("plugin", error.to_string()));
-            checks.push(check);
+                .and_then(|client| Ok((client.plugin_info()?, client.openwatchparty_token()?)));
+            match deep {
+                Ok((info, token)) => {
+                    checks.push(pass("plugin", format!("OpenWatchParty {}", info.version)));
+                    checks.push(websocket_check(
+                        &config.jellyfin.public_origin,
+                        &config.session_server.public_websocket_url,
+                        token.token.as_deref(),
+                        token.auth_enabled,
+                    ));
+                }
+                Err(error) => checks.push(fail("plugin", error.to_string())),
+            }
         } else {
             checks.push(warning(
                 "plugin",
@@ -100,6 +114,78 @@ pub fn run(
         overall,
         installed_version: state.map(|state| state.installed_version.clone()),
         checks,
+    }
+}
+
+fn websocket_check(
+    origin: &url::Url,
+    url: &url::Url,
+    token: Option<&str>,
+    auth_enabled: bool,
+) -> DiagnosticCheck {
+    let result = (|| -> anyhow::Result<()> {
+        let mut request = url.as_str().into_client_request()?;
+        request
+            .headers_mut()
+            .insert("Origin", origin.origin().ascii_serialization().parse()?);
+        let (mut socket, _) = tungstenite::connect(request)?;
+        set_socket_timeout(socket.get_mut(), Duration::from_secs(5))?;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64;
+        if auth_enabled {
+            let token = token.ok_or_else(|| anyhow::anyhow!("plugin returned no JWT"))?;
+            socket.send(Message::Text(
+                serde_json::json!({
+                    "type": "auth", "payload": { "token": token }, "ts": now
+                })
+                .to_string()
+                .into(),
+            ))?;
+        }
+        socket.send(Message::Text(
+            serde_json::json!({
+                "type": "ping", "payload": { "client_ts": now }, "ts": now
+            })
+            .to_string()
+            .into(),
+        ))?;
+        let mut authenticated = !auth_enabled;
+        let mut pong = false;
+        for _ in 0..8 {
+            let message = socket.read()?;
+            if !message.is_text() {
+                continue;
+            }
+            let value: serde_json::Value = serde_json::from_str(message.to_text()?)?;
+            authenticated |= value["type"] == "auth_success";
+            pong |= value["type"] == "pong" && value["payload"]["client_ts"] == now;
+            if authenticated && pong {
+                break;
+            }
+        }
+        if !authenticated || !pong {
+            anyhow::bail!("authentication or ping/pong did not complete");
+        }
+        socket.close(None)?;
+        Ok(())
+    })();
+    match result {
+        Ok(()) => pass("websocket", "Authenticated WebSocket ping/pong succeeded"),
+        Err(error) => fail("websocket", error.to_string()),
+    }
+}
+
+fn set_socket_timeout(
+    stream: &mut tungstenite::stream::MaybeTlsStream<std::net::TcpStream>,
+    timeout: Duration,
+) -> std::io::Result<()> {
+    match stream {
+        tungstenite::stream::MaybeTlsStream::Plain(stream) => {
+            stream.set_read_timeout(Some(timeout))
+        }
+        tungstenite::stream::MaybeTlsStream::Rustls(stream) => {
+            stream.get_mut().set_read_timeout(Some(timeout))
+        }
+        _ => Ok(()),
     }
 }
 

@@ -53,6 +53,14 @@ pub struct PluginInfo {
     pub version: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct OpenWatchPartyToken {
+    pub token: Option<String>,
+    pub auth_enabled: bool,
+    pub insecure_mode: Option<bool>,
+    pub session_server_url: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepositoryInfo {
     #[serde(rename = "Name")]
@@ -115,6 +123,10 @@ impl JellyfinClient {
 
     pub fn plugin_info(&self) -> anyhow::Result<PluginInfo> {
         self.get("OpenWatchParty/Info")
+    }
+
+    pub fn openwatchparty_token(&self) -> anyhow::Result<OpenWatchPartyToken> {
+        self.get("OpenWatchParty/Token")
     }
 
     pub fn repositories(&self) -> anyhow::Result<Vec<RepositoryInfo>> {
