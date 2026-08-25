@@ -21,6 +21,7 @@ pub fn apply_values(config: &mut DesiredConfig, values: &[String]) -> anyhow::Re
                 config.session_server.public_websocket_url = url::Url::parse(value)?
             }
             "session.log-level" => config.session_server.log_level = value.to_string(),
+            "session.published-port" => config.session_server.published_port = value.parse()?,
             "session.max-connections" => config.session_server.max_connections = value.parse()?,
             "session.max-connections-per-ip" => {
                 config.session_server.max_connections_per_ip = value.parse()?
