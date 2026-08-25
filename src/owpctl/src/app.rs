@@ -87,7 +87,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
 
 fn setup(paths: &Paths, arguments: crate::cli::SetupArgs) -> anyhow::Result<()> {
     if arguments.web {
-        bail!("web setup is introduced in the next installer layer");
+        return crate::web::run(paths.clone(), arguments.dry_run);
     }
     let config = if let Some(path) = arguments.config {
         crate::storage::read_toml(&path)?

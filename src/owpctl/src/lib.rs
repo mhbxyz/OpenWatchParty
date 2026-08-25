@@ -11,6 +11,7 @@ pub mod paths;
 pub mod secrets;
 pub mod state;
 pub mod storage;
+pub mod web;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CONFIG_SCHEMA_VERSION: u32 = 1;
