@@ -31,6 +31,8 @@ pub enum Command {
     Upgrade(ApplyArgs),
     Backup(BackupArgs),
     Uninstall(UninstallArgs),
+    Trust(TrustArgs),
+    Pair(PairArgs),
 }
 
 #[derive(Debug, Args)]
@@ -95,4 +97,40 @@ pub struct UninstallArgs {
     pub yes: bool,
     #[arg(long)]
     pub api_token_file: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct TrustArgs {
+    #[arg(long)]
+    pub store: PathBuf,
+    #[command(subcommand)]
+    pub command: TrustCommand,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TrustCommand {
+    Init,
+    List,
+    Add {
+        #[arg(long)]
+        jwk: PathBuf,
+        #[arg(long)]
+        issuer: String,
+        #[arg(long, default_value = "OpenWatchParty")]
+        audience: String,
+    },
+    Revoke {
+        #[arg(long)]
+        kid: String,
+    },
+}
+
+#[derive(Debug, Args)]
+pub struct PairArgs {
+    #[arg(long)]
+    pub jellyfin_url: String,
+    #[arg(long)]
+    pub api_token_file: PathBuf,
+    #[arg(long)]
+    pub trust_store: PathBuf,
 }

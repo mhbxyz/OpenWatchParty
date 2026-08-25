@@ -61,6 +61,12 @@ pub struct OpenWatchPartyToken {
     pub session_server_url: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct SigningKeyInfo {
+    pub issuer: String,
+    pub jwk: crate::trust::PublicJwk,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RepositoryInfo {
     #[serde(rename = "Name")]
@@ -127,6 +133,17 @@ impl JellyfinClient {
 
     pub fn openwatchparty_token(&self) -> anyhow::Result<OpenWatchPartyToken> {
         self.get("OpenWatchParty/Token")
+    }
+
+    pub fn signing_key(&self) -> anyhow::Result<SigningKeyInfo> {
+        self.get("OpenWatchParty/SigningKey")
+    }
+
+    pub fn activate_signing_key(&self, kid: &str) -> anyhow::Result<()> {
+        self.post_empty(
+            "OpenWatchParty/SigningKey/Activate",
+            Some(&serde_json::json!({ "kid": kid })),
+        )
     }
 
     pub fn repositories(&self) -> anyhow::Result<Vec<RepositoryInfo>> {

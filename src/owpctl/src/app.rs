@@ -61,6 +61,50 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             )?;
             crate::output::print(&serde_json::json!({ "uninstalled": true }), cli.json)
         }
+        Command::Trust(arguments) => {
+            use crate::cli::TrustCommand;
+            match arguments.command {
+                TrustCommand::Init => {
+                    crate::trust::mutate(&arguments.store, |_| Ok(()))?;
+                    crate::output::print(
+                        &crate::trust::TrustStore::load(&arguments.store)?,
+                        cli.json,
+                    )
+                }
+                TrustCommand::List => crate::output::print(
+                    &crate::trust::TrustStore::load(&arguments.store)?,
+                    cli.json,
+                ),
+                TrustCommand::Add {
+                    jwk,
+                    issuer,
+                    audience,
+                } => {
+                    let key: crate::trust::PublicJwk = crate::storage::read_json(&jwk)?;
+                    let kid = crate::trust::mutate(&arguments.store, |store| {
+                        store.add(key, issuer, audience)
+                    })?;
+                    crate::output::print(&serde_json::json!({ "kid": kid }), cli.json)
+                }
+                TrustCommand::Revoke { kid } => {
+                    crate::trust::mutate(&arguments.store, |store| store.revoke(&kid))?;
+                    crate::output::print(&serde_json::json!({ "revoked": kid }), cli.json)
+                }
+            }
+        }
+        Command::Pair(arguments) => {
+            let token =
+                crate::jellyfin::JellyfinClient::token_from_file(&arguments.api_token_file)?;
+            let client =
+                crate::jellyfin::JellyfinClient::new(url::Url::parse(&arguments.jellyfin_url)?)?
+                    .with_token(token);
+            let signing = client.signing_key()?;
+            let kid = crate::trust::mutate(&arguments.trust_store, |store| {
+                store.add(signing.jwk, signing.issuer, "OpenWatchParty".to_string())
+            })?;
+            client.activate_signing_key(&kid)?;
+            crate::output::print(&serde_json::json!({ "paired": true, "kid": kid }), cli.json)
+        }
         Command::Status(arguments) | Command::Doctor(arguments) => {
             let config: Option<DesiredConfig> = paths
                 .config_file
