@@ -367,7 +367,9 @@ pub fn build_health_route(
         .map(|jwt_config: Arc<JwtConfig>| {
             warp::reply::json(&serde_json::json!({
                 "status": "ok",
-                "auth_enabled": jwt_config.enabled
+                "auth_enabled": jwt_config.enabled,
+                "version": env!("CARGO_PKG_VERSION"),
+                "protocol_version": 1
             }))
         })
         .with(cors)
@@ -491,6 +493,25 @@ mod tests {
             issuer: "test".to_string(),
             enabled,
         })
+    }
+
+    #[tokio::test]
+    async fn health_reports_version_protocol_and_authentication() {
+        let route = build_health_route(
+            test_jwt_config(true),
+            Arc::new(vec!["http://localhost:8096".to_string()]),
+        );
+        let response = warp::test::request()
+            .method("GET")
+            .path("/health")
+            .reply(&route)
+            .await;
+        assert_eq!(response.status(), 200);
+        let body: serde_json::Value = serde_json::from_slice(response.body()).unwrap();
+        assert_eq!(body["status"], "ok");
+        assert_eq!(body["auth_enabled"], true);
+        assert_eq!(body["version"], env!("CARGO_PKG_VERSION"));
+        assert_eq!(body["protocol_version"], 1);
     }
 
     fn token_with_expiration(config: &JwtConfig, expiration: u64) -> String {
