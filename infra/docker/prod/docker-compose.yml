@@ -7,6 +7,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777
+    volumes:
+      - ${OWP_TRUST_STORE_DIR:-./trust}:/var/lib/openwatchparty:ro
     cap_drop:
       - ALL
     security_opt:

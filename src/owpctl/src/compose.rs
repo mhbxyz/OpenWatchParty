@@ -30,7 +30,7 @@ pub fn render(
     ports:
       - "{bind}:{published}:3000"
 {secret_environment}    volumes:
-      - {trust_store}:/var/lib/openwatchparty/trust-store.json:ro
+      - {trust_directory}:/var/lib/openwatchparty:ro
     environment:
       HOST: 0.0.0.0
       PORT: 3000
@@ -55,7 +55,7 @@ pub fn render(
 "#,
         bind = config.session_server.bind_address,
         published = config.session_server.published_port,
-        trust_store = trust_store.display(),
+        trust_directory = trust_store.parent().unwrap_or(trust_store).display(),
         auth_mode = config.session_server.auth_mode,
         log_level = config.session_server.log_level,
         audience = config.plugin.jwt_audience,
@@ -83,6 +83,8 @@ mod tests {
         );
         assert!(compose.contains("read_only: true"));
         assert!(compose.contains("cap_drop:"));
+        assert!(compose.contains("/var/lib/openwatchparty:ro"));
+        assert!(!compose.contains("trust-store.json:/var/lib"));
         assert!(!compose.contains("JWT_SECRET="));
     }
 }

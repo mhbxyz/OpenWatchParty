@@ -19,6 +19,13 @@ const MIN_SECRET_LENGTH: usize = 32;
 /// JWT `exp` is enforced at the exact whole Unix second, without clock leeway.
 pub const JWT_EXPIRATION_LEEWAY_SECONDS: u64 = 0;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AuthMode {
+    Hs256,
+    Hybrid,
+    Asymmetric,
+}
+
 fn calculate_entropy(data: &[u8]) -> f64 {
     if data.is_empty() {
         return 0.0;
@@ -100,7 +107,8 @@ impl JwtConfig {
         let audience =
             std::env::var("JWT_AUDIENCE").unwrap_or_else(|_| "OpenWatchParty".to_string());
         let issuer = std::env::var("JWT_ISSUER").unwrap_or_else(|_| "Jellyfin".to_string());
-        if auth_mode() == "asymmetric" {
+        let mode = auth_mode()?;
+        if mode == AuthMode::Asymmetric {
             let path = std::env::var("JWT_TRUST_STORE_PATH")
                 .map_err(|_| "JWT_TRUST_STORE_PATH is required in asymmetric mode".to_string())?;
             crate::trust::TrustStore::load(std::path::Path::new(&path))?;
@@ -112,7 +120,7 @@ impl JwtConfig {
             });
         }
         let config = Self::from_values(secret, allow_insecure, audience, issuer)?;
-        if auth_mode() == "hybrid" {
+        if mode == AuthMode::Hybrid {
             let path = std::env::var("JWT_TRUST_STORE_PATH")
                 .map_err(|_| "JWT_TRUST_STORE_PATH is required in hybrid mode".to_string())?;
             crate::trust::TrustStore::load(std::path::Path::new(&path))?;
@@ -165,9 +173,9 @@ impl JwtConfig {
 
         let header =
             decode_header(token).map_err(|error| format!("Invalid token header: {error}"))?;
-        let mode = auth_mode();
+        let mode = auth_mode()?;
         if header.alg == Algorithm::RS256 {
-            if mode == "hs256" {
+            if mode == AuthMode::Hs256 {
                 return Err("RS256 token rejected in hs256 mode".to_string());
             }
             return self.validate_rs256(token, header.kid.as_deref());
@@ -175,7 +183,7 @@ impl JwtConfig {
         if header.alg != Algorithm::HS256 {
             return Err("Unsupported JWT algorithm".to_string());
         }
-        if mode == "asymmetric" {
+        if mode == AuthMode::Asymmetric {
             return Err("HS256 token rejected in asymmetric mode".to_string());
         }
         let mut validation = Validation::new(Algorithm::HS256);
@@ -236,10 +244,21 @@ impl JwtConfig {
     }
 }
 
-fn auth_mode() -> String {
-    std::env::var("JWT_AUTH_MODE")
-        .unwrap_or_else(|_| "hs256".to_string())
-        .to_ascii_lowercase()
+fn auth_mode() -> Result<AuthMode, String> {
+    parse_auth_mode(
+        &std::env::var("JWT_AUTH_MODE")
+            .unwrap_or_else(|_| "hs256".to_string())
+            .to_ascii_lowercase(),
+    )
+}
+
+fn parse_auth_mode(value: &str) -> Result<AuthMode, String> {
+    match value {
+        "hs256" => Ok(AuthMode::Hs256),
+        "hybrid" => Ok(AuthMode::Hybrid),
+        "asymmetric" => Ok(AuthMode::Asymmetric),
+        value => Err(format!("unsupported JWT_AUTH_MODE: {value}")),
+    }
 }
 
 fn parse_insecure_flag(value: &str) -> bool {
@@ -446,6 +465,12 @@ mod tests {
         assert!(!parse_insecure_flag("yes"));
         assert!(!parse_insecure_flag(" true "));
         assert!(!parse_insecure_flag(""));
+    }
+
+    #[test]
+    fn unknown_auth_mode_is_rejected() {
+        assert_eq!(parse_auth_mode("hybrid").unwrap(), AuthMode::Hybrid);
+        assert!(parse_auth_mode("asymetric").is_err());
     }
 
     #[test]
