@@ -6,6 +6,8 @@ nav_order: 2
 
 # Configuration Guide
 
+For most installations, use `owpctl configure` or the plugin health dashboard. Directly editing both sides is an advanced fallback because authentication parameters must remain synchronized.
+
 ## Plugin Configuration
 
 Access the plugin configuration page at **Dashboard** > **Plugins** > **OpenWatchParty**.
@@ -45,6 +47,8 @@ openssl rand -base64 32
 | `HOST` | `0.0.0.0` | Address to bind to |
 | `ALLOWED_ORIGINS` | `http://localhost:8096,https://localhost:8096` | CORS allowed origins (comma-separated) |
 | `JWT_SECRET` | required | Secret for validating tokens |
+| `JWT_AUTH_MODE` | `hs256` | `hs256`, `hybrid`, or `asymmetric`; new `owpctl` installs pair then use asymmetric mode |
+| `JWT_TRUST_STORE_PATH` | `/var/lib/openwatchparty/trust-store.json` | Versioned public-key trust store managed by `owpctl` |
 | `ALLOW_INSECURE_NO_AUTH` | `false` | Explicit development-only override when `JWT_SECRET` is empty |
 | `AUTH_TIMEOUT_SECONDS` | `10` | Time allowed to authenticate a JWT WebSocket connection; disabled in insecure mode |
 | `MAX_CONNECTIONS` | `256` | Maximum concurrent WebSocket connections |

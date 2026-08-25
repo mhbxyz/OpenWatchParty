@@ -6,6 +6,16 @@ nav_order: 1
 
 # Installation Guide
 
+## Recommended: Guided Setup
+
+Download `owpctl` and run the local graphical assistant:
+
+```bash
+owpctl --scope system setup --web
+```
+
+See [Guided Setup and owpctl](owpctl.md) for download verification, headless installation, diagnostics, upgrades and uninstall. The remaining sections on this page are manual and advanced alternatives.
+
 ## Prerequisites
 
 - **Jellyfin Server** version compatible with your OpenWatchParty build (see [Compatibility Matrix](compatibility.md))
