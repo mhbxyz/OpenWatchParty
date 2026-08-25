@@ -1,6 +1,6 @@
 [package]
 name = "session-server"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 
 # Release profile: optimized for production
@@ -27,6 +27,4 @@ ipnet = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["test-util"] }
-rsa = { version = "0.9", features = ["pem"] }
-tempfile = "3"
 warp = { version = "0.4", features = ["test", "websocket"] }
