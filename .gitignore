@@ -22,6 +22,7 @@ src/plugins/jellyfin/OpenWatchParty/Web/*
 
 # Rust build artifacts
 src/server/target/
+**/target/
 
 # Jekyll
 docs/_site/
