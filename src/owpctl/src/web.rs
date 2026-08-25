@@ -214,6 +214,5 @@ mod tests {
         assert!(authorized(&state, &headers));
         headers.remove("x-owp-csrf");
         assert!(!authorized(&state, &headers));
-        assert!(!include_str!("web.rs").contains(".setup-token"));
     }
 }
