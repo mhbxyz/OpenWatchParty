@@ -158,6 +158,14 @@ impl JellyfinClient {
         self.post_empty(&format!("Plugins/{PLUGIN_ID}/Configuration"), Some(value))
     }
 
+    pub fn restart(&self) -> anyhow::Result<()> {
+        match self.post_empty::<serde_json::Value>("System/Restart", None) {
+            Ok(()) => Ok(()),
+            Err(error) if error.to_string().contains("connection") => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
     fn get<T: DeserializeOwned>(&self, path: &str) -> anyhow::Result<T> {
         let mut request = self.client.get(self.url(path)?);
         if let Some(token) = &self.token {

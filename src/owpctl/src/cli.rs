@@ -43,6 +43,8 @@ pub struct SetupArgs {
     pub config: Option<PathBuf>,
     #[arg(long)]
     pub dry_run: bool,
+    #[arg(long)]
+    pub jellyfin_url: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -53,6 +55,8 @@ pub struct ApplyArgs {
     pub yes: bool,
     #[arg(long)]
     pub version: Option<String>,
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -63,6 +67,8 @@ pub struct ConfigureArgs {
     pub rotate_jwt_secret: bool,
     #[arg(long)]
     pub dry_run: bool,
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

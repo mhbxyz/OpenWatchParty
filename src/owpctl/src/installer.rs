@@ -1,0 +1,198 @@
+use std::{fs, path::Path, process::Command, thread, time::Duration};
+
+use anyhow::{bail, Context};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    config::{DesiredConfig, JellyfinRuntime},
+    jellyfin::JellyfinClient,
+    paths::Paths,
+    secrets,
+    state::{InstallationState, Ownership},
+};
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstallationPlan {
+    pub version: String,
+    pub image: String,
+    pub operations: Vec<&'static str>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct PluginConfiguration {
+    jwt_secret: String,
+    allow_insecure_no_auth: bool,
+    jwt_audience: String,
+    jwt_issuer: String,
+    token_ttl_seconds: u32,
+    invite_ttl_seconds: u32,
+    session_server_url: String,
+    allow_auto_detected_session_server: bool,
+}
+
+pub fn plan(version: &str) -> InstallationPlan {
+    InstallationPlan {
+        version: version.to_string(),
+        image: format!("ghcr.io/mhbxyz/owp-session-server:{version}"),
+        operations: vec![
+            "validate Docker and Jellyfin",
+            "install or update the Jellyfin plugin",
+            "generate synchronized authentication configuration",
+            "deploy the signed session server image",
+            "verify plugin, token and session health",
+        ],
+    }
+}
+
+pub fn install(
+    paths: &Paths,
+    config: &DesiredConfig,
+    version: &str,
+    api_token_file: &Path,
+) -> anyhow::Result<InstallationState> {
+    require_command("docker", &["compose", "version"])?;
+    let token = JellyfinClient::token_from_file(api_token_file)?;
+    let jellyfin = JellyfinClient::new(config.jellyfin.base_url.clone())?.with_token(token);
+    let system = jellyfin.public_info()?;
+
+    let repository_changed = jellyfin.ensure_repository()?;
+    let plugin_ready = jellyfin.plugin_info().is_ok();
+    if !plugin_ready {
+        jellyfin.install_plugin(version)?;
+        restart_jellyfin(&config.jellyfin.runtime, &jellyfin)?;
+        wait_for_jellyfin(&jellyfin)?;
+    } else if repository_changed {
+        // Repository was added for future upgrades; no restart is needed.
+    }
+
+    let secret = if paths.secrets_file.exists() {
+        secrets::parse_env_secret(&fs::read_to_string(&paths.secrets_file)?)?
+    } else {
+        secrets::generate_jwt_secret()
+    };
+    crate::storage::atomic_write(
+        &paths.secrets_file,
+        secrets::env_file(&secret).as_bytes(),
+        true,
+    )?;
+
+    let image = format!("ghcr.io/mhbxyz/owp-session-server:{version}");
+    require_command("docker", &["pull", &image])?;
+    let digest = image_digest(&image)?;
+    let pinned_image = digest.clone().unwrap_or(image);
+    crate::storage::atomic_write(
+        &paths.compose_file,
+        crate::compose::render(config, &pinned_image, &paths.secrets_file).as_bytes(),
+        false,
+    )?;
+    compose(paths, &["up", "-d", "--remove-orphans"])?;
+
+    let plugin_config = PluginConfiguration {
+        jwt_secret: secret.clone(),
+        allow_insecure_no_auth: false,
+        jwt_audience: config.plugin.jwt_audience.clone(),
+        jwt_issuer: config.plugin.jwt_issuer.clone(),
+        token_ttl_seconds: config.plugin.token_ttl_seconds,
+        invite_ttl_seconds: config.plugin.invite_ttl_seconds,
+        session_server_url: config.session_server.public_websocket_url.to_string(),
+        allow_auto_detected_session_server: false,
+    };
+    jellyfin.update_plugin_configuration(&plugin_config)?;
+    wait_for_health(config)?;
+
+    let mut state = InstallationState::new(version);
+    state.image_reference = pinned_image;
+    state.image_digest = digest;
+    state.jellyfin_server_id = Some(system.id);
+    state.secret_fingerprint = secrets::fingerprint(&secret);
+    state.ownership = Ownership {
+        session_server: true,
+        plugin: !plugin_ready,
+        configuration: true,
+    };
+    crate::storage::write_json(&paths.state_file, &state)?;
+    Ok(state)
+}
+
+pub fn compose(paths: &Paths, arguments: &[&str]) -> anyhow::Result<()> {
+    let status = Command::new("docker")
+        .args(["compose", "--project-name", "openwatchparty", "-f"])
+        .arg(&paths.compose_file)
+        .args(arguments)
+        .status()?;
+    if !status.success() {
+        bail!("docker compose failed");
+    }
+    Ok(())
+}
+
+fn image_digest(image: &str) -> anyhow::Result<Option<String>> {
+    let output = Command::new("docker")
+        .args([
+            "image",
+            "inspect",
+            "--format",
+            "{{index .RepoDigests 0}}",
+            image,
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let digest = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok((!digest.is_empty() && digest != "<no value>").then_some(digest))
+}
+
+fn restart_jellyfin(runtime: &JellyfinRuntime, jellyfin: &JellyfinClient) -> anyhow::Result<()> {
+    match runtime {
+        JellyfinRuntime::Docker { container } => require_command("docker", &["restart", container]),
+        JellyfinRuntime::Systemd { unit, .. } => require_command("systemctl", &["restart", unit]),
+        JellyfinRuntime::External => jellyfin.restart(),
+    }
+}
+
+fn wait_for_jellyfin(client: &JellyfinClient) -> anyhow::Result<()> {
+    for _ in 0..60 {
+        if client.public_info().is_ok() {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+    bail!("Jellyfin did not restart within 60 seconds")
+}
+
+fn wait_for_health(config: &DesiredConfig) -> anyhow::Result<()> {
+    let mut url = config.session_server.public_websocket_url.clone();
+    let _ = url.set_scheme(if url.scheme() == "wss" {
+        "https"
+    } else {
+        "http"
+    });
+    url.set_path("/health");
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(2))
+        .build()?;
+    for _ in 0..30 {
+        if client
+            .get(url.clone())
+            .send()
+            .is_ok_and(|response| response.status().is_success())
+        {
+            return Ok(());
+        }
+        thread::sleep(Duration::from_secs(1));
+    }
+    bail!("session server did not become healthy")
+}
+
+fn require_command(command: &str, arguments: &[&str]) -> anyhow::Result<()> {
+    let status = Command::new(command)
+        .args(arguments)
+        .status()
+        .with_context(|| format!("cannot execute {command}"))?;
+    if !status.success() {
+        bail!("{command} {} failed", arguments.join(" "));
+    }
+    Ok(())
+}
