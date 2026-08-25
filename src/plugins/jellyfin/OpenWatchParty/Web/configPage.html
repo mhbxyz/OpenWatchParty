@@ -75,6 +75,10 @@
                             </label>
                             <div class="fieldDescription checkboxFieldDescription">Explicitly permits sending OpenWatchParty tokens to ws(s)://this-host:3000/ws.</div>
                         </div>
+                        <div class="inputContainer">
+                            <button is="emby-button" type="button" id="PreparePairingButton" class="raised">Prepare asymmetric pairing key</button>
+                            <div id="PairingKeyStatus" class="fieldDescription">No pairing key inspected.</div>
+                        </div>
                     </div>
 
                     <div>
@@ -316,6 +320,23 @@
 
             $('#RunDiagnosticsButton').on('click', function() {
                 OpenWatchPartyConfigurationPage.runDiagnostics(true);
+            });
+
+            $('#PreparePairingButton').on('click', function() {
+                var status = document.getElementById('PairingKeyStatus');
+                status.textContent = 'Generating or loading RSA-3072 key…';
+                fetch(ApiClient.getUrl('OpenWatchParty/SigningKey'), {
+                    headers: { 'X-Emby-Token': ApiClient.accessToken() },
+                    credentials: 'same-origin'
+                }).then(function(response) {
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    return response.json();
+                }).then(function(result) {
+                    status.textContent = (result.active ? 'Active' : 'Ready to pair')
+                        + ' · kid ' + result.jwk.kid + ' · ' + result.issuer;
+                }).catch(function(error) {
+                    status.textContent = 'Pairing key failed: ' + error.message;
+                });
             });
 
             $('#CopySupportReportButton').on('click', function() {
