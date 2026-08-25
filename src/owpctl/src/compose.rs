@@ -2,8 +2,18 @@ use std::path::Path;
 
 use crate::config::DesiredConfig;
 
-pub fn render(config: &DesiredConfig, image: &str, secrets_file: &Path) -> String {
+pub fn render(
+    config: &DesiredConfig,
+    image: &str,
+    secrets_file: &Path,
+    trust_store: &Path,
+) -> String {
     let origins = config.session_server.allowed_origins.join(",");
+    let secret_environment = if config.session_server.auth_mode == "asymmetric" {
+        String::new()
+    } else {
+        format!("    env_file:\n      - {}\n", secrets_file.display())
+    };
     format!(
         r#"services:
   session-server:
@@ -19,8 +29,8 @@ pub fn render(config: &DesiredConfig, image: &str, secrets_file: &Path) -> Strin
       - no-new-privileges:true
     ports:
       - "{bind}:{published}:3000"
-    env_file:
-      - {secrets}
+{secret_environment}    volumes:
+      - {trust_store}:/var/lib/openwatchparty/trust-store.json:ro
     environment:
       HOST: 0.0.0.0
       PORT: 3000
@@ -29,6 +39,8 @@ pub fn render(config: &DesiredConfig, image: &str, secrets_file: &Path) -> Strin
       ALLOW_INSECURE_NO_AUTH: "false"
       JWT_AUDIENCE: {audience}
       JWT_ISSUER: {issuer}
+      JWT_AUTH_MODE: {auth_mode}
+      JWT_TRUST_STORE_PATH: /var/lib/openwatchparty/trust-store.json
       MAX_CONNECTIONS: "{max_connections}"
       MAX_CONNECTIONS_PER_IP: "{max_connections_per_ip}"
       AUTH_TIMEOUT_SECONDS: "{auth_timeout}"
@@ -43,7 +55,8 @@ pub fn render(config: &DesiredConfig, image: &str, secrets_file: &Path) -> Strin
 "#,
         bind = config.session_server.bind_address,
         published = config.session_server.published_port,
-        secrets = secrets_file.display(),
+        trust_store = trust_store.display(),
+        auth_mode = config.session_server.auth_mode,
         log_level = config.session_server.log_level,
         audience = config.plugin.jwt_audience,
         issuer = config.plugin.jwt_issuer,
@@ -66,6 +79,7 @@ mod tests {
             &config,
             "ghcr.io/example/image@sha256:abc",
             std::path::Path::new("/etc/openwatchparty/secrets.env"),
+            std::path::Path::new("/var/lib/openwatchparty/trust-store.json"),
         );
         assert!(compose.contains("read_only: true"));
         assert!(compose.contains("cap_drop:"));

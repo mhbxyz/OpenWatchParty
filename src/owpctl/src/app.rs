@@ -93,6 +93,12 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             }
         }
         Command::Pair(arguments) => {
+            if arguments.trust_store != paths.trust_store {
+                bail!(
+                    "--trust-store must match {} for this installation",
+                    paths.trust_store.display()
+                );
+            }
             let token =
                 crate::jellyfin::JellyfinClient::token_from_file(&arguments.api_token_file)?;
             let client =
@@ -103,6 +109,24 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                 store.add(signing.jwk, signing.issuer, "OpenWatchParty".to_string())
             })?;
             client.activate_signing_key(&kid)?;
+            if paths.config_file.exists() && paths.state_file.exists() {
+                let mut config: DesiredConfig = crate::storage::read_toml(&paths.config_file)?;
+                config.session_server.auth_mode = "asymmetric".to_string();
+                crate::storage::write_toml(&paths.config_file, &config)?;
+                let state: InstallationState = crate::storage::read_json(&paths.state_file)?;
+                crate::storage::atomic_write(
+                    &paths.compose_file,
+                    crate::compose::render(
+                        &config,
+                        &state.image_reference,
+                        &paths.secrets_file,
+                        &paths.trust_store,
+                    )
+                    .as_bytes(),
+                    false,
+                )?;
+                crate::installer::compose(&paths, &["up", "-d", "--remove-orphans"])?;
+            }
             crate::output::print(&serde_json::json!({ "paired": true, "kid": kid }), cli.json)
         }
         Command::Status(arguments) | Command::Doctor(arguments) => {

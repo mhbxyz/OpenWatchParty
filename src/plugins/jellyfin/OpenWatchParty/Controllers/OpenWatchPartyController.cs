@@ -333,7 +333,8 @@ public class OpenWatchPartyController : ControllerBase
             });
         }
 
-        if (string.IsNullOrWhiteSpace(config.JwtSecret))
+        if (string.IsNullOrWhiteSpace(config.JwtSecret)
+            && RsaSigningKeyStore.ForPlugin()?.IsActive != true)
         {
             return Ok(new {
                 token = (string?)null,
@@ -372,6 +373,10 @@ public class OpenWatchPartyController : ControllerBase
 
     internal static string? GetAuthenticationConfigurationError(PluginConfiguration config)
     {
+        if (RsaSigningKeyStore.ForPlugin()?.IsActive == true)
+        {
+            return null;
+        }
         if (string.IsNullOrWhiteSpace(config.JwtSecret))
         {
             return config.AllowInsecureNoAuth ? null : "JWT authentication is not configured";
@@ -402,8 +407,35 @@ public class OpenWatchPartyController : ControllerBase
 
     internal static string GenerateJwtToken(string userId, string userName, PluginConfiguration config)
     {
-        // P-CS02 fix: Use cached signing credentials instead of creating new ones each time
-        var credentials = GetSigningCredentials(config.JwtSecret);
+        var keyStore = RsaSigningKeyStore.ForPlugin();
+        if (keyStore?.TryLoadActive(out var asymmetricIssuer, out var kid, out var rsa) == true
+            && rsa != null)
+        {
+            using (rsa)
+            {
+                var credentials = new SigningCredentials(new RsaSecurityKey(rsa) { KeyId = kid }, SecurityAlgorithms.RsaSha256);
+                return BuildToken(userId, userName, asymmetricIssuer, config.JwtAudience, config.TokenTtlSeconds, credentials, kid);
+            }
+        }
+        return BuildToken(
+            userId,
+            userName,
+            config.JwtIssuer,
+            config.JwtAudience,
+            config.TokenTtlSeconds,
+            GetSigningCredentials(config.JwtSecret),
+            null);
+    }
+
+    internal static string BuildToken(
+        string userId,
+        string userName,
+        string issuer,
+        string audience,
+        int ttlSeconds,
+        SigningCredentials credentials,
+        string? kid)
+    {
 
         var claims = new[]
         {
@@ -417,12 +449,13 @@ public class OpenWatchPartyController : ControllerBase
         // to the claims array too would produce JSON arrays instead of strings,
         // which breaks deserialization on the Rust session server.
         var token = new JwtSecurityToken(
-            issuer: config.JwtIssuer,
-            audience: config.JwtAudience,
+            issuer: issuer,
+            audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddSeconds(config.TokenTtlSeconds),
+            expires: DateTime.UtcNow.AddSeconds(ttlSeconds),
             signingCredentials: credentials
         );
+        if (kid != null) token.Header[JwtHeaderParameterNames.Kid] = kid;
 
         // P-CS02 fix: Use cached token handler instead of creating new one each time
         return _tokenHandler.WriteToken(token);

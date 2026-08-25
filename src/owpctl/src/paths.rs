@@ -13,6 +13,7 @@ pub struct Paths {
     pub state_file: PathBuf,
     pub compose_file: PathBuf,
     pub backup_dir: PathBuf,
+    pub trust_store: PathBuf,
 }
 
 impl Paths {
@@ -41,6 +42,7 @@ impl Paths {
             state_file: state_dir.join("state.json"),
             compose_file: state_dir.join("compose.yaml"),
             backup_dir: state_dir.join("backups"),
+            trust_store: state_dir.join("trust-store.json"),
             config_dir,
             state_dir,
         })

@@ -51,6 +51,7 @@ pub struct SessionServerConfig {
     pub max_connections: u32,
     pub max_connections_per_ip: u32,
     pub auth_timeout_seconds: u32,
+    pub auth_mode: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -91,6 +92,7 @@ impl DesiredConfig {
                 max_connections: 256,
                 max_connections_per_ip: 32,
                 auth_timeout_seconds: 10,
+                auth_mode: "hybrid".to_string(),
             },
             plugin: PluginConfig {
                 token_ttl_seconds: 3600,

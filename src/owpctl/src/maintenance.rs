@@ -25,6 +25,9 @@ pub fn apply_values(config: &mut DesiredConfig, values: &[String]) -> anyhow::Re
             "session.max-connections-per-ip" => {
                 config.session_server.max_connections_per_ip = value.parse()?
             }
+            "session.auth-mode" if matches!(value, "hs256" | "hybrid" | "asymmetric") => {
+                config.session_server.auth_mode = value.to_string()
+            }
             "jellyfin.base-url" => config.jellyfin.base_url = url::Url::parse(value)?,
             "jellyfin.public-origin" => config.jellyfin.public_origin = url::Url::parse(value)?,
             "plugin.token-ttl" => config.plugin.token_ttl_seconds = value.parse()?,
@@ -68,6 +71,7 @@ pub fn configure(
                 &config,
                 &crate::storage::read_json::<InstallationState>(&paths.state_file)?.image_reference,
                 &paths.secrets_file,
+                &paths.trust_store,
             )
             .as_bytes(),
             false,
@@ -98,6 +102,7 @@ pub fn backup(paths: &Paths, output: Option<&Path>) -> anyhow::Result<PathBuf> {
         &paths.secrets_file,
         &paths.state_file,
         &paths.compose_file,
+        &paths.trust_store,
     ] {
         if source.exists() {
             fs::copy(source, directory.join(source.file_name().unwrap()))?;

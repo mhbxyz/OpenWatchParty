@@ -76,6 +76,9 @@ pub fn install(
         secrets::env_file(&secret).as_bytes(),
         true,
     )?;
+    if !paths.trust_store.exists() {
+        crate::storage::write_json(&paths.trust_store, &crate::trust::TrustStore::empty())?;
+    }
 
     let image = format!("ghcr.io/mhbxyz/owp-session-server:{version}");
     require_command("docker", &["pull", &image])?;
@@ -83,7 +86,13 @@ pub fn install(
     let pinned_image = digest.clone().unwrap_or(image);
     crate::storage::atomic_write(
         &paths.compose_file,
-        crate::compose::render(config, &pinned_image, &paths.secrets_file).as_bytes(),
+        crate::compose::render(
+            config,
+            &pinned_image,
+            &paths.secrets_file,
+            &paths.trust_store,
+        )
+        .as_bytes(),
         false,
     )?;
     compose(paths, &["up", "-d", "--remove-orphans"])?;
