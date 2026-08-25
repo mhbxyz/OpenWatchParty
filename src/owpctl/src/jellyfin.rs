@@ -253,7 +253,7 @@ impl JellyfinClient {
 }
 
 fn authorization_header(token: Option<&str>) -> String {
-    let mut value = "MediaBrowser Client=\"OpenWatchParty Installer\", Device=\"CLI\", DeviceId=\"owpctl\", Version=\"0.2.1\"".to_string();
+    let mut value = format!("MediaBrowser Client=\"OpenWatchParty Installer\", Device=\"CLI\", DeviceId=\"owpctl\", Version=\"{}\"", crate::VERSION);
     if let Some(token) = token {
         value.push_str(&format!(", Token=\"{token}\""));
     }
