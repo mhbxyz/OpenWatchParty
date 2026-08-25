@@ -1,6 +1,6 @@
 services:
   session-server:
-    image: ghcr.io/mhbxyz/owp-session-server:0.2.1@sha256:17407764e853010ec291cf69ea19b77b049ddce2c3137ddf82023e862b93fb03
+    image: ghcr.io/mhbxyz/owp-session-server:0.3.1@sha256:04a401cb03dcbf53904186227a46893bdff72e3074387ac8372e8109c34d2f50
     container_name: owp-session-server
     restart: unless-stopped
     init: true
