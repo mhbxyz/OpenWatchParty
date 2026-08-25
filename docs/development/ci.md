@@ -88,7 +88,7 @@ Users can then install/update the plugin directly from Jellyfin's plugin interfa
 docker pull ghcr.io/mhbxyz/owp-session-server:latest
 
 # Specific version
-docker pull ghcr.io/mhbxyz/owp-session-server:v0.3.2
+docker pull ghcr.io/mhbxyz/owp-session-server:v0.3.3
 
 # Development (latest from main)
 docker pull ghcr.io/mhbxyz/owp-session-server:beta

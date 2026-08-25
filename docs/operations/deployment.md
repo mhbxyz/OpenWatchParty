@@ -383,9 +383,9 @@ docker compose pull
 
 ```bash
 # Download the canonical plugin package
-archive=/tmp/OpenWatchParty-v0.3.2.zip
+archive=/tmp/OpenWatchParty-v0.3.3.zip
 curl -fL \
-  https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.3.2/OpenWatchParty-v0.3.2.zip \
+  https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.3.3/OpenWatchParty-v0.3.3.zip \
   -o "$archive"
 
 # Replace the complete plugin package, including its dependencies and metadata

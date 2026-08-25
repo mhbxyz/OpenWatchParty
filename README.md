@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/mhbxyz/OpenWatchParty/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/mhbxyz/OpenWatchParty/ci.yml?branch=main&style=flat-square&label=CI" alt="CI"></a>
-  <img src="https://img.shields.io/badge/OpenWatchParty-0.3.2-blue?style=flat-square" alt="OpenWatchParty 0.3.2">
+  <img src="https://img.shields.io/badge/OpenWatchParty-0.3.3-blue?style=flat-square" alt="OpenWatchParty 0.3.3">
   <img src="https://img.shields.io/badge/Jellyfin-10.11.3-00a4dc?style=flat-square&logo=jellyfin" alt="Jellyfin 10.11.3">
   <img src="https://img.shields.io/badge/License-MIT-green?style=flat-square" alt="MIT License">
 </p>
