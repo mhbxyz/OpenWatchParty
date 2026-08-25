@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "0.3.0",
+        "changelog": "## Guided installation\n\n- New signed `owpctl` installer with CLI and loopback-only graphical setup wizard.\n- Automated Jellyfin repository/plugin installation, session-server deployment, synchronized configuration, health verification, upgrade, backup and uninstall.\n- `owpctl doctor` performs authenticated plugin and WebSocket ping/pong diagnostics.\n\n## Administration\n\n- New Jellyfin health dashboard with active session diagnostics, injection counters, version compatibility and redacted support reports.\n- Advanced settings are collapsed; secure secret generation and pairing status are integrated.\n\n## Authentication\n\n- RS256 plugin signing keys remain private in Jellyfin.\n- Versioned public-key trust store with strict `kid`/algorithm validation.\n- Explicit `hs256`, `hybrid` and `asymmetric` server modes.\n- `owpctl pair` migrates managed deployments from hybrid to asymmetric mode without copying private keys.\n\n## Documentation\n\nInstallation, development and usage paths are now separated. `just up` is documented as development-only.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.3.0/OpenWatchParty-v0.3.0.zip",
+        "checksum": "67c1caaafed9b53250f4767887a393d0",
+        "timestamp": "2026-08-25T03:41:18Z"
+      },
+      {
         "version": "0.2.1",
         "changelog": "## E2E fixes\n\n- Bind browser timer methods correctly to prevent Chrome `Illegal invocation` after authentication.\n- Retry OpenWatchParty connection automatically after a Jellyfin SPA login.\n- Launch guest media through the official Jellyfin details/play flow when Jellyfin 10.11 does not expose `playbackManager`.\n\n## Validation\n\nTested with two isolated Jellyfin users on Spider-Man (2002): room creation/join, automatic guest playback, seek propagation, pause/resume, and clock-corrected synchronization within single-digit milliseconds.",
         "targetAbi": "10.11.0.0",
