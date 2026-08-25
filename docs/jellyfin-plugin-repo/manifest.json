@@ -8,6 +8,14 @@
     "category": "General",
     "versions": [
       {
+        "version": "0.3.2",
+        "changelog": "## owpctl usability fix\n\n- Changing `session.published-port` now automatically updates the managed public WebSocket URL when it still points to the previous managed port.\n\n## Validation\n\nVerified with the signed release installer flow, isolated session-server port configuration, Jellyfin plugin upgrade, authenticated doctor, RS256 pairing, asymmetric restart, backup and ownership-safe uninstall.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/mhbxyz/OpenWatchParty/releases/download/v0.3.2/OpenWatchParty-v0.3.2.zip",
+        "checksum": "670d9a6c92de7577e75b3d4250938e76",
+        "timestamp": "2026-08-25T05:04:30Z"
+      },
+      {
         "version": "0.3.1",
         "changelog": "## owpctl fixes\n\n- Upgrade now compares and installs the requested plugin version instead of treating any existing plugin as current.\n- `session.published-port` can be configured before install, enabling isolated and multi-instance deployments.\n\n## Validation\n\nThe release candidate completed a real setup/install/doctor workflow against Jellyfin 10.11.3, then paired RS256, restarted in asymmetric mode, passed authenticated WebSocket ping/pong, created a backup and completed ownership-safe uninstall.",
         "targetAbi": "10.11.0.0",
