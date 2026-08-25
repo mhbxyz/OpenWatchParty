@@ -28,7 +28,8 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                 .api_token_file
                 .as_deref()
                 .context("--api-token-file is required")?;
-            let state = crate::installer::install(&paths, &config, version, token_file)?;
+            let state =
+                crate::installer::install_from_token_file(&paths, &config, version, token_file)?;
             crate::output::print(&state, cli.json)
         }
         Command::Configure(arguments) => {

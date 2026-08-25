@@ -78,7 +78,10 @@ pub struct RepositoryInfo {
 }
 
 impl JellyfinClient {
-    pub fn new(base_url: Url) -> anyhow::Result<Self> {
+    pub fn new(mut base_url: Url) -> anyhow::Result<Self> {
+        if !base_url.path().ends_with('/') {
+            base_url.set_path(&format!("{}/", base_url.path()));
+        }
         let client = Client::builder()
             .timeout(Duration::from_secs(10))
             .redirect(reqwest::redirect::Policy::none())
@@ -265,4 +268,18 @@ fn checked_json<T: DeserializeOwned>(response: reqwest::blocking::Response) -> a
         bail!("Jellyfin returned HTTP {}", response.status());
     }
     response.json().context("invalid Jellyfin JSON response")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn base_path_is_preserved_when_building_api_urls() {
+        let client =
+            JellyfinClient::new(Url::parse("https://media.example/jellyfin").unwrap()).unwrap();
+        assert_eq!(
+            client.url("System/Info/Public").unwrap().as_str(),
+            "https://media.example/jellyfin/System/Info/Public"
+        );
+    }
 }

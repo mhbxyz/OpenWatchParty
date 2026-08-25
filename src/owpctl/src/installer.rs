@@ -8,7 +8,7 @@ use crate::{
     jellyfin::JellyfinClient,
     paths::Paths,
     secrets,
-    state::{InstallationState, Ownership},
+    state::InstallationState,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,18 +49,33 @@ pub fn install(
     paths: &Paths,
     config: &DesiredConfig,
     version: &str,
-    api_token_file: &Path,
+    token: &str,
 ) -> anyhow::Result<InstallationState> {
     require_command("docker", &["compose", "version"])?;
-    let token = JellyfinClient::token_from_file(api_token_file)?;
     let jellyfin = JellyfinClient::new(config.jellyfin.base_url.clone())?.with_token(token);
     let system = jellyfin.public_info()?;
 
-    let repository_changed = jellyfin.ensure_repository()?;
+    let previous_state: Option<InstallationState> = paths
+        .state_file
+        .exists()
+        .then(|| crate::storage::read_json(&paths.state_file))
+        .transpose()?;
     let installed_plugin = jellyfin.plugin_info().ok();
+    let plugin_was_absent = installed_plugin.is_none();
     let plugin_needs_install = installed_plugin
         .as_ref()
         .is_none_or(|plugin| plugin.version != version);
+    let mut state = previous_state
+        .clone()
+        .unwrap_or_else(|| InstallationState::new(version));
+    state.phase = "installing".to_string();
+    state.installed_version = version.to_string();
+    state.plugin_version = version.to_string();
+    state.jellyfin_server_id = Some(system.id.clone());
+    state.ownership.plugin = plugin_is_owned(plugin_was_absent, previous_state.as_ref());
+    crate::storage::write_json(&paths.state_file, &state)?;
+
+    let repository_changed = jellyfin.ensure_repository()?;
     if plugin_needs_install {
         jellyfin.install_plugin(version)?;
         restart_jellyfin(&config.jellyfin.runtime, &jellyfin)?;
@@ -79,6 +94,9 @@ pub fn install(
         secrets::env_file(&secret).as_bytes(),
         true,
     )?;
+    state.ownership.configuration = true;
+    state.secret_fingerprint = secrets::fingerprint(&secret);
+    crate::storage::write_json(&paths.state_file, &state)?;
     if !paths.trust_store.exists() {
         crate::storage::write_json(&paths.trust_store, &crate::trust::TrustStore::empty())?;
     }
@@ -99,23 +117,28 @@ pub fn install(
         false,
     )?;
     compose(paths, &["up", "-d", "--remove-orphans"])?;
+    state.ownership.session_server = true;
+    state.image_reference = pinned_image.clone();
+    state.image_digest = digest.clone();
+    crate::storage::write_json(&paths.state_file, &state)?;
 
     let plugin_config = plugin_configuration(config, &secret);
     jellyfin.update_plugin_configuration(&plugin_config)?;
     wait_for_health(config)?;
 
-    let mut state = InstallationState::new(version);
-    state.image_reference = pinned_image;
-    state.image_digest = digest;
-    state.jellyfin_server_id = Some(system.id);
-    state.secret_fingerprint = secrets::fingerprint(&secret);
-    state.ownership = Ownership {
-        session_server: true,
-        plugin: plugin_needs_install,
-        configuration: true,
-    };
+    state.phase = "ready".to_string();
     crate::storage::write_json(&paths.state_file, &state)?;
     Ok(state)
+}
+
+pub fn install_from_token_file(
+    paths: &Paths,
+    config: &DesiredConfig,
+    version: &str,
+    api_token_file: &Path,
+) -> anyhow::Result<InstallationState> {
+    let token = JellyfinClient::token_from_file(api_token_file)?;
+    install(paths, config, version, &token)
 }
 
 pub(crate) fn plugin_configuration(config: &DesiredConfig, secret: &str) -> PluginConfiguration {
@@ -211,4 +234,21 @@ fn require_command(command: &str, arguments: &[&str]) -> anyhow::Result<()> {
         bail!("{command} {} failed", arguments.join(" "));
     }
     Ok(())
+}
+
+fn plugin_is_owned(plugin_was_absent: bool, previous: Option<&InstallationState>) -> bool {
+    plugin_was_absent || previous.is_some_and(|state| state.ownership.plugin)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn preexisting_plugin_is_not_claimed_during_upgrade() {
+        assert!(!plugin_is_owned(false, None));
+        assert!(plugin_is_owned(true, None));
+        let mut state = InstallationState::new("0.3.2");
+        state.ownership.plugin = true;
+        assert!(plugin_is_owned(false, Some(&state)));
+    }
 }

@@ -62,15 +62,40 @@ pub fn configure(
     token_file: Option<&Path>,
     dry_run: bool,
 ) -> anyhow::Result<DesiredConfig> {
-    let mut config: DesiredConfig = crate::storage::read_toml(&paths.config_file)?;
+    let original_config: DesiredConfig = crate::storage::read_toml(&paths.config_file)?;
+    let mut config = original_config.clone();
     apply_values(&mut config, values)?;
     if dry_run {
         return Ok(config);
     }
-    crate::storage::write_toml(&paths.config_file, &config)?;
-
     let installed = paths.state_file.exists();
-    if installed {
+    if !installed {
+        crate::storage::write_toml(&paths.config_file, &config)?;
+        return Ok(config);
+    }
+    let original_secret_file = fs::read(&paths.secrets_file)?;
+    let original_compose = fs::read(&paths.compose_file)?;
+    let state: InstallationState = crate::storage::read_json(&paths.state_file)?;
+    let token = if rotate_secret || !values.is_empty() {
+        Some(JellyfinClient::token_from_file(token_file.context(
+            "--api-token-file is required to configure the plugin",
+        )?)?)
+    } else {
+        None
+    };
+    let client = token
+        .map(|token| {
+            JellyfinClient::new(config.jellyfin.base_url.clone())
+                .map(|client| client.with_token(token))
+        })
+        .transpose()?;
+    let original_plugin: Option<serde_json::Value> = client
+        .as_ref()
+        .map(JellyfinClient::plugin_configuration)
+        .transpose()?;
+
+    let operation = (|| -> anyhow::Result<()> {
+        crate::storage::write_toml(&paths.config_file, &config)?;
         let secret = if rotate_secret {
             let secret = secrets::generate_jwt_secret();
             crate::storage::atomic_write(
@@ -86,23 +111,30 @@ pub fn configure(
             &paths.compose_file,
             crate::compose::render(
                 &config,
-                &crate::storage::read_json::<InstallationState>(&paths.state_file)?.image_reference,
+                &state.image_reference,
                 &paths.secrets_file,
                 &paths.trust_store,
             )
             .as_bytes(),
             false,
         )?;
-        if rotate_secret || !values.is_empty() {
-            let token_file =
-                token_file.context("--api-token-file is required to configure the plugin")?;
-            let token = JellyfinClient::token_from_file(token_file)?;
-            let client = JellyfinClient::new(config.jellyfin.base_url.clone())?.with_token(token);
+        if let Some(client) = &client {
             client.update_plugin_configuration(&crate::installer::plugin_configuration(
                 &config, &secret,
             ))?;
         }
         crate::installer::compose(paths, &["up", "-d", "--remove-orphans"])?;
+        Ok(())
+    })();
+    if let Err(error) = operation {
+        let _ = crate::storage::write_toml(&paths.config_file, &original_config);
+        let _ = crate::storage::atomic_write(&paths.secrets_file, &original_secret_file, true);
+        let _ = crate::storage::atomic_write(&paths.compose_file, &original_compose, false);
+        if let (Some(client), Some(plugin)) = (&client, &original_plugin) {
+            let _ = client.update_plugin_configuration(plugin);
+        }
+        let _ = crate::installer::compose(paths, &["up", "-d", "--remove-orphans"]);
+        return Err(error.context("configuration failed and rollback was attempted"));
     }
     Ok(config)
 }

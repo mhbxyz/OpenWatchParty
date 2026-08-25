@@ -14,6 +14,8 @@ pub struct InstallationState {
     pub jellyfin_server_id: Option<String>,
     pub ownership: Ownership,
     pub secret_fingerprint: String,
+    #[serde(default = "default_phase")]
+    pub phase: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -36,6 +38,11 @@ impl InstallationState {
             jellyfin_server_id: None,
             ownership: Ownership::default(),
             secret_fingerprint: String::new(),
+            phase: "installing".to_string(),
         }
     }
+}
+
+fn default_phase() -> String {
+    "ready".to_string()
 }

@@ -129,12 +129,7 @@ async fn setup(
                 .as_deref()
                 .ok_or_else(|| anyhow::anyhow!("admin token is required"))?;
             crate::storage::write_toml(&state.paths.config_file, &config)?;
-            let token_file = state.paths.state_dir.join(".setup-token");
-            crate::storage::atomic_write(&token_file, token.as_bytes(), true)?;
-            let installed =
-                crate::installer::install(&state.paths, &config, crate::VERSION, &token_file);
-            let _ = std::fs::remove_file(&token_file);
-            installed?;
+            crate::installer::install(&state.paths, &config, crate::VERSION, token)?;
             if let Some(sender) = state.shutdown.lock().unwrap().take() {
                 let _ = sender.send(());
             }
@@ -219,5 +214,6 @@ mod tests {
         assert!(authorized(&state, &headers));
         headers.remove("x-owp-csrf");
         assert!(!authorized(&state, &headers));
+        assert!(!include_str!("web.rs").contains(".setup-token"));
     }
 }
