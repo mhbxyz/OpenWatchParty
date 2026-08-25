@@ -20,7 +20,7 @@ pub struct InstallationPlan {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
-struct PluginConfiguration {
+pub(crate) struct PluginConfiguration {
     jwt_secret: String,
     allow_insecure_no_auth: bool,
     jwt_audience: String,
@@ -88,16 +88,7 @@ pub fn install(
     )?;
     compose(paths, &["up", "-d", "--remove-orphans"])?;
 
-    let plugin_config = PluginConfiguration {
-        jwt_secret: secret.clone(),
-        allow_insecure_no_auth: false,
-        jwt_audience: config.plugin.jwt_audience.clone(),
-        jwt_issuer: config.plugin.jwt_issuer.clone(),
-        token_ttl_seconds: config.plugin.token_ttl_seconds,
-        invite_ttl_seconds: config.plugin.invite_ttl_seconds,
-        session_server_url: config.session_server.public_websocket_url.to_string(),
-        allow_auto_detected_session_server: false,
-    };
+    let plugin_config = plugin_configuration(config, &secret);
     jellyfin.update_plugin_configuration(&plugin_config)?;
     wait_for_health(config)?;
 
@@ -113,6 +104,19 @@ pub fn install(
     };
     crate::storage::write_json(&paths.state_file, &state)?;
     Ok(state)
+}
+
+pub(crate) fn plugin_configuration(config: &DesiredConfig, secret: &str) -> PluginConfiguration {
+    PluginConfiguration {
+        jwt_secret: secret.to_string(),
+        allow_insecure_no_auth: false,
+        jwt_audience: config.plugin.jwt_audience.clone(),
+        jwt_issuer: config.plugin.jwt_issuer.clone(),
+        token_ttl_seconds: config.plugin.token_ttl_seconds,
+        invite_ttl_seconds: config.plugin.invite_ttl_seconds,
+        session_server_url: config.session_server.public_websocket_url.to_string(),
+        allow_auto_detected_session_server: false,
+    }
 }
 
 pub fn compose(paths: &Paths, arguments: &[&str]) -> anyhow::Result<()> {

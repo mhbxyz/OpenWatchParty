@@ -150,6 +150,25 @@ impl JellyfinClient {
         self.post_empty::<serde_json::Value>(&endpoint, None)
     }
 
+    pub fn uninstall_plugin(&self) -> anyhow::Result<()> {
+        let token = self
+            .token
+            .as_ref()
+            .context("Jellyfin admin token is required")?;
+        let response = self
+            .client
+            .delete(self.url(&format!("Plugins/{PLUGIN_ID}"))?)
+            .header("Authorization", authorization_header(Some(token)))
+            .send()?;
+        if !response.status().is_success() {
+            bail!(
+                "Jellyfin returned HTTP {} while removing plugin",
+                response.status()
+            );
+        }
+        Ok(())
+    }
+
     pub fn plugin_configuration<T: DeserializeOwned>(&self) -> anyhow::Result<T> {
         self.get(&format!("Plugins/{PLUGIN_ID}/Configuration"))
     }

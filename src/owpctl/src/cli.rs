@@ -69,6 +69,8 @@ pub struct ConfigureArgs {
     pub dry_run: bool,
     #[arg(long)]
     pub api_token_file: Option<PathBuf>,
+    #[arg(long)]
+    pub yes: bool,
 }
 
 #[derive(Debug, Args)]
@@ -91,4 +93,6 @@ pub struct UninstallArgs {
     pub keep_config: bool,
     #[arg(long)]
     pub yes: bool,
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
 }

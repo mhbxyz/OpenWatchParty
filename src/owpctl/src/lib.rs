@@ -5,6 +5,7 @@ pub mod config;
 pub mod diagnostics;
 pub mod installer;
 pub mod jellyfin;
+pub mod maintenance;
 pub mod output;
 pub mod paths;
 pub mod secrets;

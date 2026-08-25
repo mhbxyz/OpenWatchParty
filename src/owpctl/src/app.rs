@@ -12,7 +12,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     let paths = Paths::resolve(cli.scope, cli.root.as_deref())?;
     match cli.command {
         Command::Setup(arguments) => setup(&paths, arguments),
-        Command::Install(arguments) => {
+        Command::Install(arguments) | Command::Upgrade(arguments) => {
             let config: DesiredConfig = crate::storage::read_toml(&paths.config_file)
                 .context("run `owpctl setup` first")?;
             let version = arguments.version.as_deref().unwrap_or(crate::VERSION);
@@ -30,6 +30,36 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                 .context("--api-token-file is required")?;
             let state = crate::installer::install(&paths, &config, version, token_file)?;
             crate::output::print(&state, cli.json)
+        }
+        Command::Configure(arguments) => {
+            if arguments.rotate_jwt_secret && !arguments.yes && !arguments.dry_run {
+                bail!("secret rotation requires --yes");
+            }
+            let config = crate::maintenance::configure(
+                &paths,
+                &arguments.values,
+                arguments.rotate_jwt_secret,
+                arguments.api_token_file.as_deref(),
+                arguments.dry_run,
+            )?;
+            crate::output::print(&config, cli.json)
+        }
+        Command::Backup(arguments) => {
+            let output = crate::maintenance::backup(&paths, arguments.output.as_deref())?;
+            crate::output::print(&serde_json::json!({ "backup": output }), cli.json)
+        }
+        Command::Uninstall(arguments) => {
+            if !arguments.yes {
+                bail!("uninstall requires --yes");
+            }
+            let config: DesiredConfig = crate::storage::read_toml(&paths.config_file)?;
+            crate::maintenance::uninstall(
+                &paths,
+                &config,
+                arguments.api_token_file.as_deref(),
+                arguments.keep_config,
+            )?;
+            crate::output::print(&serde_json::json!({ "uninstalled": true }), cli.json)
         }
         Command::Status(arguments) | Command::Doctor(arguments) => {
             let config: Option<DesiredConfig> = paths
@@ -52,7 +82,6 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             }
             Ok(())
         }
-        command => bail!("{} is not implemented yet", command_name(&command)),
     }
 }
 
@@ -95,17 +124,4 @@ fn setup(paths: &Paths, arguments: crate::cli::SetupArgs) -> anyhow::Result<()> 
     crate::storage::write_toml(&paths.config_file, &config)?;
     println!("Configuration written to {}", paths.config_file.display());
     Ok(())
-}
-
-fn command_name(command: &Command) -> &'static str {
-    match command {
-        Command::Setup(_) => "setup",
-        Command::Install(_) => "install",
-        Command::Configure(_) => "configure",
-        Command::Doctor(_) => "doctor",
-        Command::Status(_) => "status",
-        Command::Upgrade(_) => "upgrade",
-        Command::Backup(_) => "backup",
-        Command::Uninstall(_) => "uninstall",
-    }
 }
