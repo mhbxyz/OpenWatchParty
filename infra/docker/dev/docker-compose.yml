@@ -62,7 +62,7 @@ services:
     entrypoint: /jellyfin-entrypoint.sh
 
   plugin-builder:
-    image: mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30
+    image: mcr.microsoft.com/dotnet/sdk:10.0@sha256:e1ffd2a92ae84c1291bc1b6887501f8af98e6331e7af6d4c8d37168c5e87a64c
     working_dir: /workspace/OpenWatchParty
     profiles:
       - tools
