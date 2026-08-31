@@ -9,20 +9,20 @@ license = "GPL-3.0-or-later"
 [dependencies]
 anyhow = "1"
 axum = "0.8"
-base64 = "0.22"
+base64 = "0.23"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 dialoguer = "0.12"
 fs2 = "0.4"
-rand = "0.9"
+rand = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sha2 = "0.10"
-toml = "0.9"
+sha2 = "0.11"
+toml = "1.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "sync", "time"] }
-tungstenite = { version = "0.28", features = ["rustls-tls-webpki-roots"] }
+tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 url = { version = "2", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 webbrowser = "1"
