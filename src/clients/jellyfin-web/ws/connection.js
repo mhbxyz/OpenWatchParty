@@ -4,7 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
-  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER } = OWP.constants;
+  const { DEFAULT_WS_URL, RECONNECT_BASE_MS, RECONNECT_MAX_MS, ROOM_REJOIN_TIMEOUT_MS, PING_INIT_MS, PING_STABLE_MS, PING_STABLE_AFTER, AUTH_TOAST_SUPPRESS_MS } = OWP.constants;
 
   const clearRoomRejoinTimer = () => {
     if (state.roomRejoinTimer) {
@@ -82,6 +82,9 @@
     state.isConnecting = false;
     state.connectionPhase = token ? 'authenticating' : 'authenticated';
     state.reconnectAttempts = 0;
+    state.authRetryAttempts = 0;
+    state.authRetryAt = 0;
+    state.authFailedToken = '';
     if (utils.flushLogBuffer) utils.flushLogBuffer();
     const authPayload = {};
     if (token) authPayload.token = token;
@@ -198,7 +201,17 @@
       const message = authResult?.message || 'OpenWatchParty authentication returned an invalid result';
       state.authBlocked = true;
       state.authError = message;
-      if (ui.showToast) ui.showToast(message);
+      state.authFailedToken = OWP.actions.getJellyfinAccessToken
+        ? OWP.actions.getJellyfinAccessToken()
+        : '';
+      const now = Date.now();
+      if (ui.showToast
+          && (message !== state.lastAuthToastMessage
+            || (now - state.lastAuthToastAt) > AUTH_TOAST_SUPPRESS_MS)) {
+        state.lastAuthToastMessage = message;
+        state.lastAuthToastAt = now;
+        ui.showToast(message);
+      }
       ui.render();
       return;
     }
