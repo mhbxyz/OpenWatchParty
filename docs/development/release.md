@@ -94,7 +94,7 @@ dotnet build -c Release
 | Component | Output Location |
 |-----------|-----------------|
 | Session Server | `src/server/target/release/session-server` |
-| Plugin DLL | `src/plugins/jellyfin/OpenWatchParty/bin/Release/net9.0/OpenWatchParty.dll` |
+| Plugin DLL | `src/plugins/jellyfin/OpenWatchParty/bin/Release/net10.0/OpenWatchParty.dll` |
 
 ## Release Steps
 

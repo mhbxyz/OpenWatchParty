@@ -1,0 +1,82 @@
+name: Bug report
+description: Report a reproducible problem with OpenWatchParty
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem with OpenWatchParty.
+
+        Before you continue, open **Dashboard** > **Plugins** > **OpenWatchParty**, press **Run diagnostics**, then use **Download JSON** to get the support report. Attach that report below.
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: OpenWatchParty plugin version
+      description: Shown in Dashboard > Plugins > OpenWatchParty.
+      placeholder: "0.4.0"
+    validations:
+      required: true
+
+  - type: input
+    id: jellyfin-version
+    attributes:
+      label: Jellyfin server version
+      description: Shown in Dashboard > Server > General.
+      placeholder: "12.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How was OpenWatchParty installed?
+      options:
+        - owpctl
+        - Manual install
+        - Docker
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem and the steps that reproduce it.
+      placeholder: |
+        1. Open ...
+        2. Start a watch party ...
+        3. The panel ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: console-errors
+    attributes:
+      label: Browser console errors
+      description: Open the browser developer tools (F12), reproduce the problem, and paste the Console output.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: support-report
+    attributes:
+      label: Support report JSON
+      description: |
+        In Dashboard > Plugins > OpenWatchParty, press Run diagnostics, then use Download JSON.
+        Drag the downloaded file into this field, or paste its contents.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I pressed "Run diagnostics" before downloading the support report.
+          required: true
+        - label: I removed secrets such as the JWT secret and API tokens from everything I pasted.
+          required: true
