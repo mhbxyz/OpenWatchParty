@@ -74,9 +74,13 @@ pub async fn send_room_list(client_id: &str, state: &SharedState) {
 
 pub async fn broadcast_room_list(state: &SharedState) {
     let state = state.read().await;
+    // Only authenticated clients may learn about rooms, matching the gate on
+    // `list_rooms` and on the initial room list. In insecure mode every client
+    // is marked authenticated, so that deployment keeps its behaviour.
     let senders = state
         .clients
         .values()
+        .filter(|client| client.authenticated)
         .map(|c| c.sender.clone())
         .collect::<Vec<_>>();
     let msg = build_room_list_msg(&state.rooms);
@@ -302,6 +306,32 @@ mod tests {
         send_to_senders(&senders, &msg, "event");
         assert!(test_helpers::recv_msg(&mut rx_a).is_some());
         assert!(test_helpers::recv_msg(&mut rx_b).is_some());
+    }
+
+    #[tokio::test]
+    async fn room_list_broadcast_skips_unauthenticated_clients() {
+        let (mut authenticated, mut auth_rx) = test_helpers::create_client_with_rx("ua", "A", true);
+        let (unauthenticated, mut anon_rx) = test_helpers::create_client_with_rx("ub", "B", false);
+        authenticated.room_id = Some("room-1".to_string());
+
+        let mut state = crate::types::ServerState::default();
+        state.rooms.insert(
+            "room-1".to_string(),
+            test_helpers::create_room("room-1", "ua"),
+        );
+        state.clients.insert("a".to_string(), authenticated);
+        state.clients.insert("b".to_string(), unauthenticated);
+        let state: SharedState = std::sync::Arc::new(tokio::sync::RwLock::new(state));
+
+        broadcast_room_list(&state).await;
+
+        let received =
+            test_helpers::recv_msg(&mut auth_rx).expect("authenticated client gets rooms");
+        assert_eq!(received.msg_type, "room_list");
+        assert!(
+            anon_rx.try_recv().is_err(),
+            "unauthenticated clients must not receive the room list"
+        );
     }
 
     #[tokio::test]
