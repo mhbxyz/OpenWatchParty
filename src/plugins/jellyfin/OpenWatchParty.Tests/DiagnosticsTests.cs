@@ -35,14 +35,14 @@ public sealed class DiagnosticsTests
 
         var result = new OpenWatchPartyDiagnosticsService().CreateStatus(
             configuration,
-            "10.11.3",
+            "12.0.0",
             injection.Snapshot());
         var json = JsonSerializer.Serialize(result);
 
         Assert.Equal("ready", result.OverallStatus);
         Assert.DoesNotContain(secret, json, StringComparison.Ordinal);
         Assert.DoesNotContain("private.example", json, StringComparison.Ordinal);
-        Assert.Equal("10.11.0.0", result.JellyfinTargetAbi);
+        Assert.Equal("12.0.0.0", result.JellyfinTargetAbi);
         Assert.Equal(1, result.ProtocolVersion);
     }
 
@@ -51,7 +51,7 @@ public sealed class DiagnosticsTests
     {
         var result = new OpenWatchPartyDiagnosticsService().CreateStatus(
             new PluginConfiguration(),
-            "10.11.3",
+            "12.0.0",
             new InjectionDiagnostics().Snapshot());
 
         Assert.Equal("blocked", result.OverallStatus);

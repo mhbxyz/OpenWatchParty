@@ -1,9 +1,9 @@
 {
-  "version": "0.3.3",
-  "jellyfinPackageVersion": "10.11.3",
-  "jellyfinTargetAbi": "10.11.0.0",
-  "jellyfinImageVersion": "10.11.3",
-  "fileTransformationVersion": "2.5.3.0",
-  "fileTransformationAbi": "10.11.3",
-  "fileTransformationSha256": "bbab2ef0528bb9a4baa80ce0ee5f3a0cfb7ce025be26a44833051aeee04003fe"
+  "version": "0.4.0",
+  "jellyfinPackageVersion": "12.0.0",
+  "jellyfinTargetAbi": "12.0.0.0",
+  "jellyfinImageVersion": "12.0",
+  "fileTransformationVersion": "3.0.1.0",
+  "fileTransformationAbi": "12.0.0",
+  "fileTransformationSha256": "78defd17c35c07974ba77412201a1294a0137535b4802e08d778bd622dd4d692"
 }

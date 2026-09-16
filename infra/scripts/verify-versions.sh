@@ -67,7 +67,7 @@ if [[ $(dotnet --version 2>/dev/null || true) == "$dotnet_sdk" ]]; then
 else
     msbuild_properties=$(docker run --rm \
         -v "$repository_root:/workspace" -w /workspace \
-        mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30 \
+        mcr.microsoft.com/dotnet/sdk:10.0@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d \
         dotnet msbuild "${msbuild_args[@]}")
 fi
 assert_equal 'MSBuild product version' "$version" "$(jq -er '.Properties.OpenWatchPartyVersion' <<< "$msbuild_properties")"
