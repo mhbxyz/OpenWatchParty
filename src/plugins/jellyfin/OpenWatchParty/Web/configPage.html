@@ -225,7 +225,17 @@
                     };
                 },
 
+                // Jellyfin 12 disables legacy authorization, so `X-Emby-Token`
+                // is rejected with 401. The modern header below is accepted by
+                // both 10.11 and 12.
+                authHeaders: function() {
+                    var token = (typeof ApiClient !== 'undefined' && ApiClient && typeof ApiClient.accessToken === 'function')
+                        ? ApiClient.accessToken() : '';
+                    return { Authorization: 'MediaBrowser Token="' + (token || '') + '"' };
+                },
+
                 lastDiagnostics: null,
+                lastDiagnosticsError: null,
 
                 runDiagnostics: function(active) {
                     var self = this;
@@ -234,17 +244,26 @@
                     button.textContent = 'Checking…';
                     return fetch(ApiClient.getUrl('OpenWatchParty/Diagnostics/' + (active ? 'Run' : 'Status')), {
                         method: active ? 'POST' : 'GET',
-                        headers: { 'X-Emby-Token': ApiClient.accessToken() },
+                        headers: self.authHeaders(),
                         credentials: 'same-origin'
                     }).then(function(response) {
                         if (!response.ok) throw new Error('Diagnostics returned HTTP ' + response.status);
                         return response.json();
                     }).then(function(result) {
                         self.lastDiagnostics = result;
+                        self.lastDiagnosticsError = null;
                         self.renderDiagnostics(result);
                         return result;
                     }).catch(function(error) {
-                        self.renderDiagnostics({ OverallStatus: 'blocked', Checks: [{ Id: 'diagnostics', Status: 'fail', Summary: error.message }] });
+                        var failure = {
+                            OverallStatus: 'blocked',
+                            Checks: [{ Id: 'diagnostics', Status: 'fail', Code: 'DIAGNOSTICS_UNREACHABLE', Summary: error.message }]
+                        };
+                        // Keep the failure so the support report is never
+                        // silently empty when diagnostics cannot run.
+                        self.lastDiagnostics = failure;
+                        self.lastDiagnosticsError = error.message;
+                        self.renderDiagnostics(failure);
                     }).finally(function() {
                         button.disabled = false;
                         button.textContent = 'Run diagnostics';
@@ -281,6 +300,7 @@
 
                 supportReport: function() {
                     var result = this.lastDiagnostics || {};
+                    var loader = window.OpenWatchParty && window.OpenWatchParty.loader;
                     return {
                         schema_version: 1,
                         generated_utc: new Date().toISOString(),
@@ -290,8 +310,13 @@
                         protocol_version: result.ProtocolVersion || null,
                         authentication_mode: result.AuthenticationMode || null,
                         destination_mode: result.SessionDestinationMode || null,
-                        browser_loader: window.OpenWatchParty && window.OpenWatchParty.loader
-                            ? window.OpenWatchParty.loader.state : 'not_loaded',
+                        browser_loader: loader ? loader.state : 'not_loaded',
+                        browser_loader_error: loader && loader.initializationError
+                            ? String(loader.initializationError) : null,
+                        diagnostics_ran: Boolean(this.lastDiagnostics),
+                        diagnostics_error: this.lastDiagnosticsError || null,
+                        page_origin: window.location.origin,
+                        user_agent: navigator.userAgent,
                         checks: (result.Checks || []).map(function(check) {
                             return { id: check.Id, status: check.Status, code: check.Code || null, summary: check.Summary };
                         })
@@ -326,7 +351,7 @@
                 var status = document.getElementById('PairingKeyStatus');
                 status.textContent = 'Generating or loading RSA-3072 key…';
                 fetch(ApiClient.getUrl('OpenWatchParty/SigningKey'), {
-                    headers: { 'X-Emby-Token': ApiClient.accessToken() },
+                    headers: OpenWatchPartyConfigurationPage.authHeaders(),
                     credentials: 'same-origin'
                 }).then(function(response) {
                     if (!response.ok) throw new Error('HTTP ' + response.status);
