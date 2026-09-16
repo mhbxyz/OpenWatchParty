@@ -19,6 +19,27 @@ fn is_zombie(client: &crate::types::Client, now: Instant) -> bool {
     crate::utils::elapsed_saturating(now, client.last_seen) > ZOMBIE_TIMEOUT
 }
 
+/// Sends a protocol-level ping to every connected client.
+///
+/// This keeps liveness fresh for clients whose timers are throttled in a
+/// background tab and for receive-only clients that never send an application
+/// ping. Browsers answer a ping with a pong without any application logic.
+pub async fn send_heartbeats(state: &SharedState) {
+    let senders: Vec<crate::messaging::ClientSender> = {
+        let locked_state = state.read().await;
+        locked_state
+            .clients
+            .values()
+            .map(|client| client.sender.clone())
+            .collect()
+    };
+    for sender in senders {
+        if let Err(error) = sender.try_send(Ok(warp::ws::Message::ping(Vec::new()))) {
+            warn!("Failed to send heartbeat: {error}");
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct AppTasks {
     cancellation: CancellationToken,
@@ -103,6 +124,27 @@ impl AppTasks {
         }
         count
     }
+}
+
+/// Periodically pings every connected client so that a client which only
+/// receives data (or whose timers are throttled) is not reaped as a zombie.
+pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
+    let cancellation = tasks.cancellation_token();
+    tasks.spawn(async move {
+        loop {
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => break,
+                _ = tokio::time::sleep(Duration::from_millis(
+                    crate::ws::constants::HEARTBEAT_INTERVAL_MS,
+                )) => {}
+            }
+            if cancellation.is_cancelled() {
+                break;
+            }
+            send_heartbeats(&state).await;
+        }
+    })
 }
 
 pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
@@ -193,6 +235,39 @@ mod tests {
 
         assert_eq!(shutdown_app_tasks(&tasks, Duration::from_secs(1)).await, 0);
         cleanup.await.unwrap();
+        assert_eq!(tasks.active_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn heartbeats_reach_every_client() {
+        use crate::test_helpers;
+
+        let state = test_helpers::create_state();
+        let (first, mut first_rx) = test_helpers::create_client_with_rx("u1", "A", true);
+        let (second, mut second_rx) = test_helpers::create_client_with_rx("u2", "B", false);
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("c1".to_string(), first);
+            locked.clients.insert("c2".to_string(), second);
+        }
+
+        send_heartbeats(&state).await;
+
+        for receiver in [&mut first_rx, &mut second_rx] {
+            let frame = receiver.try_recv().expect("every client gets a heartbeat");
+            let frame = frame.expect("heartbeat frame is valid");
+            assert!(frame.is_ping(), "heartbeats must be protocol pings");
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn heartbeat_stops_on_cancellation() {
+        let tasks = AppTasks::new();
+        let heartbeat = spawn_heartbeat(crate::test_helpers::create_state(), &tasks);
+        tokio::task::yield_now().await;
+
+        assert_eq!(shutdown_app_tasks(&tasks, Duration::from_secs(1)).await, 0);
+        heartbeat.await.unwrap();
         assert_eq!(tasks.active_count(), 0);
     }
 

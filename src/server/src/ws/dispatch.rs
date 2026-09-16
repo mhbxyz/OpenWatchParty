@@ -176,6 +176,14 @@ pub(super) async fn client_msg(
         return true;
     }
 
+    if msg.is_ping() || msg.is_pong() {
+        // Protocol-level control frames are not application messages. Browsers
+        // answer the server heartbeat with a pong, which must refresh liveness
+        // (already done by the rate limit bookkeeping above) instead of being
+        // reported as an unsupported format.
+        return false;
+    }
+
     if msg.as_bytes().len() > MAX_MESSAGE_SIZE {
         warn!(
             "Message too large from client {}: {} bytes",
@@ -495,6 +503,54 @@ mod tests {
                 super::super::constants::POLICY_VIOLATION_CLOSE_CODE,
                 "Rate limit exceeded"
             ))
+        );
+    }
+
+    #[tokio::test]
+    async fn heartbeat_control_frames_are_not_application_errors() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
+        state.write().await.clients.insert("c1".to_string(), client);
+        let jwt_config = insecure_jwt_config();
+        let tasks = crate::tasks::AppTasks::new();
+
+        let before = {
+            let state = state.read().await;
+            state.clients.get("c1").unwrap().last_seen
+        };
+
+        assert!(
+            !client_msg(
+                "c1",
+                warp::ws::Message::pong(Vec::new()),
+                &state,
+                &jwt_config,
+                &tasks,
+            )
+            .await
+        );
+        assert!(
+            !client_msg(
+                "c1",
+                warp::ws::Message::ping(Vec::new()),
+                &state,
+                &jwt_config,
+                &tasks,
+            )
+            .await
+        );
+
+        assert!(
+            rx.try_recv().is_err(),
+            "control frames must not produce an application error"
+        );
+        let after = {
+            let state = state.read().await;
+            state.clients.get("c1").unwrap().last_seen
+        };
+        assert!(
+            after >= before,
+            "a pong must keep the connection considered alive"
         );
     }
 

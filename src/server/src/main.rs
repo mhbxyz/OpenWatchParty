@@ -48,6 +48,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_tasks = tasks::AppTasks::new();
 
     tasks::spawn_zombie_cleanup(state.clone(), &app_tasks);
+    tasks::spawn_heartbeat(state.clone(), &app_tasks);
 
     let routes = routes::build_ws_route_with_tasks(
         state,
