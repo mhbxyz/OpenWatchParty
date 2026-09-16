@@ -8,7 +8,9 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
     if text.is_empty() {
         return Err("Chat message cannot be empty");
     }
-    if text.len() > MAX_CHAT_MESSAGE_LENGTH {
+    // Counted in characters, matching the client-side validator and the error
+    // message. Counting UTF-8 bytes rejected ordinary CJK or emoji messages.
+    if text.chars().count() > MAX_CHAT_MESSAGE_LENGTH {
         return Err("Chat message too long");
     }
     Ok(())
@@ -80,7 +82,7 @@ pub(in crate::ws) async fn handle_chat_message(
     };
 
     if let Err(msg) = validate_chat(chat_text) {
-        let (code, detail) = if chat_text.len() > MAX_CHAT_MESSAGE_LENGTH {
+        let (code, detail) = if chat_text.chars().count() > MAX_CHAT_MESSAGE_LENGTH {
             (
                 ErrorCode::ChatMessageTooLong,
                 format!("{msg} (max {MAX_CHAT_MESSAGE_LENGTH} characters)"),
@@ -169,6 +171,22 @@ mod tests {
     fn validate_chat_at_limit() {
         let exact = "a".repeat(MAX_CHAT_MESSAGE_LENGTH);
         assert!(validate_chat(&exact).is_ok());
+    }
+
+    #[test]
+    fn validate_chat_counts_characters_not_bytes() {
+        let multibyte = "é".repeat(MAX_CHAT_MESSAGE_LENGTH);
+        assert!(
+            multibyte.len() > MAX_CHAT_MESSAGE_LENGTH,
+            "the test must exercise a multi-byte payload"
+        );
+        assert!(validate_chat(&multibyte).is_ok());
+
+        let multibyte_too_long = "é".repeat(MAX_CHAT_MESSAGE_LENGTH + 1);
+        assert!(validate_chat(&multibyte_too_long).is_err());
+
+        let emoji = "🎉".repeat(MAX_CHAT_MESSAGE_LENGTH);
+        assert!(validate_chat(&emoji).is_ok());
     }
 
     #[tokio::test]
