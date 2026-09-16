@@ -14,7 +14,7 @@ set +e
 output=$(docker run --rm \
     -v "$temporary_dir:/work" \
     -w /work \
-    mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30 \
+    mcr.microsoft.com/dotnet/sdk:10.0@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d \
     dotnet restore jellyfin/OpenWatchParty/OpenWatchPartyPlugin.csproj --locked-mode 2>&1)
 status=$?
 set -e

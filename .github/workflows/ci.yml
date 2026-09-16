@@ -80,7 +80,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: '9.0.317'
+          dotnet-version: '10.0.401'
 
       - name: Restore dependencies
         run: dotnet restore OpenWatchParty.Tests/OpenWatchParty.Tests.csproj --locked-mode
@@ -136,7 +136,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
-          dotnet-version: '9.0.317'
+          dotnet-version: '10.0.401'
 
       - name: Check release scripts
         run: shellcheck .githooks/pre-commit infra/scripts/*.sh infra/scripts/tests/*.sh
