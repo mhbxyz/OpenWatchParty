@@ -58,6 +58,34 @@ describe('authentication configuration', () => {
     assert.match(OWP.state.authError, /not configured/);
   });
 
+  it('authenticates the token request with the modern Jellyfin header', async () => {
+    let captured = null;
+    globalThis.fetch = async (url, options) => {
+      captured = { url, options };
+      return {
+        ok: true,
+        json: async () => ({ auth_enabled: false, insecure_mode: true, session_server_url: '' })
+      };
+    };
+
+    const result = await OWP.actions.fetchAuthToken();
+
+    assert.equal(result.mode, 'insecure');
+    assert.equal(captured.url, 'https://media.example/OpenWatchParty/Token');
+    assert.equal(captured.options.headers.Authorization, 'MediaBrowser Token="jellyfin-token"');
+    assert.equal(captured.options.headers['X-Emby-Token'], undefined);
+  });
+
+  it('refuses an access token that cannot be sent as a header value', async () => {
+    assert.equal(OWP.actions.buildAuthHeaders(''), null);
+    assert.equal(OWP.actions.buildAuthHeaders('bad"token'), null);
+    assert.equal(OWP.actions.buildAuthHeaders('bad\ntoken'), null);
+    assert.equal(OWP.actions.buildAuthHeaders(undefined), null);
+    assert.deepEqual(OWP.actions.buildAuthHeaders('abc123'), {
+      Authorization: 'MediaBrowser Token="abc123"'
+    });
+  });
+
   it('returns an error when Jellyfin ApiClient is unavailable', async () => {
     const apiClient = globalThis.ApiClient;
     const originalSetTimeout = OWP.timers.setTimeout;
