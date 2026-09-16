@@ -118,6 +118,9 @@
     SYNC_LOOP_MS: 500,            // Sync loop for playback rate correction
     RECONNECT_BASE_MS: 1000,      // Base reconnect delay (1s)
     RECONNECT_MAX_MS: 30000,      // Max reconnect delay (30s)
+    AUTH_RETRY_BASE_MS: 5000,     // First retry delay after a blocked authentication (5s)
+    AUTH_RETRY_MAX_MS: 300000,    // Max retry delay after a blocked authentication (5min)
+    AUTH_TOAST_SUPPRESS_MS: 30000, // Do not repeat the same auth error toast (30s)
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
@@ -201,6 +204,11 @@
     authBlocked: false,
     authError: '',
     authRequestAttempt: 0,
+    authFailedToken: '',         // Jellyfin token that was rejected when auth got blocked
+    authRetryAttempts: 0,        // Consecutive retries of the same blocked token
+    authRetryAt: 0,              // Timestamp before which no retry may happen
+    lastAuthToastMessage: '',    // Last auth error shown, for toast de-duplication
+    lastAuthToastAt: 0,
     userId: '',
     userName: '',
     tokenExpiresAt: 0,           // Timestamp when token expires

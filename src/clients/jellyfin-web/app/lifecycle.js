@@ -4,7 +4,7 @@
   const ui = OWP.ui;
   const utils = OWP.utils;
   const playback = OWP.playback;
-  const { UI_CHECK_MS, HOME_REFRESH_MS, SYNC_LOOP_MS } = OWP.constants;
+  const { UI_CHECK_MS, HOME_REFRESH_MS, SYNC_LOOP_MS, AUTH_RETRY_BASE_MS, AUTH_RETRY_MAX_MS } = OWP.constants;
 
   let panelStopPropagation = null;
   let hadVideoElement = false;
@@ -46,13 +46,26 @@
     panel.addEventListener('keypress', panelStopPropagation);
   };
 
+  const authRetryDelayMs = (attempts) =>
+    Math.min(AUTH_RETRY_BASE_MS * Math.pow(2, Math.max(0, attempts - 1)), AUTH_RETRY_MAX_MS);
+
   const retryConnectionAfterLogin = () => {
     const socketOpen = typeof WebSocket !== 'undefined' && state.ws?.readyState === WebSocket.OPEN;
     if (!state.authBlocked || state.isConnecting || socketOpen) return false;
-    const accessToken = window.ApiClient?.accessToken?.()
-      || window.ApiClient?._accessToken
-      || window.ApiClient?._serverInfo?.AccessToken;
+    const accessToken = OWP.actions?.getJellyfinAccessToken
+      ? OWP.actions.getJellyfinAccessToken()
+      : (window.ApiClient?.accessToken?.()
+        || window.ApiClient?._accessToken
+        || window.ApiClient?._serverInfo?.AccessToken);
     if (!accessToken || !OWP.actions?.connect) return false;
+    // A new Jellyfin token means the user just logged in: retry immediately.
+    // The same token that was already rejected is retried with exponential
+    // backoff so a configuration error cannot produce a toast every 2 seconds.
+    const now = Date.now();
+    const tokenChanged = accessToken !== state.authFailedToken;
+    if (!tokenChanged && now < state.authRetryAt) return false;
+    state.authRetryAttempts = tokenChanged ? 1 : state.authRetryAttempts + 1;
+    state.authRetryAt = now + authRetryDelayMs(state.authRetryAttempts);
     state.authBlocked = false;
     state.authError = '';
     OWP.actions.connect();
