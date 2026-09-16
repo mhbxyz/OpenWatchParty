@@ -88,7 +88,7 @@ Users can then install/update the plugin directly from Jellyfin's plugin interfa
 docker pull ghcr.io/mhbxyz/owp-session-server:latest
 
 # Specific version
-docker pull ghcr.io/mhbxyz/owp-session-server:v0.3.3
+docker pull ghcr.io/mhbxyz/owp-session-server:v0.4.0
 
 # Development (latest from main)
 docker pull ghcr.io/mhbxyz/owp-session-server:beta
@@ -116,8 +116,8 @@ FROM alpine:3.21
 The plugin uses NuGet packages from nuget.org:
 
 ```xml
-<PackageReference Include="Jellyfin.Controller" Version="10.11.3" />
-<PackageReference Include="Jellyfin.Model" Version="10.11.3" />
+<PackageReference Include="Jellyfin.Controller" Version="12.0.0" />
+<PackageReference Include="Jellyfin.Model" Version="12.0.0" />
 ```
 
 CI copies JavaScript files (including subdirectories) to the `Web/` directory before building:

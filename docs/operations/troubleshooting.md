@@ -175,6 +175,36 @@ nav_order: 5
    - Max 30 token requests per fixed one-minute window
    - Wait and try again
 
+### Jellyfin 12: every OpenWatchParty request returns 401
+
+**Symptoms:**
+- The Watch Party panel loads but no request succeeds
+- `401 Unauthorized` responses in the browser console or Jellyfin logs
+
+**Cause:**
+
+Jellyfin 12 disables legacy authorization. The `DisableLegacyAuthorization` migration turns off `EnableLegacyAuthorization`, so the legacy `X-Emby-Token` header no longer resolves and only `Authorization: MediaBrowser Token="..."` is accepted.
+
+OpenWatchParty `0.4.0` sends the modern `Authorization` header. OpenWatchParty `0.3.3` and earlier do not, so they cannot authenticate against Jellyfin 12.
+
+**Solutions:**
+
+1. **Upgrade OpenWatchParty to `0.4.0`**
+   - This is the supported fix. Install `0.4.0` from the plugin repository or manually.
+   - Verify the installed version in **Dashboard** > **Plugins** > **OpenWatchParty**.
+
+2. **Temporary stopgap only**
+
+   As a short-lived workaround, set the following in Jellyfin's `system.xml`:
+
+   ```xml
+   <EnableLegacyAuthorization>true</EnableLegacyAuthorization>
+   ```
+
+   Then restart Jellyfin.
+
+   This is deprecated and unsupported long term. It re-enables a legacy authentication path that Jellyfin 12 is removing and only restores access until you can upgrade. Do not rely on it.
+
 ### HLS Streaming Issues
 
 **Symptoms:**

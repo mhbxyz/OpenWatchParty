@@ -59,6 +59,8 @@ sudo rm -f /run/owp-jellyfin-token
 
 ## Diagnostics
 
+Every `owpctl` command prints a human-readable summary by default. Passing `--json` switches the output to machine-readable JSON for scripting and automation.
+
 ```bash
 owpctl status
 owpctl doctor --api-token-file /run/owp-jellyfin-token
