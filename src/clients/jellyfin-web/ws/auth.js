@@ -35,6 +35,28 @@
     return { apiClient, accessToken, serverAddress };
   };
 
+  // The raw access token, without the ApiClient/address wrapper. Used by the
+  // connection retry watchdog to detect a Jellyfin login that happened after a
+  // blocked authentication attempt.
+  const getJellyfinAccessToken = () => {
+    const apiClient = window.ApiClient;
+    if (!apiClient) return '';
+    if (typeof apiClient.accessToken === 'function') return apiClient.accessToken() || '';
+    return apiClient._accessToken || apiClient._serverInfo?.AccessToken || '';
+  };
+
+  // Jellyfin 12 rejects the legacy `X-Emby-Token` header (legacy authorization
+  // is disabled by the `DisableLegacyAuthorization` migration), so every plugin
+  // request must carry the modern `Authorization: MediaBrowser Token="..."`.
+  // Jellyfin 10.11 accepts the same header, so there is no compatibility split.
+  // The token-only form is deliberate: the server backfills Client/Device from
+  // the stored session, so it cannot overwrite the user's real client info.
+  const buildAuthHeaders = (accessToken) => {
+    if (typeof accessToken !== 'string' || accessToken.length === 0) return null;
+    if (/["\\\u0000-\u001f]/.test(accessToken)) return null;
+    return { Authorization: `MediaBrowser Token="${accessToken}"` };
+  };
+
   const waitForApiClient = (isCurrent = () => true, maxWaitMs = 10000, intervalMs = 250) => {
     return new Promise((resolve) => {
       let elapsed = 0;
@@ -133,6 +155,11 @@
         return authError('api_client_unavailable', 'Jellyfin authentication is not available', isCurrentRequest);
       }
       const { accessToken, serverAddress } = apiAccess;
+      const authHeaders = buildAuthHeaders(accessToken);
+      if (!authHeaders) {
+        console.warn('[OpenWatchParty] Jellyfin returned an unusable access token');
+        return authError('invalid_token', 'Jellyfin returned an unusable access token', isCurrentRequest);
+      }
       const tokenUrl = `${serverAddress}/OpenWatchParty/Token`;
       const controller = new AbortController();
       requestTimeout = OWP.timers.setTimeout(() => {
@@ -140,7 +167,7 @@
         controller.abort();
       }, TOKEN_REQUEST_TIMEOUT_MS, 'auth');
       const response = await fetch(tokenUrl, {
-        headers: { 'X-Emby-Token': accessToken },
+        headers: authHeaders,
         signal: controller.signal
       });
       if (!isCurrentRequest()) {
@@ -237,5 +264,5 @@
     }
   };
 
-  Object.assign(actions, { fetchAuthToken, ensureTokenRefresh });
+  Object.assign(actions, { fetchAuthToken, ensureTokenRefresh, getJellyfinAccessToken, buildAuthHeaders });
 })();
