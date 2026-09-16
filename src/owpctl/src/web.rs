@@ -122,7 +122,7 @@ async fn setup(
         let mut config = DesiredConfig::local(url::Url::parse(&request.jellyfin_url)?)?;
         config.session_server.allowed_origins =
             vec![config.jellyfin.public_origin.origin().ascii_serialization()];
-        let plan = crate::installer::plan(crate::VERSION);
+        let plan = crate::installer::plan(crate::VERSION)?;
         if request.apply && !state.dry_run {
             let token = request
                 .admin_token

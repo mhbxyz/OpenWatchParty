@@ -20,7 +20,10 @@ pub fn apply_values(config: &mut DesiredConfig, values: &[String]) -> anyhow::Re
             "session.public-url" => {
                 config.session_server.public_websocket_url = url::Url::parse(value)?
             }
-            "session.log-level" => config.session_server.log_level = value.to_string(),
+            "session.log-level" => {
+                crate::compose::validate_log_level(value)?;
+                config.session_server.log_level = value.to_string()
+            }
             "session.published-port" => {
                 let previous = config.session_server.published_port;
                 let next = value.parse()?;
@@ -114,7 +117,7 @@ pub fn configure(
                 &state.image_reference,
                 &paths.secrets_file,
                 &paths.trust_store,
-            )
+            )?
             .as_bytes(),
             false,
         )?;

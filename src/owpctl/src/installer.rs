@@ -18,7 +18,7 @@ pub struct InstallationPlan {
     pub operations: Vec<&'static str>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub(crate) struct PluginConfiguration {
     jwt_secret: String,
@@ -31,8 +31,42 @@ pub(crate) struct PluginConfiguration {
     allow_auto_detected_session_server: bool,
 }
 
-pub fn plan(version: &str) -> InstallationPlan {
-    InstallationPlan {
+impl std::fmt::Debug for PluginConfiguration {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("PluginConfiguration")
+            .field("jwt_secret", &"<redacted>")
+            .field("allow_insecure_no_auth", &self.allow_insecure_no_auth)
+            .field("jwt_audience", &self.jwt_audience)
+            .field("jwt_issuer", &self.jwt_issuer)
+            .field("token_ttl_seconds", &self.token_ttl_seconds)
+            .field("invite_ttl_seconds", &self.invite_ttl_seconds)
+            .field("session_server_url", &self.session_server_url)
+            .field(
+                "allow_auto_detected_session_server",
+                &self.allow_auto_detected_session_server,
+            )
+            .finish()
+    }
+}
+
+pub fn validate_version(version: &str) -> anyhow::Result<()> {
+    const MAX_LENGTH: usize = 64;
+    if version.is_empty() || version.len() > MAX_LENGTH {
+        bail!("--version must be between 1 and {MAX_LENGTH} characters");
+    }
+    if !version
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-'))
+    {
+        bail!("--version may only contain ASCII letters, digits, '.', '_' and '-'");
+    }
+    Ok(())
+}
+
+pub fn plan(version: &str) -> anyhow::Result<InstallationPlan> {
+    validate_version(version)?;
+    Ok(InstallationPlan {
         version: version.to_string(),
         image: format!("ghcr.io/mhbxyz/owp-session-server:{version}"),
         operations: vec![
@@ -42,7 +76,7 @@ pub fn plan(version: &str) -> InstallationPlan {
             "deploy the signed session server image",
             "verify plugin, token and session health",
         ],
-    }
+    })
 }
 
 pub fn install(
@@ -51,6 +85,7 @@ pub fn install(
     version: &str,
     token: &str,
 ) -> anyhow::Result<InstallationState> {
+    validate_version(version)?;
     require_command("docker", &["compose", "version"])?;
     let jellyfin = JellyfinClient::new(config.jellyfin.base_url.clone())?.with_token(token);
     let system = jellyfin.public_info()?;
@@ -60,6 +95,9 @@ pub fn install(
         .exists()
         .then(|| crate::storage::read_json(&paths.state_file))
         .transpose()?;
+    if let Some(phase) = interrupted_phase(previous_state.as_ref()) {
+        eprintln!("resuming interrupted installation (previous phase: \"{phase}\")");
+    }
     let installed_plugin = jellyfin.plugin_info().ok();
     let plugin_was_absent = installed_plugin.is_none();
     let plugin_needs_install = installed_plugin
@@ -75,56 +113,65 @@ pub fn install(
     state.ownership.plugin = plugin_is_owned(plugin_was_absent, previous_state.as_ref());
     crate::storage::write_json(&paths.state_file, &state)?;
 
-    let repository_changed = jellyfin.ensure_repository()?;
-    if plugin_needs_install {
-        jellyfin.install_plugin(version)?;
-        restart_jellyfin(&config.jellyfin.runtime, &jellyfin)?;
-        wait_for_jellyfin(&jellyfin)?;
-    } else if repository_changed {
-        // Repository was added for future upgrades; no restart is needed.
-    }
+    let result = (|| -> anyhow::Result<()> {
+        let repository_changed = jellyfin.ensure_repository()?;
+        if plugin_needs_install {
+            jellyfin.install_plugin(version)?;
+            restart_jellyfin(&config.jellyfin.runtime, &jellyfin)?;
+            wait_for_jellyfin(&jellyfin)?;
+        } else if repository_changed {
+            // Repository was added for future upgrades; no restart is needed.
+        }
 
-    let secret = if paths.secrets_file.exists() {
-        secrets::parse_env_secret(&fs::read_to_string(&paths.secrets_file)?)?
-    } else {
-        secrets::generate_jwt_secret()
-    };
-    crate::storage::atomic_write(
-        &paths.secrets_file,
-        secrets::env_file(&secret).as_bytes(),
-        true,
-    )?;
-    state.ownership.configuration = true;
-    state.secret_fingerprint = secrets::fingerprint(&secret);
-    crate::storage::write_json(&paths.state_file, &state)?;
-    if !paths.trust_store.exists() {
-        crate::storage::write_json(&paths.trust_store, &crate::trust::TrustStore::empty())?;
-    }
-
-    let image = format!("ghcr.io/mhbxyz/owp-session-server:{version}");
-    require_command("docker", &["pull", &image])?;
-    let digest = image_digest(&image)?;
-    let pinned_image = digest.clone().unwrap_or(image);
-    crate::storage::atomic_write(
-        &paths.compose_file,
-        crate::compose::render(
-            config,
-            &pinned_image,
+        let secret = if paths.secrets_file.exists() {
+            secrets::parse_env_secret(&fs::read_to_string(&paths.secrets_file)?)?
+        } else {
+            secrets::generate_jwt_secret()
+        };
+        crate::storage::atomic_write(
             &paths.secrets_file,
-            &paths.trust_store,
-        )
-        .as_bytes(),
-        false,
-    )?;
-    compose(paths, &["up", "-d", "--remove-orphans"])?;
-    state.ownership.session_server = true;
-    state.image_reference = pinned_image.clone();
-    state.image_digest = digest.clone();
-    crate::storage::write_json(&paths.state_file, &state)?;
+            secrets::env_file(&secret).as_bytes(),
+            true,
+        )?;
+        state.ownership.configuration = true;
+        state.secret_fingerprint = secrets::fingerprint(&secret);
+        crate::storage::write_json(&paths.state_file, &state)?;
+        if !paths.trust_store.exists() {
+            crate::storage::write_json(&paths.trust_store, &crate::trust::TrustStore::empty())?;
+        }
 
-    let plugin_config = plugin_configuration(config, &secret);
-    jellyfin.update_plugin_configuration(&plugin_config)?;
-    wait_for_health(config)?;
+        let image = format!("ghcr.io/mhbxyz/owp-session-server:{version}");
+        require_command("docker", &["pull", &image])?;
+        let digest = image_digest(&image)?;
+        let pinned_image = digest.clone().unwrap_or(image);
+        crate::storage::atomic_write(
+            &paths.compose_file,
+            crate::compose::render(
+                config,
+                &pinned_image,
+                &paths.secrets_file,
+                &paths.trust_store,
+            )?
+            .as_bytes(),
+            false,
+        )?;
+        compose(paths, &["up", "-d", "--remove-orphans"])?;
+        state.ownership.session_server = true;
+        state.image_reference = pinned_image.clone();
+        state.image_digest = digest.clone();
+        crate::storage::write_json(&paths.state_file, &state)?;
+
+        let plugin_config = plugin_configuration(config, &secret);
+        jellyfin.update_plugin_configuration(&plugin_config)?;
+        wait_for_health(config)?;
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        state.phase = "failed".to_string();
+        let _ = crate::storage::write_json(&paths.state_file, &state);
+        return Err(error.context("installation did not complete"));
+    }
 
     state.phase = "ready".to_string();
     crate::storage::write_json(&paths.state_file, &state)?;
@@ -240,9 +287,23 @@ fn plugin_is_owned(plugin_was_absent: bool, previous: Option<&InstallationState>
     plugin_was_absent || previous.is_some_and(|state| state.ownership.plugin)
 }
 
+/// A persisted phase other than `ready` means the previous install did not finish.
+fn interrupted_phase(previous: Option<&InstallationState>) -> Option<&str> {
+    previous
+        .filter(|state| state.phase != "ready")
+        .map(|state| state.phase.as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn configuration(secret: &str) -> PluginConfiguration {
+        let config =
+            DesiredConfig::local(url::Url::parse("http://localhost:8096").unwrap()).unwrap();
+        plugin_configuration(&config, secret)
+    }
+
     #[test]
     fn preexisting_plugin_is_not_claimed_during_upgrade() {
         assert!(!plugin_is_owned(false, None));
@@ -250,5 +311,36 @@ mod tests {
         let mut state = InstallationState::new("0.3.2");
         state.ownership.plugin = true;
         assert!(plugin_is_owned(false, Some(&state)));
+    }
+
+    #[test]
+    fn debug_output_redacts_the_jwt_secret() {
+        let debug = format!("{:?}", configuration("super-secret-value"));
+        assert!(!debug.contains("super-secret-value"));
+        assert!(debug.contains("<redacted>"));
+        assert!(debug.contains("OpenWatchParty"));
+    }
+
+    #[test]
+    fn interrupted_phase_is_detected_for_resume() {
+        assert_eq!(interrupted_phase(None), None);
+        let mut state = InstallationState::new("0.3.3");
+        state.phase = "installing".to_string();
+        assert_eq!(interrupted_phase(Some(&state)), Some("installing"));
+        state.phase = "failed".to_string();
+        assert_eq!(interrupted_phase(Some(&state)), Some("failed"));
+        state.phase = "ready".to_string();
+        assert_eq!(interrupted_phase(Some(&state)), None);
+    }
+
+    #[test]
+    fn version_is_limited_to_a_safe_character_set() {
+        assert!(validate_version("0.3.3").is_ok());
+        assert!(validate_version("0.3.3-rc.1_build2").is_ok());
+        assert!(validate_version("").is_err());
+        assert!(validate_version(&"9".repeat(65)).is_err());
+        assert!(validate_version("0.3.3\n    privileged: true").is_err());
+        assert!(validate_version("0.3.3\"").is_err());
+        assert!(plan("0.3.3\n  privileged: true").is_err());
     }
 }
