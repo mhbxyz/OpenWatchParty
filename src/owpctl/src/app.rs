@@ -11,12 +11,12 @@ use crate::{
 pub fn run(cli: Cli) -> anyhow::Result<()> {
     let paths = Paths::resolve(cli.scope, cli.root.as_deref())?;
     match cli.command {
-        Command::Setup(arguments) => setup(&paths, arguments),
+        Command::Setup(arguments) => setup(&paths, arguments, cli.json),
         Command::Install(arguments) | Command::Upgrade(arguments) => {
             let config: DesiredConfig = crate::storage::read_toml(&paths.config_file)
                 .context("run `owpctl setup` first")?;
             let version = arguments.version.as_deref().unwrap_or(crate::VERSION);
-            let plan = crate::installer::plan(version);
+            let plan = crate::installer::plan(version)?;
             crate::output::print(&plan, cli.json)?;
             if arguments.dry_run {
                 return Ok(());
@@ -122,7 +122,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
                         &state.image_reference,
                         &paths.secrets_file,
                         &paths.trust_store,
-                    )
+                    )?
                     .as_bytes(),
                     false,
                 )?;
@@ -154,7 +154,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
     }
 }
 
-fn setup(paths: &Paths, arguments: crate::cli::SetupArgs) -> anyhow::Result<()> {
+fn setup(paths: &Paths, arguments: crate::cli::SetupArgs, json: bool) -> anyhow::Result<()> {
     if arguments.web {
         return crate::web::run(paths.clone(), arguments.dry_run);
     }
@@ -177,7 +177,7 @@ fn setup(paths: &Paths, arguments: crate::cli::SetupArgs) -> anyhow::Result<()> 
         config
     };
     if arguments.dry_run {
-        return crate::output::print(&config, false);
+        return crate::output::print(&config, json);
     }
     if !arguments.non_interactive
         && !Confirm::new()

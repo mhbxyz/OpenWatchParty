@@ -100,6 +100,10 @@ pub fn run(
         checks.push(fail("configuration", "owpctl.toml is missing"));
     }
 
+    if let Some(check) = state.and_then(phase_check) {
+        checks.push(check);
+    }
+
     let overall = if checks.iter().any(|check| check.status == CheckStatus::Fail) {
         CheckStatus::Fail
     } else if checks
@@ -240,6 +244,21 @@ fn fail(id: &'static str, summary: impl Into<String>) -> DiagnosticCheck {
     }
 }
 
+/// The installer only marks an installation `ready` once every step completed, so any
+/// other persisted phase means the previous run was interrupted and can be resumed.
+fn phase_check(state: &InstallationState) -> Option<DiagnosticCheck> {
+    if state.phase == "ready" {
+        return None;
+    }
+    Some(warning(
+        "installation_phase",
+        format!(
+            "installation state reports phase \"{}\"; the previous install did not finish, re-run `owpctl install --yes --api-token-file <file>` to resume",
+            state.phase
+        ),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,5 +269,25 @@ mod tests {
             health_url(&input).as_str(),
             "https://media.example/jellyfin/owp/health"
         );
+    }
+
+    #[test]
+    fn interrupted_installation_phase_is_reported() {
+        let mut state = InstallationState::new("0.3.3");
+        state.phase = "installing".to_string();
+        let check = phase_check(&state).expect("interrupted install must be reported");
+        assert_eq!(check.id, "installation_phase");
+        assert_eq!(check.status, CheckStatus::Warning);
+        assert!(check.summary.contains("installing"));
+
+        state.phase = "failed".to_string();
+        assert!(phase_check(&state).is_some());
+    }
+
+    #[test]
+    fn ready_installation_phase_is_not_reported() {
+        let mut state = InstallationState::new("0.3.3");
+        state.phase = "ready".to_string();
+        assert!(phase_check(&state).is_none());
     }
 }
