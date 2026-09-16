@@ -20,3 +20,10 @@ regexes = [
   '''^YOUR_API_KEY$''',
   '''^eyJhbGciOiJIUzI1NiIs(\.\.\.|InR5cCI6IkpXVCJ9\.\.\.)$''',
 ]
+
+[[allowlists]]
+description = "Synthetic RSA-3072 key used only as an RS256 verification fixture in the session server tests"
+regexTarget = "secret"
+regexes = [
+  '''MIIG/gIBADANBgkqhkiG9w0BAQEFAASCBugwggbk''',
+]

@@ -1,8 +1,10 @@
 use base64::engine::general_purpose::{STANDARD, URL_SAFE, URL_SAFE_NO_PAD};
 use base64::Engine;
-use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
+use std::sync::OnceLock;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -173,12 +175,34 @@ impl JwtConfig {
 
         let header =
             decode_header(token).map_err(|error| format!("Invalid token header: {error}"))?;
-        let mode = auth_mode()?;
+        // The trust store is only consulted for RS256 tokens, so an HS256-only
+        // deployment does not need JWT_TRUST_STORE_PATH to be set.
+        let trust_store = if header.alg == Algorithm::RS256 {
+            Some(std::path::PathBuf::from(trust_store_path()?))
+        } else {
+            None
+        };
+        self.validate_header(token, &header, auth_mode()?, trust_store.as_deref())
+    }
+
+    fn validate_header(
+        &self,
+        token: &str,
+        header: &Header,
+        mode: AuthMode,
+        trust_store_path: Option<&Path>,
+    ) -> Result<Claims, String> {
         if header.alg == Algorithm::RS256 {
             if mode == AuthMode::Hs256 {
                 return Err("RS256 token rejected in hs256 mode".to_string());
             }
-            return self.validate_rs256(token, header.kid.as_deref());
+            let kid = header
+                .kid
+                .as_deref()
+                .ok_or_else(|| "RS256 token has no kid".to_string())?;
+            let path = trust_store_path
+                .ok_or_else(|| "JWT_TRUST_STORE_PATH is not configured".to_string())?;
+            return self.validate_rs256_with_path(token, kid, path);
         }
         if header.alg != Algorithm::HS256 {
             return Err("Unsupported JWT algorithm".to_string());
@@ -209,20 +233,15 @@ impl JwtConfig {
         }
     }
 
-    fn validate_rs256(&self, token: &str, kid: Option<&str>) -> Result<Claims, String> {
-        let kid = kid.ok_or_else(|| "RS256 token has no kid".to_string())?;
-        let path = std::env::var("JWT_TRUST_STORE_PATH")
-            .map_err(|_| "JWT_TRUST_STORE_PATH is not configured".to_string())?;
-        self.validate_rs256_with_path(token, kid, std::path::Path::new(&path))
-    }
-
     fn validate_rs256_with_path(
         &self,
         token: &str,
         kid: &str,
         path: &std::path::Path,
     ) -> Result<Claims, String> {
-        let store = crate::trust::TrustStore::load(path)?;
+        // Parsed once per store revision: rotation and revocation are picked up
+        // without re-reading and re-parsing the file for every token.
+        let store = crate::trust::TrustStore::load_cached(path)?;
         let key = store.active_key(kid)?;
         let mut validation = Validation::new(Algorithm::RS256);
         validation.set_audience(&[&key.audience]);
@@ -244,12 +263,28 @@ impl JwtConfig {
     }
 }
 
+/// Reads `JWT_AUTH_MODE` once: the process environment cannot change while the
+/// server runs, and this sits on the per-token validation path.
 fn auth_mode() -> Result<AuthMode, String> {
-    parse_auth_mode(
-        &std::env::var("JWT_AUTH_MODE")
-            .unwrap_or_else(|_| "hs256".to_string())
-            .to_ascii_lowercase(),
-    )
+    static MODE: OnceLock<Result<AuthMode, String>> = OnceLock::new();
+    MODE.get_or_init(|| {
+        parse_auth_mode(
+            &std::env::var("JWT_AUTH_MODE")
+                .unwrap_or_else(|_| "hs256".to_string())
+                .to_ascii_lowercase(),
+        )
+    })
+    .clone()
+}
+
+/// Reads `JWT_TRUST_STORE_PATH` once for the same reason.
+fn trust_store_path() -> Result<String, String> {
+    static PATH: OnceLock<Result<String, String>> = OnceLock::new();
+    PATH.get_or_init(|| {
+        std::env::var("JWT_TRUST_STORE_PATH")
+            .map_err(|_| "JWT_TRUST_STORE_PATH is not configured".to_string())
+    })
+    .clone()
 }
 
 fn parse_auth_mode(value: &str) -> Result<AuthMode, String> {
@@ -525,5 +560,342 @@ mod tests {
         .unwrap();
 
         assert!(config.validate_token(&token).is_err());
+    }
+
+    // --- RS256 / trust store ------------------------------------------------
+
+    // RSA-3072 fixture generated for these tests only. It is never used by the
+    // server; it keeps the asymmetric path covered without adding a key
+    // generation dependency back to the build.
+    const TEST_RSA_PEM: &str = "-----BEGIN PRIVATE KEY-----
+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
+ghwPqeM2CO//6dCav8vYSdem
+-----END PRIVATE KEY-----";
+
+    const TEST_RSA_MODULUS: &str = "rMkMIxVgwNFH1iP8czfyW0_n9YMI9P1q7A0oHD-NtU2lx8bK3VfQA_NWu9Cp9YwC0qOH9AHdKm7DzTWi9h80tYDdd-VUcdtfuV4qjR_ZSx7eX2WRSy-n8ySrMzktQjw2TIO3ZHKy1zK4P0cFc-1ttWSofQEJzptFYgLfbjHycjdErsC4jnPsjkwt7bjLDsms_VT0YLzwCAwXTNMOcU59PKVfWBDc6wqbFjE1iZsZ0uKowvcrGrLM2aiUyGy_isr33alCOwUtYEuApjJnLkg_Jpf2a5hqcDcFZ0CNUSRs9IhG1KGl381PBd4lT0ltxteYVQjXD8pqug2WeW0S31fhiPQV52oJe65--9bH8bGTyjuw5c8Yzx3lLfKzhv20r-jMsJwjEfv4lYHPXQyEbyZ_BxJpkfKUu3t33hShqlzFPKO_sj8i38UjfeG7MmyDNhH0y5aueFV2nYYGFzm2a7PCYg0gSLx4T-zNZi935r39w0IyWNhyaeqbZnS8O2AYPkhp";
+    const TEST_KID: &str = "test-key-3072";
+    const TEST_ISSUER: &str = "Jellyfin";
+    const TEST_AUDIENCE: &str = "OpenWatchParty";
+
+    fn unique_temp_dir() -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let counter = COUNTER.fetch_add(1, Ordering::SeqCst);
+        let dir = std::env::temp_dir().join(format!(
+            "owp-auth-{}-{}-{counter}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|elapsed| elapsed.as_nanos())
+                .unwrap_or_default()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn write_trust_store(
+        dir: &Path,
+        status: &str,
+        issuer: &str,
+        audience: &str,
+        modulus: &str,
+    ) -> std::path::PathBuf {
+        let path = dir.join("trust.json");
+        let contents = format!(
+            r#"{{"version":1,"keys":[{{"kid":"{TEST_KID}","issuer":"{issuer}","audience":"{audience}","n":"{modulus}","e":"AQAB","status":"{status}"}}]}}"#
+        );
+        std::fs::write(&path, contents).unwrap();
+        path
+    }
+
+    fn rotate_trust_store(path: &Path, contents: &str) {
+        let next = path.with_extension("next");
+        std::fs::write(&next, contents).unwrap();
+        std::fs::rename(&next, path).unwrap();
+    }
+
+    fn sign_rs256(kid: Option<&str>, exp: usize, iat: usize) -> String {
+        use jsonwebtoken::{encode, EncodingKey};
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = kid.map(str::to_string);
+        encode(
+            &header,
+            &Claims {
+                sub: "user-1".to_string(),
+                name: "Alice".to_string(),
+                aud: TEST_AUDIENCE.to_string(),
+                iss: TEST_ISSUER.to_string(),
+                exp,
+                iat,
+            },
+            &EncodingKey::from_rsa_pem(TEST_RSA_PEM.as_bytes()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    /// Signs a token with explicit claims, for the audience/issuer cases.
+    fn sign_rs256_claims(audience: &str, issuer: &str) -> String {
+        use jsonwebtoken::{encode, EncodingKey};
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(TEST_KID.to_string());
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        encode(
+            &header,
+            &Claims {
+                sub: "user-1".to_string(),
+                name: "Alice".to_string(),
+                aud: audience.to_string(),
+                iss: issuer.to_string(),
+                exp: now + 600,
+                iat: now,
+            },
+            &EncodingKey::from_rsa_pem(TEST_RSA_PEM.as_bytes()).unwrap(),
+        )
+        .unwrap()
+    }
+
+    fn validate_rs256_token(token: &str, path: &Path) -> Result<Claims, String> {
+        let config = JwtConfig {
+            secret: "unused-in-asymmetric-mode".to_string(),
+            audience: TEST_AUDIENCE.to_string(),
+            issuer: TEST_ISSUER.to_string(),
+            enabled: true,
+        };
+        let header = decode_header(token).unwrap();
+        config.validate_header(token, &header, AuthMode::Asymmetric, Some(path))
+    }
+
+    #[test]
+    fn rs256_token_signed_by_a_trusted_key_is_accepted() {
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = sign_rs256(Some(TEST_KID), now + 600, now);
+
+        let claims = validate_rs256_token(&token, &path).expect("trusted RS256 token must verify");
+        assert_eq!(claims.sub, "user-1");
+        assert_eq!(claims.name, "Alice");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_rejects_revoked_unknown_and_unidentified_keys() {
+        let dir = unique_temp_dir();
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = sign_rs256(Some(TEST_KID), now + 600, now);
+
+        let revoked = write_trust_store(
+            &dir,
+            "revoked",
+            TEST_ISSUER,
+            TEST_AUDIENCE,
+            TEST_RSA_MODULUS,
+        );
+        assert!(validate_rs256_token(&token, &revoked).is_err());
+
+        let retiring = write_trust_store(
+            &dir,
+            "retiring",
+            TEST_ISSUER,
+            TEST_AUDIENCE,
+            TEST_RSA_MODULUS,
+        );
+        assert!(
+            validate_rs256_token(&token, &retiring).is_ok(),
+            "retiring keys must keep verifying existing tokens"
+        );
+
+        let unknown = sign_rs256(Some("some-other-key"), now + 600, now);
+        assert!(validate_rs256_token(&unknown, &retiring).is_err());
+
+        let without_kid = sign_rs256(None, now + 600, now);
+        let error = validate_rs256_token(&without_kid, &retiring).unwrap_err();
+        assert!(error.contains("no kid"), "unexpected error: {error}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_enforces_the_key_audience_and_issuer() {
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+
+        assert!(
+            validate_rs256_token(&sign_rs256_claims("OtherAudience", TEST_ISSUER), &path).is_err()
+        );
+        assert!(
+            validate_rs256_token(&sign_rs256_claims(TEST_AUDIENCE, "OtherIssuer"), &path).is_err()
+        );
+        assert!(
+            validate_rs256_token(&sign_rs256_claims(TEST_AUDIENCE, TEST_ISSUER), &path).is_ok()
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_enforces_the_token_lifetime() {
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+
+        assert!(
+            validate_rs256_token(
+                &sign_rs256(
+                    Some(TEST_KID),
+                    now.saturating_sub(1),
+                    now.saturating_sub(60)
+                ),
+                &path
+            )
+            .is_err(),
+            "expired tokens must be rejected"
+        );
+
+        let future_iat =
+            validate_rs256_token(&sign_rs256(Some(TEST_KID), now + 3600, now + 120), &path)
+                .unwrap_err();
+        assert!(
+            future_iat.contains("lifetime"),
+            "unexpected error: {future_iat}"
+        );
+
+        let too_long = validate_rs256_token(&sign_rs256(Some(TEST_KID), now + 90_000, now), &path)
+            .unwrap_err();
+        assert!(
+            too_long.contains("lifetime"),
+            "unexpected error: {too_long}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_rejects_a_modulus_below_3072_bits() {
+        let dir = unique_temp_dir();
+        let short_modulus = URL_SAFE_NO_PAD.encode([7u8; 64]);
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, &short_modulus);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = sign_rs256(Some(TEST_KID), now + 600, now);
+
+        let error = validate_rs256_token(&token, &path).unwrap_err();
+        assert!(error.contains("3072"), "unexpected error: {error}");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn algorithm_and_mode_mismatches_are_rejected() {
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let rs256 = sign_rs256(Some(TEST_KID), now + 600, now);
+        let config = JwtConfig {
+            secret: "unused".to_string(),
+            audience: TEST_AUDIENCE.to_string(),
+            issuer: TEST_ISSUER.to_string(),
+            enabled: true,
+        };
+
+        let error = config
+            .validate_header(
+                &rs256,
+                &decode_header(&rs256).unwrap(),
+                AuthMode::Hs256,
+                Some(&path),
+            )
+            .unwrap_err();
+        assert!(error.contains("hs256 mode"), "unexpected error: {error}");
+
+        use jsonwebtoken::{encode, EncodingKey};
+        let hs256 = encode(
+            &Header::new(Algorithm::HS256),
+            &Claims {
+                sub: "user-1".to_string(),
+                name: "Alice".to_string(),
+                aud: TEST_AUDIENCE.to_string(),
+                iss: TEST_ISSUER.to_string(),
+                exp: now + 600,
+                iat: now,
+            },
+            &EncodingKey::from_secret(b"a-shared-secret-for-tests-only!!"),
+        )
+        .unwrap();
+        let error = config
+            .validate_header(
+                &hs256,
+                &decode_header(&hs256).unwrap(),
+                AuthMode::Asymmetric,
+                Some(&path),
+            )
+            .unwrap_err();
+        assert!(
+            error.contains("asymmetric mode"),
+            "unexpected error: {error}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_revocation_is_visible_without_a_restart() {
+        let dir = unique_temp_dir();
+        let path = write_trust_store(&dir, "active", TEST_ISSUER, TEST_AUDIENCE, TEST_RSA_MODULUS);
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = sign_rs256(Some(TEST_KID), now + 600, now);
+
+        assert!(validate_rs256_token(&token, &path).is_ok());
+
+        rotate_trust_store(
+            &path,
+            &format!(
+                r#"{{"version":1,"keys":[{{"kid":"{TEST_KID}","issuer":"{TEST_ISSUER}","audience":"{TEST_AUDIENCE}","n":"{TEST_RSA_MODULUS}","e":"AQAB","status":"revoked"}}]}}"#
+            ),
+        );
+
+        let error = validate_rs256_token(&token, &path).unwrap_err();
+        assert!(
+            error.contains("revoked") || error.contains("unknown"),
+            "revocation must be visible immediately, got: {error}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
