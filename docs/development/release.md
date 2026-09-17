@@ -18,6 +18,10 @@ MAJOR.MINOR.PATCH
 - **MINOR**: New features (backwards compatible)
 - **PATCH**: Bug fixes (backwards compatible)
 
+### Automated bump
+
+Run `just bump 0.5.0` (or `infra/scripts/bump-version.sh 0.5.0`) to rewrite every mirror of the product version from `version.json` in one shot, adding `--dry-run` to preview the files that would change without writing them. Finish with `infra/scripts/verify-versions.sh`, which fails if any mirror still disagrees.
+
 ## Release Checklist
 
 ### Pre-Release
