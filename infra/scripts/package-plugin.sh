@@ -30,17 +30,8 @@ metadata="$publish_dir/meta.json"
 loader="$client_dir/plugin.js"
 
 publish_plugin() {
-    required_sdk=$(jq -er '.sdk.version' "$repository_root/global.json")
-    if dotnet_path=$(command -v dotnet); then
-        installed_sdks=$("$dotnet_path" --list-sdks)
-        if grep -Fq "$required_sdk [" <<< "$installed_sdks"; then
-            "$dotnet_path" restore "$project" --locked-mode
-            "$dotnet_path" publish "$project" -c Release --no-restore -o "$relative_publish_dir"
-            return
-        fi
-    fi
     if ! docker_path=$(command -v docker); then
-        echo "The SDK from global.json is unavailable and Docker is not installed" >&2
+        echo "Packaging the plugin requires Docker to run the pinned .NET SDK container image" >&2
         return 1
     fi
     # shellcheck disable=SC2016

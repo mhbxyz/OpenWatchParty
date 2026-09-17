@@ -62,14 +62,15 @@ msbuild_args=(
     -getProperty:JellyfinPackageVersion
     -getProperty:JellyfinTargetAbi
 )
-if [[ $(dotnet --version 2>/dev/null || true) == "$dotnet_sdk" ]]; then
-    msbuild_properties=$(cd "$repository_root" && dotnet msbuild "${msbuild_args[@]}")
-else
-    msbuild_properties=$(docker run --rm \
-        -v "$repository_root:/workspace" -w /workspace \
-        mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30 \
-        dotnet msbuild "${msbuild_args[@]}")
-fi
+msbuild_properties=$(docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e DOTNET_CLI_HOME=/tmp/.dotnet \
+    -v "$repository_root:/workspace" \
+    -w /workspace \
+    mcr.microsoft.com/dotnet/sdk:9.0@sha256:35048e3a81e6a07c316e7bbbd80d80d2ba705fe5f23a8ed42b6638c8f4c20d30 \
+    dotnet msbuild "${msbuild_args[@]}")
+
 assert_equal 'MSBuild product version' "$version" "$(jq -er '.Properties.OpenWatchPartyVersion' <<< "$msbuild_properties")"
 assert_equal 'MSBuild Jellyfin package version' "$jellyfin_package" "$(jq -er '.Properties.JellyfinPackageVersion' <<< "$msbuild_properties")"
 assert_equal 'MSBuild Jellyfin target ABI' "$jellyfin_target_abi" "$(jq -er '.Properties.JellyfinTargetAbi' <<< "$msbuild_properties")"

@@ -8,9 +8,8 @@ nav_order: 1
 
 ## Prerequisites
 
-- **Docker** and **Docker Compose**
+- **Docker** and **Docker Compose** (plugin development always runs inside the pinned `.NET SDK 9.0.317` container image, so a local .NET installation is not required)
 - **[Just](https://just.systems/)** — command runner (`cargo install just` or [other methods](https://just.systems/man/en/packages.html))
-- **.NET SDK 9.0.317** (for plugin development)
 - **Rust 1.88.0** (for server development)
 - **Node.js 20.20.2** (CI version; the client package also accepts `^20.19.0 || ^22.13.0 || >=24`)
 - **Ruby 3.2.9** (for building the documentation)
