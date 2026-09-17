@@ -155,6 +155,10 @@ release:
     @echo -e "{{GREEN}}▶ Packaging plugin release...{{RESET}}"
     @infra/scripts/package-plugin.sh
 
+[doc('Bump every mirror of the product version (for example: just bump 0.5.0)')]
+bump VERSION:
+    @infra/scripts/bump-version.sh "{{VERSION}}"
+
 [doc('Full reset (stop + remove containers + clean artifacts)')]
 reset: down
     @just clean docker
