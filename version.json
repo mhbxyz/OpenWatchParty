@@ -2,7 +2,7 @@
   "version": "0.4.0",
   "jellyfinPackageVersion": "12.0.0",
   "jellyfinTargetAbi": "12.0.0.0",
-  "jellyfinImageVersion": "12.0",
+  "jellyfinImageVersion": "12.1",
   "fileTransformationVersion": "3.0.1.0",
   "fileTransformationAbi": "12.0.0",
   "fileTransformationSha256": "78defd17c35c07974ba77412201a1294a0137535b4802e08d778bd622dd4d692"

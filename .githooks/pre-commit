@@ -88,7 +88,8 @@ if $compose_staged; then
     printf 'pre-commit: validating staged Compose files...\n'
     compose_env=(
         JWT_SECRET='K7xR9mPqN2wLhVbE4cT8fY0jU5sA3dG1'
-        JELLYFIN_VERSION='12.0'
+        # Follow version.json so the validated image cannot drift from the pin.
+        JELLYFIN_VERSION=$(jq -er '.jellyfinImageVersion' "$root/version.json")
     )
     for compose_file in infra/docker/dev/docker-compose.yml infra/docker/prod/docker-compose.yml; do
         env "${compose_env[@]}" docker compose --file "$snapshot/$compose_file" config --quiet || \

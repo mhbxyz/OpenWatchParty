@@ -12,7 +12,7 @@ This page summarizes the compatibility encoded by the repository's canonical ver
 
 | OpenWatchParty | Jellyfin packages | Jellyfin target ABI | Jellyfin image | File Transformation | Status |
 |----------------|-------------------|---------------------|-----------------|---------------------|--------|
-| `0.4.0` | `12.0.0` | `12.0.0.0` | `12.0` | `3.0.1.0` | Supported |
+| `0.4.0` | `12.0.0` | `12.0.0.0` | `12.1` | `3.0.1.0` | Supported |
 | `0.3.3` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
 | `0.3.2` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
 | `0.3.1` | `10.11.3` | `10.11.0.0` | `10.11.3` | `2.5.3.0` | Supported |
@@ -22,10 +22,10 @@ This page summarizes the compatibility encoded by the repository's canonical ver
 
 ## Notes
 
-- OpenWatchParty `0.4.0` targets Jellyfin 12. It is compiled against Jellyfin packages `12.0.0` and declares target ABI `12.0.0.0`.
+- OpenWatchParty `0.4.0` targets Jellyfin 12. It is compiled against Jellyfin packages `12.0.0` and declares target ABI `12.0.0.0`, so it loads on Jellyfin 12.0 and 12.1.
 - OpenWatchParty `0.3.3` remains the last release for the Jellyfin 10.11 line. It is compiled against Jellyfin packages `10.11.3` and declares target ABI `10.11.0.0`.
 - Both lines are published from the same plugin repository manifest, so Jellyfin can offer the release that matches its own ABI.
-- Development and integration testing use the Jellyfin `12.0` image.
+- Development and integration testing use the Jellyfin `12.1` image.
 - Automatic client injection uses File Transformation `3.0.1.0` (archive ABI `12.0.0`).
 - The target ABI is the plugin compatibility contract; the image version is the environment tested by this repository.
 
