@@ -53,6 +53,9 @@ describe('configuration page support report', () => {
   });
 
   it('reports that diagnostics have not run yet instead of staying silent', () => {
+    page.lastDiagnostics = null;
+    page.lastSuccessfulDiagnostics = null;
+    page.lastDiagnosticsError = null;
     const report = page.supportReport();
 
     assert.equal(report.diagnostics_ran, false);
@@ -62,6 +65,32 @@ describe('configuration page support report', () => {
     assert.equal(report.checks.length, 0);
     assert.equal(report.user_agent, 'test-agent');
     assert.equal(report.page_origin, 'https://media.example');
+  });
+
+  it('keeps the last successful versions when a later run fails', async () => {
+    context.fetch = async () => ({
+      ok: true,
+      json: async () => ({
+        OverallStatus: 'ready',
+        PluginVersion: '0.4.0',
+        JellyfinVersion: '12.1.0',
+        JellyfinTargetAbi: '12.0.0.0',
+        Checks: []
+      })
+    });
+    await page.runDiagnostics(false);
+
+    context.fetch = async () => { throw new Error('NetworkError'); };
+    await page.runDiagnostics(false);
+
+    const report = page.supportReport();
+    assert.equal(report.diagnostics_ran, true);
+    assert.equal(report.diagnostics_error, 'NetworkError');
+    assert.equal(report.plugin_version, '0.4.0');
+    assert.equal(report.jellyfin_version, '12.1.0');
+    assert.equal(report.target_abi, '12.0.0.0');
+    assert.equal(report.checks.length, 1);
+    assert.equal(report.checks[0].code, 'DIAGNOSTICS_UNREACHABLE');
   });
 
   it('keeps a failed diagnostics run in the support report', async () => {
