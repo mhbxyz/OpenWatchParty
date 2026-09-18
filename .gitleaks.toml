@@ -20,3 +20,14 @@ regexes = [
   '''^YOUR_API_KEY$''',
   '''^eyJhbGciOiJIUzI1NiIs(\.\.\.|InR5cCI6IkpXVCJ9\.\.\.)$''',
 ]
+
+# The scan walks every ref, not only the branch under review, so this entry
+# covers the RS256 verification fixture that lives on the Jellyfin 12 branch
+# while that branch is still open. It is a test-only key and never used by the
+# server.
+[[allowlists]]
+description = "Synthetic RSA-3072 key used only as an RS256 verification fixture in the session server tests"
+regexTarget = "secret"
+regexes = [
+  '''MIIG/gIBADANBgkqhkiG9w0BAQEFAASCBugwggbk''',
+]
