@@ -232,3 +232,27 @@ jobs:
           [[ $(docker exec owp-ci id -u) == 1000 ]]
           docker stop --time 10 owp-ci
           docker logs owp-ci 2>&1 | grep -q 'Server shutdown complete'
+
+  docs-build:
+    name: Documentation Build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Setup Ruby
+        uses: ruby/setup-ruby@95ef2b042f9d7a56d8268cba8559e2842e2ad01b # v1
+        with:
+          ruby-version: '3.2.9'
+          bundler-cache: true
+          working-directory: docs
+
+      # The documentation workflow only runs on pushes to main, so a broken
+      # Gemfile or _config.yml would otherwise reach main before anything
+      # built the site.
+      - name: Build with Jekyll
+        run: bundle exec jekyll build

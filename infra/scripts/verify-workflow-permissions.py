@@ -16,6 +16,7 @@ EXPECTED = {
         "js-lint": {"contents": "read"},
         "release-script-tests": {"contents": "read"},
         "build-server": {"contents": "read"},
+        "docs-build": {"contents": "read"},
     },
     "publish.yml": {
         "verify-versions": {"contents": "read"},
