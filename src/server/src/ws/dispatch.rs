@@ -548,10 +548,7 @@ mod tests {
             let state = state.read().await;
             state.clients.get("c1").unwrap().last_seen
         };
-        assert!(
-            after >= before,
-            "a pong must keep the connection considered alive"
-        );
+        assert!(after > before, "a pong must refresh the liveness timestamp");
     }
 
     #[tokio::test]

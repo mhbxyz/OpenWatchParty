@@ -1,5 +1,5 @@
 use crate::types::SharedState;
-use log::{info, warn};
+use log::{debug, info, warn};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -34,8 +34,16 @@ pub async fn send_heartbeats(state: &SharedState) {
             .collect()
     };
     for sender in senders {
-        if let Err(error) = sender.try_send(Ok(warp::ws::Message::ping(Vec::new()))) {
-            warn!("Failed to send heartbeat: {error}");
+        // A heartbeat that does not fit must not disconnect a client that is
+        // simply behind; only a closed channel means the writer is gone.
+        match sender.try_send_keep_alive(Ok(warp::ws::Message::ping(Vec::new()))) {
+            Ok(()) => {}
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                debug!("Skipping a heartbeat for a client whose buffer is momentarily full");
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                warn!("Heartbeat found a closed client channel");
+            }
         }
     }
 }

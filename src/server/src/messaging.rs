@@ -36,6 +36,22 @@ impl ClientSender {
         })
     }
 
+    /// Enqueues a keep-alive without treating a full queue as a dead socket.
+    ///
+    /// A client that is momentarily behind (a burst of player events, a slow
+    /// render) must not be disconnected because a heartbeat did not fit; only
+    /// a closed receiver means the writer is gone.
+    pub fn try_send_keep_alive(
+        &self,
+        message: OutboundMessage,
+    ) -> Result<(), mpsc::error::TrySendError<OutboundMessage>> {
+        let result = self.outbound.try_send(message);
+        if matches!(result, Err(mpsc::error::TrySendError::Closed(_))) {
+            self.request_disconnect();
+        }
+        result
+    }
+
     pub async fn send(
         &self,
         message: OutboundMessage,
