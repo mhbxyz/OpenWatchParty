@@ -93,7 +93,7 @@
                 </div>
                 <div class="verticalSection">
                     <h2 class="sectionTitle">Support</h2>
-                    <p class="fieldDescription">The support report excludes secrets, tokens, user IDs, room IDs and hostnames.</p>
+                    <p class="fieldDescription">The support report excludes secrets, tokens, user IDs and room IDs. It includes the detected versions, the diagnostic checks, the page origin and the browser user agent.</p>
                     <button is="emby-button" type="button" id="CopySupportReportButton" class="raised">Copy support report</button>
                     <button is="emby-button" type="button" id="DownloadSupportReportButton" class="raised">Download JSON</button>
                 </div>
@@ -236,6 +236,7 @@
 
                 lastDiagnostics: null,
                 lastDiagnosticsError: null,
+                lastSuccessfulDiagnostics: null,
 
                 runDiagnostics: function(active) {
                     var self = this;
@@ -251,6 +252,7 @@
                         return response.json();
                     }).then(function(result) {
                         self.lastDiagnostics = result;
+                        self.lastSuccessfulDiagnostics = result;
                         self.lastDiagnosticsError = null;
                         self.renderDiagnostics(result);
                         return result;
@@ -260,7 +262,8 @@
                             Checks: [{ Id: 'diagnostics', Status: 'fail', Code: 'DIAGNOSTICS_UNREACHABLE', Summary: error.message }]
                         };
                         // Keep the failure so the support report is never
-                        // silently empty when diagnostics cannot run.
+                        // silently empty when diagnostics cannot run; the last
+                        // successful run still supplies the detected versions.
                         self.lastDiagnostics = failure;
                         self.lastDiagnosticsError = error.message;
                         self.renderDiagnostics(failure);
@@ -300,16 +303,19 @@
 
                 supportReport: function() {
                     var result = this.lastDiagnostics || {};
+                    // A failed run only carries the error, so fall back to the
+                    // last successful payload for the detected versions.
+                    var detected = this.lastSuccessfulDiagnostics || result;
                     var loader = window.OpenWatchParty && window.OpenWatchParty.loader;
                     return {
                         schema_version: 1,
                         generated_utc: new Date().toISOString(),
-                        plugin_version: result.PluginVersion || null,
-                        jellyfin_version: result.JellyfinVersion || null,
-                        target_abi: result.JellyfinTargetAbi || null,
-                        protocol_version: result.ProtocolVersion || null,
-                        authentication_mode: result.AuthenticationMode || null,
-                        destination_mode: result.SessionDestinationMode || null,
+                        plugin_version: detected.PluginVersion || null,
+                        jellyfin_version: detected.JellyfinVersion || null,
+                        target_abi: detected.JellyfinTargetAbi || null,
+                        protocol_version: detected.ProtocolVersion || null,
+                        authentication_mode: detected.AuthenticationMode || null,
+                        destination_mode: detected.SessionDestinationMode || null,
                         browser_loader: loader ? loader.state : 'not_loaded',
                         browser_loader_error: loader && loader.initializationError
                             ? String(loader.initializationError) : null,

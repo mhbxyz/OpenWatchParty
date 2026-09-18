@@ -85,6 +85,8 @@
     state.authRetryAttempts = 0;
     state.authRetryAt = 0;
     state.authFailedToken = '';
+    state.lastAuthToastMessage = '';
+    state.lastAuthToastAt = 0;
     if (utils.flushLogBuffer) utils.flushLogBuffer();
     const authPayload = {};
     if (token) authPayload.token = token;
@@ -221,7 +223,19 @@
       state.isConnecting = false;
       state.authBlocked = true;
       state.authError = sessionServerUrl.error;
-      if (ui.showToast) ui.showToast(sessionServerUrl.error);
+      // Recorded like any other blocked authentication, so the retry watchdog
+      // backs off instead of reconnecting on every UI tick.
+      state.authFailedToken = OWP.actions.getJellyfinAccessToken
+        ? OWP.actions.getJellyfinAccessToken()
+        : '';
+      const now = Date.now();
+      if (ui.showToast
+          && (sessionServerUrl.error !== state.lastAuthToastMessage
+            || (now - state.lastAuthToastAt) > AUTH_TOAST_SUPPRESS_MS)) {
+        state.lastAuthToastMessage = sessionServerUrl.error;
+        state.lastAuthToastAt = now;
+        ui.showToast(sessionServerUrl.error);
+      }
       ui.render();
       return;
     }
