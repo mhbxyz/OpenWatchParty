@@ -8,7 +8,9 @@
     console.log('[OpenWatchParty] Chat.send called with:', text);
     if (!text || !text.trim()) return false;
     const trimmed = text.trim();
-    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    // Count code points, like the message validator and the server, so a
+    // 500-character emoji or CJK message is not refused here.
+    if (Array.from(trimmed).length > MAX_MESSAGE_LENGTH) {
       OWP.ui.showToast(`Message too long (max ${MAX_MESSAGE_LENGTH} characters)`);
       return false;
     }

@@ -127,4 +127,36 @@ describe('authentication retry watchdog', () => {
     assert.equal(toasts.length, 1, `expected a single toast, got ${JSON.stringify(toasts)}`);
     assert.match(toasts[0], /401/);
   });
+
+  it('treats an invalid session server URL as a blocked authentication', async () => {
+    const connect = realConnect[0];
+    const originalNormalize = OWP.utils.normalizeSessionServerUrl;
+    OWP.state.autoReconnect = true;
+    globalThis.fetch = async () => ({
+      ok: true,
+      json: async () => ({ auth_enabled: false, insecure_mode: true, session_server_url: '' })
+    });
+    // The token request validates the URL first and must keep succeeding; the
+    // connection step then rejects it, which is the branch under test.
+    let calls = 0;
+    OWP.utils.normalizeSessionServerUrl = (value) => {
+      calls++;
+      return calls === 1 ? originalNormalize(value) : { valid: false, error: 'Session server URL is invalid' };
+    };
+
+    try {
+      await connect();
+    } finally {
+      OWP.utils.normalizeSessionServerUrl = originalNormalize;
+    }
+
+    assert.equal(OWP.state.authBlocked, true);
+    assert.equal(OWP.state.authFailedToken, 'token-a');
+    assert.equal(toasts.length, 1, 'the invalid URL is reported once');
+
+    // The watchdog must now back off like for any other blocked attempt.
+    assert.equal(retryConnectionAfterLogin(), true, 'the first retry is immediate');
+    OWP.state.authBlocked = true;
+    assert.equal(retryConnectionAfterLogin(), false, 'the next retry respects the backoff');
+  });
 });
