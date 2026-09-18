@@ -1,9 +1,18 @@
 source "https://rubygems.org"
 
-# GitHub Pages compatible setup
-gem "github-pages", group: :jekyll_plugins
+# The site is built and deployed by .github/workflows/docs.yml, so it uses
+# plain Jekyll instead of the github-pages meta-gem. That meta-gem pins
+# jekyll-remote-theme = 0.4.3, which in turn pins rubyzip < 3.0 and keeps
+# CVE-2026-85396 (path traversal in rubyzip < 3.4.0) in the lockfile.
+gem "jekyll", "~> 3.10"
+gem "jekyll-remote-theme", "~> 0.5.2"
 
-# For local development with the theme
+# Theme
 gem "just-the-docs"
 gem "webrick" # Required for Ruby 3.0+
+
+# Jekyll 3 converts Markdown with kramdown's GFM parser, which is a separate
+# gem; the github-pages meta-gem used to pull it in.
+gem "kramdown-parser-gfm"
+
 gem "bundler-audit", "0.9.3", require: false
