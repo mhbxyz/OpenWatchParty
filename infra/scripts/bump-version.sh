@@ -185,6 +185,8 @@ apply_sed 'README.md' 'README product badge alt text' \
 
 update_compatibility_row
 
+# The backticks below are literal Markdown, not command substitution.
+# shellcheck disable=SC2016
 apply_sed 'docs/operations/installation.md' 'installation product version' \
     'OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`' \
     's/OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`/OpenWatchParty `'"$new_version"'`/'

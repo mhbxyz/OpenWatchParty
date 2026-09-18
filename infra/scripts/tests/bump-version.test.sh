@@ -27,10 +27,14 @@ bump() {
     "$copy/infra/scripts/bump-version.sh" "$@"
 }
 
+# Only tracked content matters here: an untracked leftover directory in the
+# caller's working tree (a scratch clone, a nested worktree) must not turn a
+# version no-op into a failure.
 assert_clean() {
     local message=$1
-    if [[ -n $(git -C "$copy" status --porcelain) ]]; then
-        git -C "$copy" status --porcelain >&2
+    if [[ -n $(git -C "$copy" diff --stat) || -n $(git -C "$copy" diff --cached --stat) ]]; then
+        git -C "$copy" diff --stat >&2
+        git -C "$copy" diff --cached --stat >&2
         printf '%s\n' "$message" >&2
         exit 1
     fi
