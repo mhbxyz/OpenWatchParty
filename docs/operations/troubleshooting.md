@@ -205,6 +205,40 @@ OpenWatchParty `0.4.0` sends the modern `Authorization` header. OpenWatchParty `
 
    This is deprecated and unsupported long term. It re-enables a legacy authentication path that Jellyfin 12 is removing and only restores access until you can upgrade. Do not rely on it.
 
+### The WebSocket connects but the session server rejects the token
+
+**Symptoms:**
+- The OpenWatchParty panel loads but never joins a room
+- The session server logs `Client connected: …` immediately followed by `Auth failed for …: Invalid token: InvalidSignature`
+- The plugin diagnostics may report `authentication_configuration` as passing
+
+**Cause:**
+
+The plugin signs each session token with its own `JwtSecret`; the session server verifies it with `JWT_SECRET`. When the two values differ, every authentication attempt fails with `InvalidSignature` even though both components look healthy on their own.
+
+The plugin's **Allow insecure unauthenticated development** setting does not work around this. It only makes the plugin omit the token, it is ignored while a `JwtSecret` is configured, and the session server independently requires `ALLOW_INSECURE_NO_AUTH=true` before it accepts unauthenticated clients.
+
+**Solutions:**
+
+1. **Managed deployments** (installed with `owpctl`): run `owpctl doctor`, which performs an authenticated WebSocket ping/pong and reports this failure directly. Use `owpctl configure --rotate-jwt-secret` (or `owpctl pair`) to bring both sides back in sync.
+2. **Manual deployments**: set the same value in *Dashboard → Plugins → OpenWatchParty → JWT secret* and in the session server's `JWT_SECRET` environment variable, then restart the session server. Confirm from its logs that it started with `JWT authentication is enabled` and that no `InvalidSignature` appears after a browser reload.
+
+### Diagnostics report the session server as unreachable
+
+**Symptoms:**
+- `Run diagnostics` fails the `session_http` check with `SESSION_UNREACHABLE` or `Connection refused (host:3000)`
+- The browser still appears to connect, or the panel times out while `just up` looks healthy
+
+**Cause:**
+
+The health probe runs inside the Jellyfin process, so it resolves the session server from Jellyfin's network namespace — not the browser's. A same-host auto-detected URL such as `ws://192.168.1.10:3000/ws` can be reachable from the browser and refused from the Jellyfin container, especially when the two run on different Docker networks or the port is only published on loopback.
+
+**Solutions:**
+
+1. Set an explicit **Session server URL** (`ws://host:port/ws`) that is reachable from both Jellyfin and the browser, rather than relying on same-host auto-detection.
+2. In Docker, put Jellyfin and the session server on a shared network and use the service name (for example `ws://owp-session-server:3000/ws`) if the browser reaches it through a reverse proxy.
+3. Re-run `Run diagnostics`: `session_http` must report the session server version and protocol before a watch party can work.
+
 ### HLS Streaming Issues
 
 **Symptoms:**
