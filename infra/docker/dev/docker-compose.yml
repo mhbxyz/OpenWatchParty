@@ -42,7 +42,7 @@ services:
 
   jellyfin-dev:
     # The tag follows version.json; update this digest when that version changes.
-    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-12.0}@sha256:baba630419915985442f315f08b0cf46d9f4c8a0cc4bd38e94a6d35751dd5ef5
+    image: jellyfin/jellyfin:${JELLYFIN_VERSION:-12.1}@sha256:78d3ea1207d1322471fcac39a614f004f2ccf7e878f95ab2977d752f07e4dd7e
     container_name: jellyfin-dev
     environment:
       - PUID=${UID:-1000}

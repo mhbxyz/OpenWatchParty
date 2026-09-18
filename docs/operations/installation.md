@@ -26,7 +26,7 @@ See [Guided Setup and owpctl](owpctl.md) for download verification, headless ins
 ### Version Selection
 
 - **OpenWatchParty `0.4.0`** targets Jellyfin ABI `12.0.0.0`
-- **Validated environment**: Jellyfin packages and image `12.0`
+- **Validated environment**: Jellyfin packages `12.0.0` and image `12.1`
 
 ## Choose Your Installation Path
 
