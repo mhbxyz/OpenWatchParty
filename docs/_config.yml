@@ -2,6 +2,11 @@ title: OpenWatchParty
 description: Synchronized watch parties for Jellyfin
 remote_theme: just-the-docs/just-the-docs@v0.10.0
 
+# The remote theme is fetched by this plugin, which the github-pages
+# meta-gem used to whitelist for us.
+plugins:
+  - jekyll-remote-theme
+
 # GitHub repository
 repository: mhbxyz/OpenWatchParty
 
