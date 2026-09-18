@@ -109,6 +109,10 @@ struct Fingerprint {
     modified: Option<SystemTime>,
     len: u64,
     inode: u64,
+    /// Inode change time. Unlike mtime, userspace cannot set it, so a rewrite
+    /// that preserves timestamps (`cp -p`, `install -p`, `rsync -a`) still
+    /// invalidates the cache.
+    changed: (i64, i64),
 }
 
 impl Fingerprint {
@@ -116,22 +120,23 @@ impl Fingerprint {
         let metadata = fs::metadata(path)
             .map_err(|error| format!("cannot read trust store {}: {error}", path.display()))?;
         #[cfg(unix)]
-        let inode = {
+        let (inode, changed) = {
             use std::os::unix::fs::MetadataExt;
-            metadata.ino()
+            (metadata.ino(), (metadata.ctime(), metadata.ctime_nsec()))
         };
         #[cfg(not(unix))]
-        let inode = 0;
+        let (inode, changed) = (0, (0, 0));
 
         Ok(Self {
             modified: metadata.modified().ok(),
             len: metadata.len(),
             inode,
+            changed,
         })
     }
 
     fn is_conclusive(self) -> bool {
-        self.modified.is_some() || self.inode != 0
+        self.modified.is_some() || self.inode != 0 || self.changed != (0, 0)
     }
 }
 
@@ -147,12 +152,20 @@ static TRUST_STORE_CACHE: OnceLock<Mutex<Option<CachedStore>>> = OnceLock::new()
 mod tests {
     use super::*;
 
-    fn store_with_status(status: &str) -> String {
-        // 384 bytes is the smallest modulus the store accepts (3072 bits).
-        let modulus = URL_SAFE_NO_PAD.encode([3u8; 384]);
+    fn store_with_modulus(status: &str, modulus: &str) -> String {
         format!(
             r#"{{"version":1,"keys":[{{"kid":"key-1","issuer":"i","audience":"a","n":"{modulus}","e":"AQAB","status":"{status}"}}]}}"#
         )
+    }
+
+    fn store_with_status(status: &str) -> String {
+        // 384 bytes is the smallest modulus the store accepts (3072 bits).
+        store_with_modulus(status, &URL_SAFE_NO_PAD.encode([3u8; 384]))
+    }
+
+    /// A second valid 3072-bit modulus of exactly the same encoded length.
+    fn rotated_modulus() -> String {
+        URL_SAFE_NO_PAD.encode([5u8; 384])
     }
 
     #[test]
@@ -178,25 +191,54 @@ mod tests {
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("trust.json");
 
-        fs::write(&path, store_with_status("active")).unwrap();
+        let original = URL_SAFE_NO_PAD.encode([3u8; 384]);
+        fs::write(&path, store_with_modulus("active", &original)).unwrap();
         let first = TrustStore::load_cached(&path).unwrap();
         let second = TrustStore::load_cached(&path).unwrap();
         assert!(
             Arc::ptr_eq(&first, &second),
             "an unchanged store must be reused instead of re-parsed"
         );
-        assert!(first.active_key("key-1").is_ok());
+        assert_eq!(first.active_key("key-1").unwrap().n, original);
 
-        // Rotation is an atomic rename over the mounted directory, which
-        // changes the inode even when the content length is identical.
-        let rotated = dir.join("trust.json.next");
-        fs::write(&rotated, store_with_status("revoked")).unwrap();
-        fs::rename(&rotated, &path).unwrap();
+        // Rotate in place with a different key of identical encoded length, so
+        // a fingerprint based on the length alone would keep serving the old
+        // modulus and consider a retired key valid.
+        let rotated = rotated_modulus();
+        assert_eq!(
+            rotated.len(),
+            original.len(),
+            "the rotation fixture must not change the store length"
+        );
+        fs::write(&path, store_with_modulus("active", &rotated)).unwrap();
 
         let after_rotation = TrustStore::load_cached(&path).unwrap();
-        assert!(
-            after_rotation.active_key("key-1").is_err(),
-            "revoking a key must be visible without a restart"
+        assert_eq!(
+            after_rotation.active_key("key-1").unwrap().n,
+            rotated,
+            "a same-length rewrite must invalidate the cached store"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn fingerprint_is_sensitive_to_a_same_length_rewrite() {
+        let dir =
+            std::env::temp_dir().join(format!("owp-trust-fingerprint-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("trust.json");
+
+        fs::write(&path, store_with_status("active")).unwrap();
+        let before = Fingerprint::of(&path).unwrap();
+
+        fs::write(&path, store_with_modulus("active", &rotated_modulus())).unwrap();
+        let after = Fingerprint::of(&path).unwrap();
+
+        assert_eq!(before.len, after.len, "the rewrite keeps the same length");
+        assert_ne!(
+            before, after,
+            "a same-length rewrite must change the fingerprint"
         );
 
         let _ = fs::remove_dir_all(&dir);

@@ -175,14 +175,17 @@ impl JwtConfig {
 
         let header =
             decode_header(token).map_err(|error| format!("Invalid token header: {error}"))?;
-        // The trust store is only consulted for RS256 tokens, so an HS256-only
-        // deployment does not need JWT_TRUST_STORE_PATH to be set.
-        let trust_store = if header.alg == Algorithm::RS256 {
+        let mode = auth_mode()?;
+        // The trust store is only consulted for RS256 tokens accepted in an
+        // asymmetric mode, so an HS256-only deployment does not need
+        // JWT_TRUST_STORE_PATH to be set — and an RS256 token must be reported
+        // as rejected by the mode, not as a missing configuration.
+        let trust_store = if header.alg == Algorithm::RS256 && mode != AuthMode::Hs256 {
             Some(std::path::PathBuf::from(trust_store_path()?))
         } else {
             None
         };
-        self.validate_header(token, &header, auth_mode()?, trust_store.as_deref())
+        self.validate_header(token, &header, mode, trust_store.as_deref())
     }
 
     fn validate_header(
@@ -872,6 +875,24 @@ ghwPqeM2CO//6dCav8vYSdem
         );
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rs256_in_hs256_mode_reports_the_mode_not_a_missing_trust_store() {
+        let config = JwtConfig {
+            secret: "a-shared-secret-for-tests-only!!".to_string(),
+            audience: TEST_AUDIENCE.to_string(),
+            issuer: TEST_ISSUER.to_string(),
+            enabled: true,
+        };
+        let now = (crate::utils::now_ms() / 1000) as usize;
+        let token = sign_rs256(Some(TEST_KID), now + 600, now);
+
+        let error = config.validate_token(&token).unwrap_err();
+        assert!(
+            error.contains("hs256 mode"),
+            "an RS256 token in hs256 mode must be reported as a mode mismatch, got: {error}"
+        );
     }
 
     #[test]
