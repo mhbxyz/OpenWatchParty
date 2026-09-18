@@ -221,7 +221,7 @@ services:
 ### Check Plugin Config
 
 ```bash
-curl -H "X-Emby-Token: YOUR_API_KEY" \
+curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "http://localhost:8096/System/Configuration/Plugin/0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
 ```
 
@@ -234,7 +234,7 @@ curl http://localhost:3000/health
 ### Test JWT Token Generation
 
 ```bash
-curl -H "X-Emby-Token: YOUR_API_KEY" \
+curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "http://localhost:8096/OpenWatchParty/Token"
 ```
 

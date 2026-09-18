@@ -91,7 +91,7 @@ Generates a JWT token for the authenticated user.
 **Example:**
 ```bash
 # With Jellyfin API key
-curl -H "X-Emby-Token: YOUR_API_KEY" \
+curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "http://localhost:8096/OpenWatchParty/Token"
 
 # Response
@@ -192,7 +192,7 @@ TOKEN=$(curl -s -X POST "http://localhost:8096/Users/AuthenticateByName" \
   -d '{"Username":"admin","Pw":"password"}' | jq -r '.AccessToken')
 
 # Get OpenWatchParty token
-curl -H "X-Emby-Token: $TOKEN" \
+curl -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
   "http://localhost:8096/OpenWatchParty/Token"
 ```
 
@@ -205,7 +205,7 @@ Plugin configuration is managed through Jellyfin's standard plugin configuration
 Get plugin configuration.
 
 ```bash
-curl -H "X-Emby-Token: $TOKEN" \
+curl -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
   "http://localhost:8096/System/Configuration/Plugin/0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
 ```
 
@@ -215,7 +215,7 @@ Update plugin configuration.
 
 ```bash
 curl -X POST \
-  -H "X-Emby-Token: $TOKEN" \
+  -H "Authorization: MediaBrowser Token=\"$TOKEN\"" \
   -H "Content-Type: application/json" \
   -d '{
     "JwtSecret": "<output-of-openssl-rand-base64-32>",

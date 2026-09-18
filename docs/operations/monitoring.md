@@ -39,7 +39,7 @@ docker inspect --format='{{.State.Health.Status}}' session-server
 
 Check if plugin is loaded:
 ```bash
-curl -H "X-Emby-Token: TOKEN" \
+curl -H "Authorization: MediaBrowser Token=\"TOKEN\"" \
   "http://localhost:8096/System/Plugins" | jq '.[] | select(.Name == "OpenWatchParty")'
 ```
 
