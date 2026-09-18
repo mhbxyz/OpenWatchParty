@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.88-alpine@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa714dea036574d AS builder
+FROM rust:1.98-alpine@sha256:622b73220064fc64618062f7d9350a9ec689e6134b288a3023665431dc7dbd83 AS builder
 
 # Build mode: "dev" (fast compile, debug) or "release" (optimized)
 ARG BUILD_MODE=dev
@@ -39,7 +39,7 @@ RUN touch src/main.rs && \
     fi
 
 # Runtime stage
-FROM alpine:3.21@sha256:81ec32e1e073303f1591af7725ca32446d44d12907c1f4e2851a95031faaec99
+FROM alpine:3.24@sha256:5b02b42e375f7426f8d65c3af331ca05d9878f9989230354504e0b9dfd431f60
 
 # Install curl for healthcheck and ca-certificates for HTTPS
 RUN apk add --no-cache ca-certificates curl && \
