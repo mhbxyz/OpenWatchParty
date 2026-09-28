@@ -4,8 +4,9 @@ FROM rust:1.88-alpine@sha256:9dfaae478ecd298b6b5a039e1f2cc4fc040fc818a2de9aa78fa
 # Build mode: "dev" (fast compile, debug) or "release" (optimized)
 ARG BUILD_MODE=dev
 
-# Install build dependencies: musl-dev for static linking, mold for fast linking
-RUN apk add --no-cache musl-dev mold
+# Install build dependencies: build-base for the aws-lc-sys C sources and static
+# musl linking, mold for fast linking
+RUN apk add --no-cache build-base mold
 
 # Configure Rust to use mold linker
 ENV RUSTFLAGS="-C link-arg=-fuse-ld=mold"

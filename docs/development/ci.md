@@ -102,7 +102,9 @@ The Docker build uses Alpine with musl libc for smaller images:
 
 ```dockerfile
 FROM rust:1.88-alpine AS builder
-RUN apk add --no-cache musl-dev
+# build-base provides the C/C++ compiler required by the aws-lc-sys crypto
+# backend; mold keeps the Rust link step fast.
+RUN apk add --no-cache build-base mold
 # ... build with musl target
 
 FROM alpine:3.21
