@@ -1,16 +1,16 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
-use rand::RngCore;
 use sha2::{Digest, Sha256};
 
 pub fn generate_jwt_secret() -> String {
     let mut bytes = [0_u8; 32];
-    rand::rng().fill_bytes(&mut bytes);
+    rand::fill(&mut bytes);
     STANDARD.encode(bytes)
 }
 
 pub fn fingerprint(secret: &str) -> String {
     let digest = Sha256::digest(secret.as_bytes());
-    format!("sha256:{digest:x}")
+    let fingerprint: String = digest.iter().map(|byte| format!("{byte:02x}")).collect();
+    format!("sha256:{fingerprint}")
 }
 
 pub fn env_file(secret: &str) -> String {

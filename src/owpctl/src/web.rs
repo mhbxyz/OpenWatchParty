@@ -11,7 +11,6 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
 
@@ -182,7 +181,7 @@ fn secure_headers(headers: &mut HeaderMap) {
 
 fn random_token() -> String {
     let mut bytes = [0_u8; 32];
-    rand::rng().fill_bytes(&mut bytes);
+    rand::fill(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
