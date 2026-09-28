@@ -117,6 +117,13 @@ describe('WebSocket message schema validation', () => {
     invalid({ type: 'pong', payload: { client_ts: 1 }, ts: 1 });
   });
 
+  it('rejects message types inherited from Object.prototype', () => {
+    for (const type of ['toString', 'hasOwnProperty', 'constructor', '__defineGetter__']) {
+      invalid(envelope(type, {}));
+      assert.equal(OWP.wsValidation.isKnownType(type), false);
+    }
+  });
+
   it('rejects unknown envelope and payload fields', () => {
     invalid(envelope('pong', { client_ts: 1 }, { injected: true }));
     invalid(envelope('state_update', {

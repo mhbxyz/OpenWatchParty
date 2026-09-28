@@ -147,7 +147,13 @@
 
   const validateMessage = (message) => {
     if (!object(message)) return invalid('message must be an object');
-    if (typeof message.type !== 'string' || !validators[message.type]) return invalid('message type is unknown');
+    // Resolve the validator as an own property only, then require a real
+    // function: a plain truthiness check would accept inherited names such as
+    // `toString` or `hasOwnProperty` and dispatch to Object.prototype methods.
+    const validator = typeof message.type === 'string' && Object.hasOwn(validators, message.type)
+      ? validators[message.type]
+      : null;
+    if (typeof validator !== 'function') return invalid('message type is unknown');
     if (!onlyKeys(message, envelopeKeys)) return invalid('message has unknown fields');
     if (roomRequired.has(message.type) && !string(message.room, MAX_ID_LENGTH)) {
       return invalid('room is required');
@@ -157,7 +163,7 @@
     if (!timestamp(message.ts)) return invalid('ts is invalid');
     if (!timestamp(message.server_ts)) return invalid('server_ts is invalid');
     if (!Object.prototype.hasOwnProperty.call(message, 'payload')) return invalid('payload is required');
-    const error = validators[message.type](message);
+    const error = validator(message);
     return error ? invalid(error) : valid();
   };
 
