@@ -179,6 +179,21 @@ Current alert policy:
 - **MEDIUM**: Fix in next release
 - **LOW/NOTE**: Track, fix when convenient
 
+### Repository automation
+
+The repository enables the GitHub security features that feed these alerts:
+
+- **CodeQL** (`security.yml`) runs on every push and pull request to `main`,
+  plus the weekly schedule. Its findings appear under **Code scanning alerts**;
+  fixing the code closes the alert on the next default-branch analysis.
+- **Dependabot alerts** and **Dependabot security updates** are enabled, so a
+  vulnerable dependency raises an alert and opens a fix pull request
+  automatically. Version-update pull requests keep the rest of the dependency
+  set current.
+- **Gitleaks**, `cargo audit`, `npm audit`, `nuget audit`, `bundle-audit` and
+  Trivy run in the same workflow, so a secret leak or a known CVE in a lockfile
+  fails CI before it reaches a release.
+
 ## Next Steps
 
 - [Setup](setup) - Development environment
