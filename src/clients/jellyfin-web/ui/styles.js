@@ -1,7 +1,19 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
-  const { PANEL_ID, STYLE_ID } = OWP.constants;
+  const {
+    PANEL_ID,
+    STYLE_ID,
+    SYNCPLAY_HIDE_STYLE_ID,
+    HEADER_BTN_CLASS,
+    MODERN_HEADER_BTN_ID,
+    PANEL_HEADER_CLASS
+  } = OWP.constants;
+
+  // Jellyfin's built-in SyncPlay button: `.headerSyncButton` in the legacy
+  // header, and the MUI toolbar button that opens the `app-sync-play-menu`.
+  const NATIVE_SYNCPLAY_CSS =
+    '.headerSyncButton, button[aria-controls="app-sync-play-menu"] { display: none !important; }';
 
   const CSS_STYLES = `
     #${PANEL_ID} {
@@ -12,7 +24,25 @@
       display: flex; flex-direction: column;
     }
     #${PANEL_ID}.hide { display: none; }
+    /* Opened from the header: placed below it (top is set when it opens) */
+    #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
+    @media (max-width: 600px) {
+      #${PANEL_ID}.${PANEL_HEADER_CLASS} { left: 8px; right: 8px; width: auto; }
+    }
+    /* The player has its own Watch Party button */
+    .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
+    /* Same size as the MUI SVG icons next to it (MuiSvgIcon fontSizeMedium) */
+    #${MODERN_HEADER_BTN_ID} .material-icons { font-size: 1.5rem; width: 1em; height: 1em; line-height: 1; }
     .owp-header { font-weight: bold; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 8px; }
+    .owp-header-actions { display: flex; align-items: center; gap: 8px; }
+    .owp-close-btn {
+      display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+      margin-left: 8px; padding: 4px; border: none; border-radius: 50%;
+      background: transparent; color: #aaa; cursor: pointer;
+    }
+    .owp-header-actions .owp-close-btn { margin-left: 0; }
+    .owp-close-btn:hover, .owp-close-btn:focus-visible { background: rgba(255,255,255,0.1); color: #fff; }
+    .owp-close-btn .material-icons { font-size: 20px; }
     .owp-section { margin-bottom: 15px; overflow-y: auto; }
     .owp-label { font-size: 11px; color: #888; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
     .owp-room-item {
@@ -27,6 +57,9 @@
     }
     .owp-btn.secondary { background: #1565c0; }
     .owp-btn.danger { background: #d32f2f; }
+    .owp-btn:disabled { background: #333; color: #888; cursor: not-allowed; }
+    .owp-hint { font-size: 11px; color: #888; margin-top: 8px; text-align: center; }
+    .owp-room-note { font-size: 10px; color: #ffb74d; }
     .owp-input {
       width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444;
       background: #000; color: #fff; box-sizing: border-box; margin-bottom: 10px; font-size: 14px;
@@ -123,5 +156,21 @@
     document.head.appendChild(style);
   };
 
-  Object.assign(ui, { injectStyles });
+  // Hides or restores the native SyncPlay button to match the plugin setting.
+  // A stylesheet, rather than removing the buttons, survives Jellyfin
+  // re-rendering its headers.
+  const applyNativeSyncPlayVisibility = () => {
+    const existing = document.getElementById(SYNCPLAY_HIDE_STYLE_ID);
+    if (!OWP.state.hideNativeSyncPlayButton) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    const style = document.createElement('style');
+    style.id = SYNCPLAY_HIDE_STYLE_ID;
+    style.textContent = NATIVE_SYNCPLAY_CSS;
+    document.head.appendChild(style);
+  };
+
+  Object.assign(ui, { injectStyles, applyNativeSyncPlayVisibility });
 })();

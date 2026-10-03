@@ -135,7 +135,7 @@ describe('dynamic DOM rendering', () => {
     let bubbled = false;
     OWP.actions = { joinRoom: roomId => { joinedRoom = roomId; } };
     list.addEventListener('click', () => { bubbled = true; });
-    OWP.state.rooms = [{ id: 'room-handler', name: 'Room', count: 1, media_id: '' }];
+    OWP.state.rooms = [{ id: 'room-handler', name: 'Room', count: 1, media_id: 'media' }];
 
     OWP.ui.updateRoomListUI();
     list.children[0].click();

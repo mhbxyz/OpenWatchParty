@@ -62,5 +62,29 @@
     return getItemIdFromGlobals() || getItemIdFromDom() || getItemIdFromUrl() || null;
   };
 
-  Object.assign(utils, { getCurrentItem, getCurrentItemId });
+  const ITEM_ID_RE = /^[a-f0-9]{32}$/i;
+
+  // Jellyfin keeps the last player page in the DOM, hidden as `.page.hide`,
+  // and its OSD still carries the previous item's id.
+  const firstOnVisiblePage = (selector) => [...document.querySelectorAll(selector)]
+    .find(element => typeof element.closest !== 'function' || !element.closest('.page.hide')) || null;
+
+  // The item the player is actually playing, or null. Unlike getCurrentItemId,
+  // it never falls back to the page being browsed (route item, URL) or to a
+  // hidden player page, which name something that is not playing.
+  const getPlayingItemId = () => {
+    if (!utils.getVideo()) return null;
+    try {
+      if (window.NowPlayingItem?.Id) return window.NowPlayingItem.Id;
+    } catch (e) { /* ignore */ }
+    const item = getCurrentItem();
+    if (item?.Id) return item.Id;
+    const titleEl = firstOnVisiblePage('.osdTitle[data-id], .videoOsdTitle[data-id], [class*="osd"] [data-id]');
+    if (ITEM_ID_RE.test(titleEl?.dataset?.id || '')) return titleEl.dataset.id;
+    const itemIdEl = firstOnVisiblePage('.videoOsd [data-itemid], .videoOsdBottom [data-itemid]');
+    if (ITEM_ID_RE.test(itemIdEl?.dataset?.itemid || '')) return itemIdEl.dataset.itemid;
+    return null;
+  };
+
+  Object.assign(utils, { getCurrentItem, getCurrentItemId, getPlayingItemId });
 })();

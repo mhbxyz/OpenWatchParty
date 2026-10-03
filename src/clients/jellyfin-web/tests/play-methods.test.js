@@ -1,7 +1,8 @@
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 
 const OWP = require('./setup.js');
+const { FakeDocument } = require('./fake-dom.js');
 let playbackManager;
 let toasts;
 OWP.utils.getPlaybackManager = () => playbackManager;
@@ -81,18 +82,77 @@ describe('Jellyfin playback API fallbacks', () => {
     assert.equal(await OWP.playback.playItem({ Id: 'item' }), false);
   });
 
-  it('uses the official Jellyfin play button when PlaybackManager is unavailable', async () => {
-    let clicked = 0;
-    OWP.state.inRoom = true;
-    OWP.utils.getVideo = () => null;
-    document.querySelector = selector => selector === '.btnPlay:not(.hide)'
-      ? { click: () => { clicked++; } }
-      : null;
+  describe('official play button of the details page', () => {
+    const ITEM = '0123456789abcdef0123456789abcdef';
+    const OTHER = 'fedcba9876543210fedcba9876543210';
+    let realDocument;
+    let clicked;
 
-    assert.equal(await OWP.playback.playItem({ Id: 'item-fallback' }), true);
-    assert.match(window.location.hash, /details\?id=item-fallback/);
-    assert.equal(clicked, 1);
-    OWP.state.inRoom = false;
+    // A Jellyfin details page: its button row carries the item id. Pages shown
+    // before stay in the DOM, hidden as `.page.hide`.
+    const detailsPage = (itemId, { hidden = false } = {}) => {
+      const page = document.createElement('div');
+      page.className = `page libraryPage itemDetailPage${hidden ? ' hide' : ''}`;
+      const row = document.createElement('div');
+      row.className = 'mainDetailButtons focuscontainer-x';
+      const play = document.createElement('button');
+      play.className = 'button-flat btnPlay detailButton emby-button';
+      play.click = () => clicked.push(itemId);
+      const rating = document.createElement('button');
+      rating.className = 'button-flat btnUserRating detailButton emby-button';
+      rating.setAttribute('data-id', itemId);
+      row.append(play, rating);
+      page.appendChild(row);
+      document.body.appendChild(page);
+    };
+
+    beforeEach(() => {
+      realDocument = globalThis.document;
+      globalThis.document = new FakeDocument();
+      clicked = [];
+      OWP.state.inRoom = true;
+      OWP.utils.getVideo = () => null;
+    });
+
+    afterEach(() => {
+      globalThis.document = realDocument;
+      OWP.state.inRoom = false;
+      OWP.timers.clearScope('media');
+    });
+
+    it('plays the item from its own details page when PlaybackManager is unavailable', async () => {
+      // A hidden details page of another item comes first in the document.
+      detailsPage(OTHER, { hidden: true });
+      detailsPage(ITEM);
+
+      assert.equal(await OWP.playback.playItem({ Id: ITEM }), true);
+      assert.match(window.location.hash, new RegExp(`details\\?id=${ITEM}`));
+      assert.deepEqual(clicked, [ITEM]);
+    });
+
+    it('does not play another item whose details page is still shown', async () => {
+      // The previous page can stay visible until Jellyfin renders the new one.
+      detailsPage(OTHER);
+
+      await OWP.playback.playItem({ Id: ITEM });
+      assert.deepEqual(clicked, []);
+
+      detailsPage(ITEM);
+      await new Promise(resolve => setTimeout(resolve, 150));
+      assert.deepEqual(clicked, [ITEM]);
+    });
+
+    it('waits for the item details page instead of playing a hidden one', async () => {
+      detailsPage(OTHER, { hidden: true });
+      detailsPage(ITEM, { hidden: true });
+
+      await OWP.playback.playItem({ Id: ITEM });
+      assert.deepEqual(clicked, []);
+
+      detailsPage(ITEM);
+      await new Promise(resolve => setTimeout(resolve, 150));
+      assert.deepEqual(clicked, [ITEM]);
+    });
   });
 
   it('does not continue fallbacks after request invalidation', async () => {

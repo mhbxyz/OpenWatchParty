@@ -139,4 +139,24 @@ public class PluginConfigurationTests
         Assert.False(config.AllowAutoDetectedSessionServer);
     }
 
+    [Fact]
+    public void HideNativeSyncPlayButton_DefaultIsDisabled()
+    {
+        var config = new PluginConfiguration();
+        Assert.False(config.HideNativeSyncPlayButton);
+    }
+
+    [Fact]
+    public void ConfigurationPage_OffersNativeSyncPlayToggle()
+    {
+        var assembly = typeof(Plugin).Assembly;
+        using var stream = assembly.GetManifestResourceStream("OpenWatchParty.Plugin.Web.configPage.html");
+        Assert.NotNull(stream);
+        using var reader = new StreamReader(stream);
+        var page = reader.ReadToEnd();
+
+        // Loading and saving the checkbox is covered by tests/config-page-syncplay.test.js.
+        Assert.Contains("id=\"HideNativeSyncPlayButton\"", page, StringComparison.Ordinal);
+    }
+
 }

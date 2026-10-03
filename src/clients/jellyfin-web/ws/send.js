@@ -65,10 +65,15 @@
   };
 
   const createRoom = () => {
+    const v = utils.getVideo();
+    const mediaId = utils.getPlayingItemId?.();
+    // Rooms start from what is playing: never create an empty room.
+    if (!v || !mediaId) {
+      if (OWP.ui?.showToast) OWP.ui.showToast('Start playing something to create a room.');
+      return;
+    }
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = '';
-    const v = utils.getVideo();
-    const mediaId = utils.getCurrentItemId();
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
       || 'Anonymous';

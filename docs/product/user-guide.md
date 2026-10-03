@@ -24,11 +24,20 @@ Before using OpenWatchParty, ensure your Jellyfin administrator has:
 4. **Click "Create Room"** - The room is created and named after you (`Room de <you>`)
 5. **Wait for participants** - The room appears in everyone's "Available Rooms" list and on the Jellyfin home page
 
+The Watch Party button in the Jellyfin header opens the same panel, but **Create Room** stays disabled, with a hint, until something is playing: a room always starts from the video you are watching.
+
 As the host, you control playback for everyone. When you play, pause, or seek, all participants follow.
 
 ![The Watch Party panel during an active session]({{ '/assets/images/watch-party-panel.png' | relative_url }})
 
 ## Joining a Watch Party
+
+### From the Header
+1. **Click the Watch Party button in the Jellyfin header** - Next to SyncPlay, Cast and Search, on the pages that show the header (in the player, use the OSD button); nothing needs to be playing
+2. **Find the room** - Rooms appear in the list with participant counts
+3. **Click "Join"** - OpenWatchParty starts the room's movie and syncs you to the host's position
+
+A room marked **No media** has nothing to start for you: play something first, then join it from the player panel.
 
 ### From the Player
 1. **Open any video** - The same video the host is watching
@@ -95,9 +104,10 @@ As a participant:
 ![Close-up of an active room: participants, chat, latency and room ID]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
 ### Lobby View (Not in a room)
-- **Room list** - Active watch parties with names and participant counts
-- **Create room** - "Create Room" button; the room is named after you
+- **Room list** - Active watch parties with names and participant counts; rooms without media are marked "No media"
+- **Create room** - "Create Room" button; the room is named after you. Disabled until something is playing
 - **Connection status** - Online/Offline indicator
+- **Close (X)** - Hides the panel; open it again from the header or the player button
 
 ### In-Room View
 - **Room name** - Current watch party name
@@ -105,7 +115,8 @@ As a participant:
 - **Sync indicator** - Shows sync status (participants only)
 - **Chat** - Text messaging with other participants
 - **RTT** - Round-trip time to server (latency indicator)
-- **Leave button** - Exit the watch party (the host closes the room for everyone)
+- **Leave button** - Exit the watch party; for the host it reads **Close room** and closes the room for everyone
+- **Close (X)** - Only hides the panel: you stay in the room
 
 ## Using Chat
 

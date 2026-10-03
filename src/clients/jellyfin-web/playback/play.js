@@ -48,6 +48,21 @@
     return { success: false, errors };
   };
 
+  const ITEM_ID_RE = /^[a-f0-9]{32}$/i;
+
+  // The play button of this item's details page. Jellyfin keeps the pages it
+  // showed before in the DOM, hidden as `.page.hide`, so the first play button
+  // in the document can belong to a details page of another item.
+  const findDetailsPlayButton = (itemId) => {
+    if (!ITEM_ID_RE.test(itemId) || typeof document.querySelectorAll !== 'function') return null;
+    for (const page of document.querySelectorAll('.page:not(.hide)')) {
+      if (!page.querySelector(`.mainDetailButtons [data-id="${itemId}"]`)) continue;
+      const button = page.querySelector('.mainDetailButtons .btnPlay:not(.hide)');
+      if (button) return button;
+    }
+    return null;
+  };
+
   const launchViaDetailsPage = (item, isCurrent = () => true) => {
     const itemId = item?.Id || item?.id;
     if (!itemId || !OWP.state.inRoom || !isCurrent() || !window.location || !document.querySelector) {
@@ -60,9 +75,8 @@
     let attempts = 0;
     const clickOfficialPlay = () => {
       if (!OWP.state.inRoom || !isCurrent()) return;
-      const video = OWP.utils.getVideo?.();
-      if (video && OWP.utils.getCurrentItemId?.() === itemId) return;
-      const button = document.querySelector('.btnPlay:not(.hide)');
+      if (OWP.utils.getPlayingItemId?.() === itemId) return;
+      const button = findDetailsPlayButton(itemId);
       if (button) {
         button.click();
         return;
@@ -136,7 +150,9 @@
   const ensurePlayback = async (itemId, attempt = 0, expectedRequestAttempt = null, force = false) => {
     const state = OWP.state;
     if (!state.inRoom || !itemId || !window.ApiClient) return false;
-    if (!force && utils.getCurrentItemId() === itemId) return true;
+    // Only media that is actually playing counts as started, not the item of
+    // the page being browsed (a details page names it while nothing plays).
+    if (!force && utils.getPlayingItemId?.() === itemId) return true;
     if (!force && state.joiningItemId === itemId && expectedRequestAttempt === null) return false;
     const requestAttempt = expectedRequestAttempt ?? ++state.playbackRequestAttempt;
     if (requestAttempt !== state.playbackRequestAttempt) return false;

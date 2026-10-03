@@ -71,4 +71,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public bool AllowAutoDetectedSessionServer { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether Jellyfin Web hides its built-in SyncPlay button.
+    /// Disabled by default; the Watch Party controls are not affected.
+    /// </summary>
+    public bool HideNativeSyncPlayButton { get; set; }
+
 }

@@ -60,7 +60,9 @@ Generates a JWT token for the authenticated user.
   "auth_enabled": true,
   "expires_in": 3600,
   "user_id": "abc123",
-  "user_name": "John"
+  "user_name": "John",
+  "session_server_url": "wss://jellyfin.example.com/ws",
+  "hide_native_syncplay_button": false
 }
 ```
 
@@ -71,9 +73,13 @@ Generates a JWT token for the authenticated user.
   "auth_enabled": false,
   "insecure_mode": true,
   "user_id": "abc123",
-  "user_name": "John"
+  "user_name": "John",
+  "session_server_url": "wss://jellyfin.example.com/ws",
+  "hide_native_syncplay_button": false
 }
 ```
+
+`hide_native_syncplay_button` is `true` when the administrator enabled **Hide Jellyfin's SyncPlay button**; the web client then hides the built-in SyncPlay button, and shows it again when a later response turns the setting off.
 
 **Status Codes:**
 | Code | Description |

@@ -71,6 +71,17 @@ const matchesSimple = (element, selector) => {
     selector = selector.slice(0, notMatch.index);
     if (matchesSimple(element, notMatch[1])) return false;
   }
+  const attributes = [...selector.matchAll(/\[([\w-]+)(?:(\*?=)"([^"]*)")?\]/g)];
+  const attributeValue = name => (name === 'class'
+    ? element.className || undefined
+    : (Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined));
+  if (attributes.some(([, name, operator, value]) => {
+    const actual = attributeValue(name);
+    if (operator === undefined) return actual === undefined;
+    if (operator === '*=') return actual === undefined || !String(actual).includes(value);
+    return actual !== value;
+  })) return false;
+  selector = selector.replace(/\[[^\]]*\]/g, '');
   const idMatch = selector.match(/#([\w-]+)/);
   if (idMatch && element.id !== idMatch[1]) return false;
   const classes = [...selector.matchAll(/\.([\w-]+)/g)].map(match => match[1]);
@@ -82,6 +93,7 @@ const matchesSimple = (element, selector) => {
 const descendants = (root) => root.children.flatMap(child => [child, ...descendants(child)]);
 
 const matchesSelector = (element, selector) => {
+  if (selector.includes(',')) return selector.split(',').some(part => matchesSelector(element, part));
   const parts = selector.trim().split(/\s+/);
   let candidate = element;
   if (!matchesSimple(candidate, parts.pop())) return false;
@@ -115,6 +127,10 @@ class FakeElement extends FakeNode {
         names.forEach(name => classes.add(name));
         this.className = [...classes].join(' ');
       },
+      remove: (...names) => {
+        this.className = this.className.split(/\s+/)
+          .filter(value => value && !names.includes(value)).join(' ');
+      },
       contains: name => this.className.split(/\s+/).includes(name),
       toggle: name => {
         if (this.classList.contains(name)) {
@@ -125,6 +141,10 @@ class FakeElement extends FakeNode {
         return true;
       }
     };
+  }
+
+  getAttribute(name) {
+    return Object.prototype.hasOwnProperty.call(this.attributes, name) ? this.attributes[name] : null;
   }
 
   setAttribute(name, value) {
@@ -183,6 +203,7 @@ class FakeElement extends FakeNode {
 
 class FakeDocument {
   constructor() {
+    this.head = new FakeElement('head');
     this.body = new FakeElement('body');
   }
 
@@ -195,7 +216,8 @@ class FakeDocument {
   }
 
   getElementById(id) {
-    return this.body.id === id ? this.body : descendants(this.body).find(element => element.id === id) || null;
+    return [this.body, this.head].flatMap(root => [root, ...descendants(root)])
+      .find(element => element.id === id) || null;
   }
 
   querySelector(selector) {

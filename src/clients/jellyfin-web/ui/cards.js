@@ -10,6 +10,8 @@
     return element;
   };
 
+  const NO_MEDIA_JOIN_HINT = 'This room has no media. Start playing something, then join it from the player.';
+
   const updateRoomListUI = () => {
     const roomList = document.getElementById('owp-room-list');
     if (!roomList) return;
@@ -28,9 +30,19 @@
       const count = createElement('div', '', `${String(room.count)} users`);
       count.style.cssText = 'font-size:10px; color:#888';
       details.append(name, count);
+      if (!room.media_id) {
+        const noMedia = createElement('div', 'owp-room-note', 'No media');
+        details.appendChild(noMedia);
+      }
       const join = createElement('button', 'owp-btn secondary', 'Join');
       item.append(details, join);
       item.onclick = () => {
+        // A room without media has nothing to start here. From the player,
+        // joining still syncs whatever is playing.
+        if (!room.media_id && !OWP.utils?.getPlayingItemId?.()) {
+          ui.showToast(NO_MEDIA_JOIN_HINT);
+          return;
+        }
         if (OWP.actions && OWP.actions.joinRoom) OWP.actions.joinRoom(room.id);
       };
       roomList.appendChild(item);

@@ -48,6 +48,7 @@
       state.ws.close();
       state.ws = null;
     }
+    if (OWP.ui?.removeHeaderButtons) OWP.ui.removeHeaderButtons();
     cleanupPanel();
     cleanupVideo();
     state.bound = false;

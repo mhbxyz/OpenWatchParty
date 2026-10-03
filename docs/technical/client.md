@@ -18,7 +18,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── utils/               # Utility functions
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
-    │   ├── cards.js, home.js, indicators.js
+    │   ├── cards.js, header.js, home.js, indicators.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -46,7 +46,12 @@ Defines global shared state and configuration constants.
 |----------|------|-------|-------------|
 | `PANEL_ID` | string | `'owp-panel'` | Panel element ID |
 | `BTN_ID` | string | `'owp-osd-btn'` | OSD button ID |
+| `HEADER_BTN_CLASS` | string | `'owp-header-btn'` | Class of the header buttons |
+| `LEGACY_HEADER_BTN_ID` | string | `'owp-header-btn-legacy'` | Header button ID (legacy `.headerRight`) |
+| `MODERN_HEADER_BTN_ID` | string | `'owp-header-btn-modern'` | Header button ID (MUI app bar) |
+| `PANEL_HEADER_CLASS` | string | `'owp-panel-header'` | Panel class while placed below the header |
 | `STYLE_ID` | string | `'owp-style'` | Style tag ID |
+| `SYNCPLAY_HIDE_STYLE_ID` | string | `'owp-hide-native-syncplay'` | Style tag that hides the native SyncPlay button |
 | `HOME_SECTION_ID` | string | `'owp-home-section'` | Home section ID |
 | `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | WebSocket server URL |
 | `SUPPRESS_MS` | number | `2000` | Event suppression duration (ms) |
@@ -137,7 +142,10 @@ Returns the Jellyfin playback manager.
 Returns the currently playing media item.
 
 #### `getCurrentItemId() -> string|null`
-Returns the current media item ID.
+Returns the current media item ID, falling back to the item of the page being browsed (route item, URL).
+
+#### `getPlayingItemId() -> string|null`
+Returns the item the player is actually playing, or `null`. It requires a video and never falls back to the page being browsed or to the hidden player page Jellyfin keeps (`.page.hide`) with the previous item's OSD.
 
 #### `getItemImageUrl(itemId: string) -> string`
 Returns the cover image URL for an item.
@@ -169,11 +177,12 @@ Manages HTML5 video element interaction and playback synchronization.
 ### Functions
 
 #### `playItem(item: object) -> boolean`
-Starts playback of a media item via Jellyfin API.
+Starts playback of a media item via Jellyfin API. Without a PlaybackManager, it opens the item's details page and selects the play button of that visible page (never one of a hidden, earlier details page).
 
 #### `ensurePlayback(itemId: string, attempt?: number) -> void`
 Ensures the specified media is playing.
 - **Usage**: Called when participant joins to load the same media as host.
+- **Already playing**: Skipped only when `getPlayingItemId()` reports the same item.
 - **Retry**: Up to 5 attempts, 500ms apart.
 
 #### `notifyReady() -> void`
@@ -253,7 +262,7 @@ Sends a message to the WebSocket server.
 ```
 
 #### `createRoom() -> void`
-Creates a new room with the name from the input field.
+Creates a new room for the item that is playing (`getPlayingItemId()`); refuses, with a toast, when nothing plays.
 
 #### `joinRoom(id: string) -> void`
 Joins an existing room.
@@ -338,6 +347,21 @@ Main panel render:
 #### `injectOsdButton() -> void`
 Injects "Watch Party" button into video player OSD controls.
 
+#### `injectHeaderButtons() -> void`
+Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player).
+
+#### `removeHeaderButtons() -> void`
+Removes the header buttons and stops their observers and listeners.
+
+#### `resetPanelPlacement(panel) -> void`
+Restores the default panel placement used by the player button.
+
+#### `updateCreateRoomButton() -> void`
+Enables "Create Room" only while something is playing; otherwise shows a hint.
+
+#### `applyNativeSyncPlayVisibility() -> void`
+Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).
+
 #### `showToast(message: string) -> void`
 Shows a toast notification.
 
@@ -351,12 +375,13 @@ Main entry point, initialization loops, and cleanup management.
 1. Log loading message
 2. Inject CSS styles
 3. Create UI panel (hidden by default)
-4. Connect WebSocket
-5. Start intervals:
+4. Inject the header buttons
+5. Connect WebSocket
+6. Start intervals:
 
 | Interval | Frequency | Action |
 |----------|-----------|--------|
-| UI check | 2000ms | Inject OSD button, bind video, detect video player exit |
+| UI check | 2000ms | Inject header and OSD buttons, update "Create Room", bind video, detect video player exit |
 | Ping | 10000ms | Send ping for RTT measurement |
 | Home render | 5000ms | Refresh watch parties on home page |
 | Sync loop | 500ms | Execute synchronization loop (non-hosts only) |

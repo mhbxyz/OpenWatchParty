@@ -81,6 +81,18 @@
                         </div>
                     </div>
 
+                    <!-- Web Client Settings -->
+                    <div class="verticalSection">
+                        <h2 class="sectionTitle">Web Client</h2>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label">
+                                <input is="emby-checkbox" type="checkbox" id="HideNativeSyncPlayButton" />
+                                <span>Hide Jellyfin's SyncPlay button</span>
+                            </label>
+                            <div class="fieldDescription checkboxFieldDescription">Hides the built-in SyncPlay button in Jellyfin Web, leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded.</div>
+                        </div>
+                    </div>
+
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
                             <span>Save</span>
@@ -401,6 +413,9 @@
                     // Server settings
                     $('#SessionServerUrl', page).val(config.SessionServerUrl || '');
                     $('#AllowAutoDetectedSessionServer', page).prop('checked', config.AllowAutoDetectedSessionServer === true);
+
+                    // Web client settings
+                    $('#HideNativeSyncPlayButton', page).prop('checked', config.HideNativeSyncPlayButton === true);
                     OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
                     OpenWatchPartyConfigurationPage.runDiagnostics(false);
 
@@ -452,6 +467,7 @@
                     return false;
                 }
                 $('#SessionServerUrl', page).val(sessionServerUrl.url);
+                var hideNativeSyncPlayButton = $('#HideNativeSyncPlayButton', page).prop('checked') === true;
                 Dashboard.showLoadingMsg();
 
                 ApiClient.getPluginConfiguration(OpenWatchPartyConfigurationPage.pluginId).then(function (config) {
@@ -465,6 +481,9 @@
                     // Server settings
                     config.SessionServerUrl = sessionServerUrl.url;
                     config.AllowAutoDetectedSessionServer = allowAutoDetected;
+
+                    // Web client settings
+                    config.HideNativeSyncPlayButton = hideNativeSyncPlayButton;
 
                     return ApiClient.updatePluginConfiguration(OpenWatchPartyConfigurationPage.pluginId, config);
                 }).then(function () {

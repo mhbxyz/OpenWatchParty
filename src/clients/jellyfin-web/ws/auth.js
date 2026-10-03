@@ -121,6 +121,11 @@
     return true;
   };
 
+  const setNativeSyncPlayHidden = (hidden) => {
+    state.hideNativeSyncPlayButton = hidden;
+    if (OWP.ui?.applyNativeSyncPlayVisibility) OWP.ui.applyNativeSyncPlayVisibility();
+  };
+
   const authError = (code, message, isCurrentRequest) => {
     if (isCurrentRequest()) {
       state.authToken = null;
@@ -128,6 +133,8 @@
       state.authBlocked = true;
       state.authError = message;
       state.tokenExpiresAt = 0;
+      // Without a working Watch Party connection, keep Jellyfin's SyncPlay available.
+      setNativeSyncPlayHidden(false);
     }
     return { mode: 'error', code, message };
   };
@@ -224,6 +231,7 @@
         state.wsUrl = sessionServerUrl.url;
         state.authEnabled = true;
         state.authToken = data.token;
+        setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
         const expiresIn = data.expires_in || 3600;
         state.tokenExpiresAt = Date.now() + (expiresIn * 1000);
         scheduleTokenRefresh(expiresIn);
@@ -239,6 +247,7 @@
         state.authEnabled = false;
         state.authToken = null;
         state.tokenExpiresAt = 0;
+        setNativeSyncPlayHidden(data.hide_native_syncplay_button === true);
         console.log('[OpenWatchParty] Explicit insecure mode enabled, connecting without token');
         return { mode: 'insecure', token: null };
       }

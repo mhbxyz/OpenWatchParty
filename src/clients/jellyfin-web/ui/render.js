@@ -11,12 +11,52 @@
     return element;
   };
 
+  // Hides the panel from inside it, so closing does not mean reaching for the
+  // button that opened it; focus goes back to that button when it is shown.
+  const createCloseButton = () => {
+    const button = createElement('button', 'owp-close-btn');
+    button.type = 'button';
+    button.title = 'Close panel';
+    button.setAttribute('aria-label', 'Close panel');
+    const icon = createElement('span', 'material-icons close');
+    icon.setAttribute('aria-hidden', 'true');
+    button.appendChild(icon);
+    button.onclick = () => {
+      const panel = document.getElementById(PANEL_ID);
+      if (!panel) return;
+      panel.classList.add('hide');
+      // Keep keyboard focus out of the hidden panel: back on the button that
+      // opened it, or nowhere if that button is not shown any more.
+      const opener = panel.dataset.opener && document.getElementById(panel.dataset.opener);
+      if (opener && typeof opener.getClientRects === 'function' && opener.getClientRects().length > 0) opener.focus();
+      else button.blur();
+    };
+    return button;
+  };
+
+  const CREATE_ROOM_HINT_ID = 'owp-create-hint';
+  const CREATE_ROOM_HINT = 'Start playing something to create a room.';
+
+  // A room starts from what is playing; without it there is nothing to share.
+  const canCreateRoom = () => Boolean(OWP.utils?.getPlayingItemId?.());
+
+  const updateCreateRoomButton = () => {
+    const button = document.getElementById('owp-btn-create');
+    if (!button) return;
+    const enabled = canCreateRoom();
+    button.disabled = !enabled;
+    const hint = document.getElementById(CREATE_ROOM_HINT_ID);
+    if (hint) hint.hidden = enabled;
+  };
+
   const renderLobby = (panel) => {
     const header = createElement('div', 'owp-header');
     header.append(createElement('span', '', 'OpenWatchParty'), document.createTextNode(' '));
     const status = createElement('span');
     status.id = 'owp-ws-indicator';
-    header.appendChild(status);
+    const actions = createElement('span', 'owp-header-actions');
+    actions.append(status, createCloseButton());
+    header.appendChild(actions);
 
     const lobby = createElement('div', 'owp-lobby-container');
     const roomSection = createElement('div', 'owp-section');
@@ -30,13 +70,17 @@
     btn.id = 'owp-btn-create';
     btn.style.width = '100%';
     btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
-    createSection.appendChild(btn);
+    btn.setAttribute('aria-describedby', CREATE_ROOM_HINT_ID);
+    const hint = createElement('div', 'owp-hint', CREATE_ROOM_HINT);
+    hint.id = CREATE_ROOM_HINT_ID;
+    createSection.append(btn, hint);
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
     footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
     panel.replaceChildren(header, lobby, footer);
     ui.updateRoomListUI();
+    updateCreateRoomButton();
   };
 
   const renderRoom = (panel) => {
@@ -46,10 +90,10 @@
     online.style.color = '#69f0ae';
     const roomName = createElement('span', '', state.roomName);
     roomName.style.cssText = 'flex-grow:1; margin-left:8px;';
-    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close' : 'Leave');
+    const leaveBtn = createElement('button', 'owp-btn danger', state.isHost ? 'Close room' : 'Leave');
     leaveBtn.id = 'owp-btn-leave';
     leaveBtn.onclick = () => OWP.actions && OWP.actions.leaveRoom && OWP.actions.leaveRoom();
-    header.append(online, roomName, leaveBtn);
+    header.append(online, roomName, leaveBtn, createCloseButton());
 
     const participantSection = createElement('div', 'owp-section');
     participantSection.style.flexShrink = '0';
@@ -122,6 +166,7 @@
       ui.updateStatusIndicator();
       ui.updateSyncIndicator();
       ui.updateRoomListUI();
+      updateCreateRoomButton();
       ui.renderHomeWatchParties();
       return;
     }
@@ -149,7 +194,11 @@
       e.stopPropagation(); e.preventDefault();
       const panel = document.getElementById(PANEL_ID);
       panel.classList.toggle('hide');
-      if (!panel.classList.contains('hide')) render(true);
+      if (!panel.classList.contains('hide')) {
+        panel.dataset.opener = BTN_ID;
+        if (ui.resetPanelPlacement) ui.resetPanelPlacement(panel);
+        render(true);
+      }
     };
     const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
     if (favBtn) {
@@ -159,5 +208,5 @@
     }
   };
 
-  Object.assign(ui, { render, injectOsdButton });
+  Object.assign(ui, { render, injectOsdButton, updateCreateRoomButton });
 })();

@@ -169,7 +169,8 @@ control bar.
 ![Jellyfin player showing the Watch Party button circled at the right end of the controls]({{ '/assets/images/tutorial-player-button.png' | relative_url }})
 
 **1** — This is OpenWatchParty's player button, not Jellyfin's separate
-**SyncPlay** button in the normal header.
+**SyncPlay** button in the normal header. OpenWatchParty also adds a Watch
+Party button to the header, just before SyncPlay; it opens the same panel.
 
 Check that the panel says **Online**, then select **Create Room**. It will
 show `Room de <your username>` and **Online: 1**. Keep the movie open.

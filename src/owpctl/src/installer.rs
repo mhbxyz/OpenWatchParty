@@ -29,6 +29,9 @@ pub(crate) struct PluginConfiguration {
     invite_ttl_seconds: u32,
     session_server_url: String,
     allow_auto_detected_session_server: bool,
+    /// Not managed by owpctl; carried over from the current plugin configuration.
+    #[serde(default)]
+    hide_native_sync_play_button: bool,
 }
 
 impl std::fmt::Debug for PluginConfiguration {
@@ -45,6 +48,10 @@ impl std::fmt::Debug for PluginConfiguration {
             .field(
                 "allow_auto_detected_session_server",
                 &self.allow_auto_detected_session_server,
+            )
+            .field(
+                "hide_native_sync_play_button",
+                &self.hide_native_sync_play_button,
             )
             .finish()
     }
@@ -114,6 +121,14 @@ pub fn install(
     crate::storage::write_json(&paths.state_file, &state)?;
 
     let result = (|| -> anyhow::Result<()> {
+        // Jellyfin replaces the whole plugin configuration on update, so keep the
+        // settings owpctl does not manage. Snapshot a detected plugin's
+        // configuration before any upgrade can touch it.
+        let previous_plugin_config: Option<serde_json::Value> = if plugin_was_absent {
+            None
+        } else {
+            Some(jellyfin.plugin_configuration()?)
+        };
         let repository_changed = jellyfin.ensure_repository()?;
         if plugin_needs_install {
             jellyfin.install_plugin(version)?;
@@ -161,7 +176,13 @@ pub fn install(
         state.image_digest = digest.clone();
         crate::storage::write_json(&paths.state_file, &state)?;
 
-        let plugin_config = plugin_configuration(config, &secret);
+        // A plugin that was not detected (including a failed detection) is read
+        // now that it is installed, rather than assuming its defaults.
+        let current_plugin_config = match previous_plugin_config {
+            Some(previous) => previous,
+            None => jellyfin.plugin_configuration()?,
+        };
+        let plugin_config = plugin_configuration(config, &secret, Some(&current_plugin_config));
         jellyfin.update_plugin_configuration(&plugin_config)?;
         wait_for_health(config)?;
         Ok(())
@@ -188,7 +209,14 @@ pub fn install_from_token_file(
     install(paths, config, version, &token)
 }
 
-pub(crate) fn plugin_configuration(config: &DesiredConfig, secret: &str) -> PluginConfiguration {
+/// Builds the plugin configuration owpctl writes. Jellyfin replaces the whole
+/// configuration object on update, so settings owpctl does not manage are
+/// carried over from `current`, the configuration read before the update.
+pub(crate) fn plugin_configuration(
+    config: &DesiredConfig,
+    secret: &str,
+    current: Option<&serde_json::Value>,
+) -> PluginConfiguration {
     PluginConfiguration {
         jwt_secret: secret.to_string(),
         allow_insecure_no_auth: false,
@@ -198,6 +226,10 @@ pub(crate) fn plugin_configuration(config: &DesiredConfig, secret: &str) -> Plug
         invite_ttl_seconds: config.plugin.invite_ttl_seconds,
         session_server_url: config.session_server.public_websocket_url.to_string(),
         allow_auto_detected_session_server: false,
+        hide_native_sync_play_button: current
+            .and_then(|value| value.get("HideNativeSyncPlayButton"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
     }
 }
 
@@ -299,9 +331,41 @@ mod tests {
     use super::*;
 
     fn configuration(secret: &str) -> PluginConfiguration {
+        configuration_over(secret, None)
+    }
+
+    fn configuration_over(
+        secret: &str,
+        current: Option<&serde_json::Value>,
+    ) -> PluginConfiguration {
         let config =
             DesiredConfig::local(url::Url::parse("http://localhost:8096").unwrap()).unwrap();
-        plugin_configuration(&config, secret)
+        plugin_configuration(&config, secret, current)
+    }
+
+    #[test]
+    fn plugin_configuration_keeps_the_native_syncplay_setting() {
+        let current = serde_json::json!({
+            "JwtSecret": "old-secret",
+            "HideNativeSyncPlayButton": true
+        });
+        let written =
+            serde_json::to_value(configuration_over("new-secret", Some(&current))).unwrap();
+        assert_eq!(written["HideNativeSyncPlayButton"], serde_json::json!(true));
+        assert_eq!(written["JwtSecret"], serde_json::json!("new-secret"));
+    }
+
+    #[test]
+    fn plugin_configuration_defaults_the_native_syncplay_setting_to_off() {
+        let without_key = serde_json::json!({ "JwtSecret": "old-secret" });
+        let not_a_bool = serde_json::json!({ "HideNativeSyncPlayButton": "true" });
+        for current in [None, Some(&without_key), Some(&not_a_bool)] {
+            let written = serde_json::to_value(configuration_over("secret", current)).unwrap();
+            assert_eq!(
+                written["HideNativeSyncPlayButton"],
+                serde_json::json!(false)
+            );
+        }
     }
 
     #[test]

@@ -158,7 +158,9 @@ public ActionResult GetToken()
             auth_enabled = false,
             insecure_mode = true,
             user_id = userId,
-            user_name = userName
+            user_name = userName,
+            session_server_url = sessionServerUrl,
+            hide_native_syncplay_button = config.HideNativeSyncPlayButton
         });
     }
 
@@ -169,7 +171,9 @@ public ActionResult GetToken()
         auth_enabled = true,
         expires_in = config.TokenTtlSeconds,
         user_id = userId,
-        user_name = userName
+        user_name = userName,
+        session_server_url = sessionServerUrl,
+        hide_native_syncplay_button = config.HideNativeSyncPlayButton
     });
 }
 ```

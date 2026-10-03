@@ -146,6 +146,7 @@
     await Promise.all([
       load('ui/home.js'),
       load('ui/render.js'),
+      load('ui/header.js'),
     ]);
     await Promise.all([
       load('playback/play.js'),
