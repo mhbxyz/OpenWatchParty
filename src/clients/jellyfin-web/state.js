@@ -140,6 +140,7 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    MEDIA_SWITCH_GRACE_MS: 20000, // Player closed by OWP to open the room media (> MEDIA_READY_TIMEOUT_MS)
     STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
     VIDEO_ACTION_MAX_WAIT_MS: 2000,
@@ -200,6 +201,7 @@
     mediaSyncAttempt: 0,
     mediaReadyCleanup: null,
     pendingMediaId: '',
+    mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
     pendingMediaUntil: 0,
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     roomName: '',

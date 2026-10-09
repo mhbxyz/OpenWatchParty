@@ -707,9 +707,17 @@
   const isKeyboardClick = event => !!event && event.detail === 0;
 
   const injectOsdButton = () => {
-    if (document.getElementById(BTN_ID)) return;
-    const videoOsd = document.querySelector('.videoOsdBottom .buttons');
+    // Jellyfin keeps the previous player page in the DOM, hidden as
+    // `.page.hide`: use the buttons of the shown player, and move the button
+    // there when it is still in another player page.
+    const videoOsd = Array.from(document.querySelectorAll('.videoOsdBottom .buttons'))
+      .find(buttons => !buttons.closest('.page.hide'));
     if (!videoOsd) return;
+    const existing = document.getElementById(BTN_ID);
+    if (existing) {
+      if (existing.closest('.videoOsdBottom .buttons') === videoOsd) return;
+      existing.remove();
+    }
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';

@@ -103,6 +103,7 @@ Defines global shared state and configuration constants.
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
+| `mediaSwitchUntil` | number | Until this time (ms), a closed player is OWP opening the room media, not the user leaving |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |
 | `isSyncing` | boolean | Anti-feedback lock during sync |
@@ -182,7 +183,7 @@ Manages HTML5 video element interaction and playback synchronization.
 ### Functions
 
 #### `playItem(item: object) -> boolean`
-Starts playback of a media item via Jellyfin API. Without a PlaybackManager, it opens the item's details page and selects the play button of that visible page (never one of a hidden, earlier details page).
+Starts playback of a media item via Jellyfin API. Without a PlaybackManager, it opens the item's details page and selects the play button of that visible page (never one of a hidden, earlier details page). Leaving the player for that page sets `mediaSwitchUntil` (`MEDIA_SWITCH_GRACE_MS`, 20 s), so the periodic UI check does not take the closed player for the user leaving the room.
 
 #### `ensurePlayback(itemId: string, attempt?: number) -> void`
 Ensures the specified media is playing.
@@ -194,7 +195,7 @@ Ensures the specified media is playing.
 Sends `ready` message to server indicating client is ready to play.
 
 #### `watchReady() -> void`
-Waits for video to be ready (`readyState >= 2`) then calls `notifyReady()`.
+Waits for the room media to play (`getPlayingItemId()`, which ignores the hidden pages Jellyfin keeps) and its video to be ready (`readyState >= 2`), then applies the room state and calls `notifyReady()`. A new video is required only when a different item was playing. Once ready, it ends the `mediaSwitchUntil` grace.
 
 #### `bindVideo() -> void`
 Binds video events to synchronization handlers.
@@ -366,7 +367,7 @@ Main panel render:
 - **In-room**: Compact bar with the sync dot, latency, room name, participants, chat and leave buttons, plus their drop-downs
 
 #### `injectOsdButton() -> void`
-Injects "Watch Party" button into video player OSD controls.
+Injects "Watch Party" button into the OSD controls of the shown player page, and moves it there from a player page Jellyfin has hidden.
 
 #### `injectHeaderButtons() -> void`
 Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI app bar box holding SyncPlay, Cast and Search. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.

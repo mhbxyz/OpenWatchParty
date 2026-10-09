@@ -70,6 +70,9 @@
     }
     const encodedId = encodeURIComponent(itemId);
     if (!(window.location.hash || '').includes(`/details?id=${encodedId}`)) {
+      // Leaving the player removes its video: the lifecycle check must not
+      // take that for the user closing the player and leave the room.
+      OWP.state.mediaSwitchUntil = Date.now() + OWP.constants.MEDIA_SWITCH_GRACE_MS;
       window.location.hash = `#/details?id=${encodedId}`;
     }
     let attempts = 0;

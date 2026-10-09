@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const OWP = require('./setup.js');
 let currentMediaId = 'old-media';
+// The item the player is playing; undefined follows currentMediaId.
+let playingMediaId;
 let currentVideo = null;
 let sent = [];
 let ensuredMedia = [];
@@ -47,6 +49,7 @@ OWP.ui = { render: () => {}, updateSyncIndicator: () => {} };
 OWP.ui.showToast = () => {};
 OWP.utils.getVideo = () => currentVideo;
 OWP.utils.getCurrentItemId = () => currentMediaId;
+OWP.utils.getPlayingItemId = () => (playingMediaId === undefined ? currentMediaId : playingMediaId);
 OWP.utils.startSyncing = () => {};
 OWP.utils.log = () => {};
 OWP.utils.isVideoReady = () => Boolean(currentVideo && currentVideo.readyState >= 2);
@@ -81,11 +84,13 @@ const roomState = (room, mediaId, position = 20, targetServerTs = null) => ({
 describe('media-correlated ready state', () => {
   beforeEach(() => {
     currentMediaId = 'old-media';
+    playingMediaId = undefined;
     currentVideo = new FakeVideo({ readyState: 2, currentTime: 5 });
     sent = [];
     ensuredMedia = [];
     ensureCalls = [];
     Object.assign(OWP.state, {
+      mediaSwitchUntil: 0,
       clientId: 'guest',
       inRoom: false,
       roomId: '',
@@ -156,6 +161,75 @@ describe('media-correlated ready state', () => {
     assert.equal(currentVideo, reusedVideo);
     assert.equal(sent.length, 1);
     assert.equal(sent[0].payload.media_id, 'new-media');
+  });
+
+  it('declares ready on the playing media while a hidden page names the previous one', async () => {
+    const previousVideo = currentVideo;
+    // OWP left the player to open the room media (see launchViaDetailsPage).
+    OWP.state.mediaSwitchUntil = Date.now() + 20000;
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), previousVideo);
+
+    // Jellyfin plays the room media, but the hidden page of the previous item
+    // still names it, so getCurrentItemId keeps returning 'old-media'.
+    playingMediaId = 'new-media';
+    currentVideo = new FakeVideo({ readyState: 2, currentTime: 0 });
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    assert.equal(currentMediaId, 'old-media');
+    assert.ok(currentVideo.currentTime > 19 && currentVideo.currentTime < 21);
+    assert.equal(currentVideo.pauseCalls, 1);
+    // The room media plays: closing the player now leaves the room at once.
+    assert.equal(OWP.state.mediaSwitchUntil, 0);
+    assert.deepEqual(sent.map(message => message.payload), [{ room: 'room-a', media_id: 'new-media' }]);
+    assert.equal(ensureCalls.some(call => call[3] === true), false);
+  });
+
+  it('declares ready at once when the room media already plays and a hidden page names another', async () => {
+    const video = currentVideo;
+    video.currentSrc = 'blob:new-media';
+    playingMediaId = 'new-media';
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), video);
+    await new Promise(resolve => setTimeout(resolve, 60));
+
+    assert.equal(currentMediaId, 'old-media');
+    assert.ok(video.currentTime > 19 && video.currentTime < 21);
+    assert.deepEqual(sent.map(message => message.payload), [{ room: 'room-a', media_id: 'new-media' }]);
+    assert.equal(ensureCalls.some(call => call[3] === true), false);
+  });
+
+  it('does not synchronize a stale video while a details page names the room media', async () => {
+    const staleVideo = currentVideo;
+    currentMediaId = 'new-media';
+    playingMediaId = null;
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), staleVideo);
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    assert.equal(staleVideo.currentTime, 5);
+    assert.equal(staleVideo.pauseCalls, 0);
+    assert.equal(sent.length, 0);
+
+    playingMediaId = 'new-media';
+    currentVideo = new FakeVideo({ readyState: 2, currentTime: 0 });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(sent.length, 1);
+    assert.equal(staleVideo.currentTime, 5);
+  });
+
+  it('accepts the room media replayed on the same video element after a details page', async () => {
+    // A details page of the room media is shown and nothing plays yet; the
+    // video element left from an earlier playback of that media is reused.
+    const video = currentVideo;
+    video.currentSrc = 'blob:new-media';
+    currentMediaId = 'new-media';
+    playingMediaId = null;
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), video);
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.equal(sent.length, 0);
+
+    playingMediaId = 'new-media';
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert.equal(sent.length, 1);
+    assert.equal(ensureCalls.some(call => call[3] === true), false);
   });
 
   it('follows a replacement video element for the target media', async () => {

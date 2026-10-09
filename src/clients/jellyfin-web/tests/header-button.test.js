@@ -489,6 +489,53 @@ describe('header Watch Party button', () => {
     assert.equal(panel().style.maxHeight, '');
   });
 
+  it('moves the player button to a new player page, never to a hidden one', () => {
+    const playerPage = () => {
+      const page = element('div', 'page');
+      const osd = element('div', 'videoOsdBottom');
+      const buttons = element('div', 'buttons');
+      osd.appendChild(buttons);
+      page.appendChild(osd);
+      document.body.appendChild(page);
+      return { page, buttons };
+    };
+    const first = playerPage();
+    OWP.ui.injectOsdButton();
+    assert.equal(document.getElementById(BTN_ID).parentNode, first.buttons);
+
+    // Jellyfin hides the previous player page and opens a new one.
+    first.page.classList.add('hide');
+    const second = playerPage();
+    OWP.ui.injectOsdButton();
+    OWP.ui.injectOsdButton();
+
+    const buttons = document.querySelectorAll(`#${BTN_ID}`);
+    assert.equal(buttons.length, 1);
+    assert.equal(buttons[0].parentNode, second.buttons);
+
+    // While Jellyfin swaps pages both can be shown: the button follows the
+    // first shown player, and moves once that one is hidden.
+    const third = playerPage();
+    OWP.ui.injectOsdButton();
+    assert.equal(document.getElementById(BTN_ID).parentNode, second.buttons);
+    second.page.classList.add('hide');
+    OWP.ui.injectOsdButton();
+    assert.equal(document.getElementById(BTN_ID).parentNode, third.buttons);
+    assert.equal(document.querySelectorAll(`#${BTN_ID}`).length, 1);
+
+    // Jellyfin shows the cached second page again, before the third one in
+    // the document: the button follows it even before the third is hidden.
+    second.page.classList.remove('hide');
+    OWP.ui.injectOsdButton();
+    assert.equal(document.getElementById(BTN_ID).parentNode, second.buttons);
+
+    // Only hidden players left: no button is added to them.
+    second.page.remove();
+    third.page.remove();
+    OWP.ui.injectOsdButton();
+    assert.equal(document.getElementById(BTN_ID), null);
+  });
+
   it('closes the panel from its X button, in the lobby and in a room', () => {
     modernHeader();
     OWP.ui.injectHeaderButtons();

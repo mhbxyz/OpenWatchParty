@@ -86,6 +86,7 @@ OWP.ui = {
 OWP.playback = {};
 OWP.utils.getVideo = () => OWP.state.currentVideoElement;
 OWP.utils.getCurrentItemId = () => currentMediaId;
+OWP.utils.getPlayingItemId = () => currentMediaId;
 OWP.utils.isVideoReady = () => Boolean(OWP.state.currentVideoElement?.readyState >= 2);
 OWP.utils.isSeeking = () => false;
 OWP.utils.log = () => {};
