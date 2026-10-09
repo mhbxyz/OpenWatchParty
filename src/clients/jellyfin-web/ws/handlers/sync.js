@@ -17,6 +17,7 @@
       state.clientId = msg.client;
     }
     state.isHost = (msg.payload.host_id === state.clientId);
+    state.roomHostId = msg.payload.host_id;
     if (!state.hasTimeSync && typeof msg.server_ts === 'number') {
       state.serverOffsetMs = msg.server_ts - utils.nowMs();
       state.hasTimeSync = true;
@@ -36,6 +37,7 @@
     state.lastSyncServerTs = stateServerTs;
     state.lastSyncPosition = basePos;
     state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
+    if (hostPlaying) state.roomWaiting = false;
     state.pendingPlayUntil = 0;
     state.syncStatus = hostPlaying ? 'syncing' : 'synced';
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
@@ -142,9 +144,12 @@
 
   h.handleStateUpdate = (msg, video) => {
     if (state.isHost || !video) return;
+    // The host sent this before the room took this guest's own play or pause.
+    if (utils.nowMs() < state.ownCommandUntil && msg.payload?.play_state !== state.ownCommandPlayState) return;
     state.playbackActionAttempt++;
     if (msg.payload) {
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
+      if (msg.payload.play_state === 'playing') state.roomWaiting = false;
     }
     if (msg.payload.play_state === 'playing' && video.paused) {
       utils.startSyncing();

@@ -92,7 +92,7 @@ npm run lint
 
 The `e2e` suite drives the real Jellyfin Web UI with two browser contexts
 (`testhost` and `testclient1`) against the development stack. It covers room
-creation and joins, play/pause/seek propagation, the paused-room hold, leaving,
+creation and joins, play/pause/seek propagation, guests' shared play and pause, leaving,
 reconnection and the home card lifecycle.
 
 ```bash

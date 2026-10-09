@@ -72,6 +72,7 @@
     if (!state.inRoom || msg.room !== state.roomId) return;
     const becameHost = msg.payload.host_id === state.clientId;
     state.isHost = becameHost;
+    state.roomHostId = msg.payload.host_id;
     if (becameHost && OWP.actions?.resetDriftCorrection) {
       OWP.actions.resetDriftCorrection();
     }

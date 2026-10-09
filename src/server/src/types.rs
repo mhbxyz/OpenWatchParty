@@ -54,6 +54,10 @@ pub struct Room {
     pub statuses: HashMap<String, &'static str>,
     #[serde(skip)]
     pub status_broadcast: StatusBroadcast,
+    /// Until when a guest's play or pause holds against the host's state
+    /// updates sent before the host applied it.
+    #[serde(skip)]
+    pub guest_command_until: Option<Instant>,
 }
 
 /// When the room last got `participant_statuses` for a status change, and the
@@ -256,6 +260,7 @@ mod tests {
         assert!(json.get("target_at").is_none());
         assert!(json.get("last_state_at").is_none());
         assert!(json.get("command_cooldown_until").is_none());
+        assert!(json.get("guest_command_until").is_none());
         assert!(json["pending_play"].get("generation").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }

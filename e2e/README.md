@@ -40,8 +40,8 @@ npm test
 - host creates a room and the guest joins from the home card;
 - the guest joins from the header button;
 - pause, play and seek propagate to the guest;
-- a guest who presses play while the room is paused is held paused
-  (regression for #52);
+- a guest pause pauses the host, and the host play resumes the guest;
+- a guest play resumes the paused room;
 - the host leaving closes the room for the guest;
 - the guest leaving keeps the room open for the host;
 - the guest reconnects and rejoins the room;

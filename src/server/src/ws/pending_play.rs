@@ -29,6 +29,13 @@ pub(super) fn prepare_scheduled_play(
     room.command_cooldown_until = now.checked_add(Duration::from_millis(
         PLAY_SCHEDULE_MS + super::constants::COMMAND_COOLDOWN_MS,
     ));
+    // A guest's pending play keeps holding until the host has applied it.
+    if room
+        .guest_command_until
+        .is_some_and(|deadline| now < deadline)
+    {
+        room.guest_command_until = room.command_cooldown_until;
+    }
     let msg = WsMessage {
         msg_type: "player_event".to_string(),
         room: Some(room.room_id.clone()),

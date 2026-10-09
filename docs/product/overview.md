@@ -45,7 +45,7 @@ OpenWatchParty provides:
 | Feature | Description |
 |---------|-------------|
 | Room management | Create and join watch party rooms |
-| Play/Pause sync | All clients respond to host controls |
+| Play/Pause sync | Anyone's play or pause applies to everyone |
 | Seek sync | Jumping to a position syncs everyone |
 | Drift correction | Gradual speed adjustments prevent desync |
 | Auto-reconnect | Handles network interruptions gracefully |

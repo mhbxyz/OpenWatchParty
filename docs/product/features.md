@@ -17,7 +17,7 @@ nav_order: 2
 - **Invite links** - Hosts copy a short-lived link (`?owp_invite=<ticket>`); opening it joins the room automatically. The ticket is room-scoped, expires, and stops working when the room closes
 
 ### Playback Synchronization
-- **Play/Pause sync** - Host controls playback state for all clients
+- **Play/Pause sync** - Anyone in the room can pause or resume it for everyone
 - **Seek sync** - Jumping to a position syncs everyone
 - **Position sync** - Continuous updates keep clients aligned
 - **Drift correction** - Automatic playback speed adjustment (0.90x-1.15x)
@@ -118,7 +118,7 @@ Mobile browsers have reduced functionality due to platform restrictions:
 
 ## Known Limitations
 
-1. **Host-only control** - Only the host can control playback (democratic mode planned)
+1. **Host-only seeking** - Only the host can seek; play and pause are shared
 2. **Single media** - One media item per room (by design)
 3. **Ephemeral rooms** - Rooms are closed when the host leaves or server restarts (by design)
 4. **Web only** - Only works in web browsers (no native mobile/TV apps planned)

@@ -145,6 +145,7 @@
     ]);
     await Promise.all([
       load('ui/home.js'),
+      load('ui/guest-controls.js'),
       load('ui/render.js'),
       load('ui/header.js'),
     ]);

@@ -34,6 +34,7 @@
     state.autoJoinAttempt++;
     OWP.timers.clearScope('media');
     state.bound = false;
+    if (ui.updateGuestControls) ui.updateGuestControls();
   };
 
   const createPanel = () => {
@@ -150,6 +151,7 @@
       }
     }, HOME_REFRESH_MS, 'lifecycle');
     state.intervals.sync = OWP.timers.setInterval(() => {
+      if (ui.updateGuestControls) ui.updateGuestControls();
       if (state.inRoom && !state.isHost) {
         playback.syncLoop();
       }

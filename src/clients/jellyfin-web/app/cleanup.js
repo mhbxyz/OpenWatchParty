@@ -51,6 +51,7 @@
     if (OWP.ui?.removeHeaderButtons) OWP.ui.removeHeaderButtons();
     cleanupPanel();
     cleanupVideo();
+    if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     state.bound = false;
     state.initialized = false;
   };

@@ -11,6 +11,18 @@ class FakeNode {
     return this.childNodes.filter(node => node.nodeType === 1);
   }
 
+  get nextSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return this.parentNode.childNodes[index + 1] || null;
+  }
+
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const index = this.parentNode.childNodes.indexOf(this);
+    return index > 0 ? this.parentNode.childNodes[index - 1] : null;
+  }
+
   get textContent() {
     if (this.nodeType === 3) return this._text;
     return this.childNodes.map(node => node.textContent).join('');
@@ -28,6 +40,16 @@ class FakeNode {
     if (node.parentNode) node.remove();
     node.parentNode = this;
     this.childNodes.push(node);
+    return node;
+  }
+
+  insertBefore(node, reference) {
+    if (reference == null) return this.appendChild(node);
+    const index = this.childNodes.indexOf(reference);
+    if (index === -1) throw new Error('Reference node is not a child');
+    if (node.parentNode) node.remove();
+    node.parentNode = this;
+    this.childNodes.splice(index, 0, node);
     return node;
   }
 
@@ -154,8 +176,12 @@ class FakeElement extends FakeNode {
           .filter(value => value && !names.includes(value)).join(' ');
       },
       contains: name => this.className.split(/\s+/).includes(name),
-      toggle: name => {
-        if (this.classList.contains(name)) {
+      toggle: (name, force) => {
+        if (force === true) {
+          this.classList.add(name);
+          return true;
+        }
+        if (force === false || this.classList.contains(name)) {
           this.className = this.className.split(/\s+/).filter(value => value && value !== name).join(' ');
           return false;
         }
@@ -225,8 +251,10 @@ class FakeElement extends FakeNode {
 
 class FakeDocument {
   constructor() {
+    this.documentElement = new FakeElement('html');
     this.head = new FakeElement('head');
     this.body = new FakeElement('body');
+    this.documentElement.append(this.head, this.body);
   }
 
   createElementNS(namespace, tagName) {
@@ -258,4 +286,32 @@ class FakeDocument {
   }
 }
 
-module.exports = { FakeDocument };
+class FakeWindow {
+  constructor(document) {
+    this.document = document;
+    this.listeners = {};
+  }
+
+  addEventListener(type, listener, options) {
+    (this.listeners[type] ||= []).push({ listener, capture: options === true || options?.capture === true });
+  }
+
+  removeEventListener(type, listener) {
+    this.listeners[type] = (this.listeners[type] || []).filter(entry => entry.listener !== listener);
+  }
+
+  dispatchEvent(event) {
+    event.target ||= this;
+    event.currentTarget = this;
+    event.preventDefault ||= () => { event.defaultPrevented = true; };
+    event.stopPropagation ||= () => { event.propagationStopped = true; };
+    event.stopImmediatePropagation ||= () => { event.immediatePropagationStopped = true; };
+    for (const entry of this.listeners[event.type] || []) {
+      entry.listener(event);
+      if (event.immediatePropagationStopped) break;
+    }
+    return !event.defaultPrevented;
+  }
+}
+
+module.exports = { FakeDocument, FakeWindow };

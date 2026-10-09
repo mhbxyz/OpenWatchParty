@@ -37,10 +37,10 @@ No in the supported Jellyfin environment. OpenWatchParty includes native client 
 ## Usage
 
 ### Who controls playback?
-The person who creates the room (the host) controls playback. Their play, pause, and seek actions are mirrored to all participants.
+The person who creates the room (the host) controls seeking. Play and pause are shared: anyone in the room can pause or resume it for everyone.
 
 ### Can participants control playback?
-Not currently. Only the host can control playback. Democratic mode is planned for a future release.
+Play and pause, yes: a guest's pause pauses the whole room, the host included, and anyone's play resumes everyone. Seeking stays with the host.
 
 ### What happens if the host leaves?
 The room closes and all participants are disconnected. A participant cannot become the new host.

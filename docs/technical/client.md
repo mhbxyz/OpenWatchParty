@@ -18,7 +18,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── utils/               # Utility functions
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
-    │   ├── cards.js, header.js, home.js, indicators.js
+    │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -102,6 +102,10 @@ Defines global shared state and configuration constants.
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
+| `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
+| `roomHostId` | string | Client id of the room's host, to tell a guest's play or pause from the host's |
+| `ownCommandUntil` | number | Until when a guest's own play or pause holds against room updates already on their way |
+| `ownCommandPlayState` | string | Play state of that command |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |
@@ -235,8 +239,9 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ```
 1. If host or not in room → reset playbackRate to 1
 2. If no sync or state !== 'playing' → reset playbackRate to 1
-   If the room is paused and the video plays (a guest pressed play) → pause it,
-   unless a room command is being applied or a host play is scheduled
+   If the room is paused and the video plays without the room taking it (while it
+   waits for the host) → pause it, unless a room command is being applied or a
+   host play is scheduled
 3. If isBuffering or readyState < 3 → do nothing (let it load)
 4. If video paused → reset playbackRate to 1
 5. Calculate expected position:

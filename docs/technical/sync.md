@@ -205,7 +205,9 @@ The sqrt curve corrects small drifts gently and larger ones faster, within 0.90x
 
 ### Paused Rooms
 
-While the room plays, the host's periodic `state_update` resumes a guest who paused. A paused room sends none (the server drops state updates that change nothing), so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
+A guest's own play or pause is the room's: the client sends it as a `player_event`, and the server passes it to everyone, the host included. For 1.5 s (`OWN_COMMAND_HOLD_MS`) the guest ignores a state update with the other play state, one the host sent before it applied the command; the server drops the later ones. OWP's own plays and pauses set the room state first, so they are never sent back. Neither are the pause at the end of an episode or when leaving the player, nor a play while the room waits for the host.
+
+A paused room sends no unchanged state updates, so the loop pauses a guest whose video plays while the room is paused and the play did not reach the room (while it waits for the host). It waits while a room command is being applied or a host play is scheduled.
 
 ### Manual Nudge (Sync Adjustment)
 

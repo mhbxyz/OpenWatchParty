@@ -87,17 +87,28 @@ test('pause, play and seek propagate to the guest', async () => {
     .toBeLessThan(3);
 });
 
-test('a guest who presses play while the room is paused is held paused', async () => {
+test('a guest pause pauses the host, and the host play resumes the guest', async () => {
+  await openRoomWithGuest('header');
+  await helpers.waitForSettled(guest);
+
+  await helpers.togglePlayback(guest);
+  await helpers.waitForPaused(host);
+  await expect(host.locator('.owp-toast-system', { hasText: 'A guest paused playback' })).toHaveCount(1);
+
+  await helpers.togglePlayback(host);
+  await helpers.waitForPlaying(guest);
+});
+
+test('a guest play resumes the paused room', async () => {
   await openRoomWithGuest('header');
 
   await helpers.togglePlayback(host);
   await helpers.waitForPaused(guest);
+  await helpers.waitForSettled(guest);
 
   await helpers.togglePlayback(guest);
-  await helpers.waitForPlaying(guest);
-  await helpers.waitForPaused(guest);
-
-  await expect(guest.locator('.owp-toast-system')).toContainText('Only the host can control playback');
+  await helpers.waitForPlaying(host);
+  await expect(host.locator('.owp-toast-system', { hasText: 'A guest resumed playback' })).toHaveCount(1);
 });
 
 test('the host leaving closes the room for the guest', async () => {

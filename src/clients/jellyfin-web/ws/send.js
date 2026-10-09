@@ -58,6 +58,7 @@
       lastPlayedPosition: 0,
       lastPlayedPlaying: false,
       streamReloadResume: false,
+      reloadGuestCommand: null,
       isSyncing: false,
       syncCooldownUntil: 0,
       isInitialSync: false,
@@ -71,6 +72,10 @@
       lastSyncServerTs: 0,
       lastSyncPosition: 0,
       lastSyncPlayState: '',
+      roomWaiting: false,
+      roomHostId: '',
+      ownCommandUntil: 0,
+      ownCommandPlayState: '',
       joiningItemId: '',
       pendingJoinRoomId: '',
       pendingMediaId: '',
@@ -86,6 +91,7 @@
     state.cardPollAttempt++;
     state.mediaSyncAttempt++;
     state.playbackActionAttempt++;
+    if (OWP.ui?.updateGuestControls) OWP.ui.updateGuestControls();
     if (OWP.chat) OWP.chat.clear();
   };
 

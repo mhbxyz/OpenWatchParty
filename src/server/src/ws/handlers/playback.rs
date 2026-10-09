@@ -1,6 +1,6 @@
 use super::super::constants::{
-    COMMAND_COOLDOWN_MS, CONTROL_SCHEDULE_MS, MIN_STATE_UPDATE_INTERVAL_MS, PLAY_SCHEDULE_MS,
-    POSITION_JITTER_THRESHOLD,
+    COMMAND_COOLDOWN_MS, CONTROL_SCHEDULE_MS, MAX_READY_WAIT_MS, MIN_STATE_UPDATE_INTERVAL_MS,
+    PLAY_SCHEDULE_MS, POSITION_JITTER_THRESHOLD,
 };
 use super::super::dispatch::{send_error, ErrorCode};
 use super::super::pending_play::{all_ready, schedule_pending_play};
@@ -112,6 +112,37 @@ impl PlaybackMessage {
             Self::StateUpdate(_) => None,
         }
     }
+
+    /// Play and pause are the room's: any member may send them. Seeking,
+    /// buffering and the position updates stay with the host.
+    fn is_open_to_guests(&self) -> bool {
+        matches!(
+            self.action(),
+            Some(PlaybackAction::Play | PlaybackAction::Pause)
+        )
+    }
+
+    /// Puts a guest's play or pause where the room is: only the host seeks,
+    /// so a guest's own position is never used.
+    fn set_room_position(&mut self, room_position: f64) {
+        if let Self::PlayerEvent(payload) = self {
+            payload.position = Some(room_position);
+        }
+    }
+}
+
+/// Where the room's video is now: its last known position, moved on by the
+/// time since it took effect while the room plays.
+fn room_position_now(room: &Room, current_ts: u64) -> f64 {
+    if room.state.play_state != "playing" {
+        return room.state.position;
+    }
+    let since = room
+        .target_server_ts
+        .map_or(room.state_server_ts, |target| {
+            target.max(room.state_server_ts)
+        });
+    room.state.position + current_ts.saturating_sub(since) as f64 / 1000.0
 }
 
 fn handle_play_not_ready(
@@ -169,7 +200,11 @@ fn should_process_state_update(room: &Room, payload: &StateUpdatePayload, now: I
     let new_play_state = payload.play_state.as_str();
 
     if new_play_state != room.state.play_state {
-        return true;
+        // A guest's play or pause holds against the host's updates sent
+        // before the host applied it.
+        return room
+            .guest_command_until
+            .is_none_or(|deadline| now >= deadline);
     }
 
     let pos_diff = new_pos - room.state.position;
@@ -264,7 +299,7 @@ pub(in crate::ws) async fn handle_playback(
         .await;
         return;
     };
-    let Some(message) = PlaybackMessage::parse(&parsed) else {
+    let Some(mut message) = PlaybackMessage::parse(&parsed) else {
         send_error(
             client_id,
             state,
@@ -285,7 +320,7 @@ pub(in crate::ws) async fn handle_playback(
                     ErrorCode::NotRoomMember,
                     "Client is not a member of this room",
                 )
-            } else if room.host_id != client_id {
+            } else if room.host_id != client_id && !message.is_open_to_guests() {
                 PlaybackOutcome::Error(
                     ErrorCode::HostPermissionRequired,
                     "Only the room host can control playback",
@@ -294,12 +329,28 @@ pub(in crate::ws) async fn handle_playback(
                 let current_ts = now_ms();
                 let now = Instant::now();
                 let action = message.action();
+                let from_guest = room.host_id != client_id;
+                if from_guest {
+                    message.set_room_position(room_position_now(room, current_ts));
+                }
 
                 if action == Some(PlaybackAction::Pause) {
                     room.pending_play = None;
                 }
+                // A host command ends a guest's hold; a guest's command
+                // starts a new one below.
+                if action.is_some() {
+                    room.guest_command_until = None;
+                }
 
                 if action == Some(PlaybackAction::Play) && !all_ready(room) {
+                    if from_guest {
+                        // Until the pending play starts; then until the host
+                        // has applied it (see prepare_scheduled_play).
+                        room.guest_command_until = now.checked_add(Duration::from_millis(
+                            MAX_READY_WAIT_MS + PLAY_SCHEDULE_MS + COMMAND_COOLDOWN_MS,
+                        ));
+                    }
                     let position = message.position().unwrap_or(room.state.position);
                     match handle_play_not_ready(room, position, current_ts, now) {
                         Some((room_id, generation)) => {
@@ -321,6 +372,9 @@ pub(in crate::ws) async fn handle_playback(
                     } else {
                         let outgoing =
                             apply_state_changes(room, &message, client_id, current_ts, now);
+                        if from_guest {
+                            room.guest_command_until = room.command_cooldown_until;
+                        }
                         let senders = collect_room_senders(room, clients, Some(client_id));
                         send_to_senders(&senders, &outgoing, "playback");
                         PlaybackOutcome::Accepted
@@ -780,12 +834,29 @@ mod tests {
                 Some(serde_json::json!({ "action": "pause" })),
             )
         };
+        let host_only = [
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "seek", "position": 30.0 })),
+            ),
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "buffering", "position": 30.0 })),
+            ),
+            incoming(
+                ClientMessageType::StateUpdate,
+                Some(serde_json::json!({ "position": 30.0, "play_state": "playing" })),
+            ),
+        ];
 
-        handle_playback("guest", valid(), &state, &crate::tasks::AppTasks::new()).await;
-        assert_error_code(
-            test_helpers::recv_msg(&mut guest_rx).unwrap(),
-            "HOST_PERMISSION_REQUIRED",
-        );
+        for parsed in host_only {
+            handle_playback("guest", parsed, &state, &crate::tasks::AppTasks::new()).await;
+            assert_error_code(
+                test_helpers::recv_msg(&mut guest_rx).unwrap(),
+                "HOST_PERMISSION_REQUIRED",
+            );
+        }
+        assert_eq!(state.read().await.rooms["r1"].state.position, 0.0);
 
         let (mut outsider, mut outsider_rx) =
             test_helpers::create_client_with_rx("outsider", "Outsider", true);
@@ -836,10 +907,263 @@ mod tests {
             "player_event"
         );
 
-        handle_playback("host", pause(), &state, &crate::tasks::AppTasks::new()).await;
+        // Back as a guest, the old host can still pause, but not seek.
+        let seek = incoming(
+            ClientMessageType::PlayerEvent,
+            Some(serde_json::json!({ "action": "seek", "position": 30.0 })),
+        );
+        handle_playback("host", seek, &state, &crate::tasks::AppTasks::new()).await;
         assert_error_code(
             test_helpers::recv_msg(&mut old_host_rx).unwrap(),
             "HOST_PERMISSION_REQUIRED",
         );
+    }
+
+    async fn set_room_playing(state: &SharedState, position: f64) {
+        let mut locked = state.write().await;
+        let room = locked.rooms.get_mut("r1").unwrap();
+        room.state.position = position;
+        room.state.play_state = "playing".to_string();
+        room.state_server_ts = now_ms();
+        room.target_server_ts = None;
+    }
+
+    #[tokio::test]
+    async fn a_guest_cannot_move_the_room_with_its_play_or_pause() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        set_room_playing(&state, 40.0).await;
+
+        handle_playback(
+            "guest",
+            player_event("pause", 3600.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let payload = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        let position = payload["position"].as_f64().unwrap();
+        assert!((40.0..41.0).contains(&position), "paused at {position}");
+        assert_eq!(state.read().await.rooms["r1"].state.position, position);
+    }
+
+    #[tokio::test]
+    async fn a_guest_play_or_pause_without_a_position_uses_the_room_one() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("r1").unwrap();
+            room.state.position = 25.0;
+            room.state.play_state = "paused".to_string();
+        }
+
+        handle_playback(
+            "guest",
+            incoming(
+                ClientMessageType::PlayerEvent,
+                Some(serde_json::json!({ "action": "play" })),
+            ),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let payload = test_helpers::recv_msg(&mut host_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert_eq!(payload["position"], 25.0);
+    }
+
+    #[test]
+    fn the_room_position_moves_on_from_when_it_took_effect() {
+        let mut room = crate::test_helpers::create_room("r1", "host");
+        room.state.position = 10.0;
+        room.state.play_state = "playing".to_string();
+        room.state_server_ts = 1_000;
+        room.target_server_ts = Some(1_500);
+        assert_eq!(room_position_now(&room, 4_500), 13.0);
+        room.target_server_ts = None;
+        assert_eq!(room_position_now(&room, 4_500), 13.5);
+        room.state.play_state = "paused".to_string();
+        assert_eq!(room_position_now(&room, 4_500), 10.0);
+    }
+
+    fn player_event(action: &str, position: f64) -> IncomingMessage {
+        incoming(
+            ClientMessageType::PlayerEvent,
+            Some(serde_json::json!({ "action": action, "position": position })),
+        )
+    }
+
+    #[tokio::test]
+    async fn a_guest_pause_pauses_the_room_and_reaches_the_host() {
+        let (state, mut host_rx, mut guest_rx) = setup_room().await;
+        set_room_playing(&state, 40.0).await;
+
+        handle_playback(
+            "guest",
+            player_event("pause", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let outgoing = test_helpers::recv_msg(&mut host_rx).expect("pause for the host");
+        assert_eq!(outgoing.msg_type, "player_event");
+        assert_eq!(outgoing.client.as_deref(), Some("guest"));
+        let payload = outgoing.payload.unwrap();
+        assert_eq!(payload["action"], "pause");
+        // Where the room is, not where the guest said (42): only the host seeks.
+        let position = payload["position"].as_f64().unwrap();
+        assert!((40.0..41.0).contains(&position), "paused at {position}");
+        assert_eq!(payload["play_state"], "paused");
+        assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+        let locked = state.read().await;
+        assert_eq!(locked.rooms["r1"].state.play_state, "paused");
+        assert_eq!(locked.rooms["r1"].state.position, position);
+        assert!(locked.rooms["r1"].guest_command_until.is_some());
+        assert_eq!(
+            locked.rooms["r1"].guest_command_until,
+            locked.rooms["r1"].command_cooldown_until
+        );
+    }
+
+    #[tokio::test]
+    async fn a_guest_play_resumes_the_room() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+
+        handle_playback(
+            "guest",
+            player_event("play", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let outgoing = test_helpers::recv_msg(&mut host_rx).expect("play for the host");
+        assert_eq!(outgoing.client.as_deref(), Some("guest"));
+        let payload = outgoing.payload.unwrap();
+        assert_eq!(payload["action"], "play");
+        assert_eq!(payload["play_state"], "playing");
+        assert!(payload["target_server_ts"].as_u64().is_some());
+        assert_eq!(state.read().await.rooms["r1"].state.play_state, "playing");
+    }
+
+    #[tokio::test]
+    async fn the_host_updates_sent_before_a_guest_pause_do_not_undo_it() {
+        let (state, _host_rx, mut guest_rx) = setup_room().await;
+        set_room_playing(&state, 40.0).await;
+        handle_playback(
+            "guest",
+            player_event("pause", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let stale = incoming(
+            ClientMessageType::StateUpdate,
+            Some(serde_json::json!({ "position": 42.4, "play_state": "playing" })),
+        );
+        handle_playback("host", stale, &state, &crate::tasks::AppTasks::new()).await;
+
+        assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+        assert_eq!(state.read().await.rooms["r1"].state.play_state, "paused");
+    }
+
+    #[test]
+    fn a_guest_hold_only_lasts_until_its_deadline() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let now = Instant::now();
+        room.guest_command_until = Some(now + Duration::from_millis(100));
+        let payload = StateUpdatePayload {
+            position: 10.0,
+            play_state: PlayState::Playing,
+        };
+
+        assert!(!should_process_state_update(&room, &payload, now));
+        assert!(should_process_state_update(
+            &room,
+            &payload,
+            now + Duration::from_millis(101)
+        ));
+    }
+
+    #[tokio::test]
+    async fn a_host_command_ends_the_guest_hold() {
+        let (state, _host_rx, mut guest_rx) = setup_room().await;
+        set_room_playing(&state, 40.0).await;
+        handle_playback(
+            "guest",
+            player_event("pause", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        handle_playback(
+            "host",
+            player_event("play", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        let outgoing = test_helpers::recv_msg(&mut guest_rx).expect("the host's play");
+        assert_eq!(outgoing.payload.unwrap()["action"], "play");
+        let locked = state.read().await;
+        assert_eq!(locked.rooms["r1"].state.play_state, "playing");
+        assert!(locked.rooms["r1"].guest_command_until.is_none());
+    }
+
+    #[tokio::test]
+    async fn a_guest_play_waiting_for_ready_clients_holds_until_the_host_applies_it() {
+        let (state, mut host_rx, _guest_rx) = setup_room().await;
+        {
+            let mut locked = state.write().await;
+            let room = locked.rooms.get_mut("r1").unwrap();
+            room.ready_clients.remove("guest");
+        }
+        let before = Instant::now();
+
+        handle_playback(
+            "guest",
+            player_event("play", 42.0),
+            &state,
+            &crate::tasks::AppTasks::new(),
+        )
+        .await;
+
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
+        let mut locked = state.write().await;
+        let crate::types::ServerState { clients, rooms } = &mut *locked;
+        let room = rooms.get_mut("r1").unwrap();
+        assert!(room.pending_play.is_some());
+        let hold = room.guest_command_until.expect("hold while the play waits");
+        assert!(hold >= before + Duration::from_millis(MAX_READY_WAIT_MS + PLAY_SCHEDULE_MS));
+
+        let (_, message) = super::super::super::pending_play::prepare_scheduled_play(
+            room, clients, 42.0, 4000, 5000,
+        );
+        assert_eq!(message.payload.unwrap()["action"], "play");
+        assert!(room.guest_command_until.is_some());
+        assert_eq!(room.guest_command_until, room.command_cooldown_until);
+    }
+
+    #[test]
+    fn a_stale_guest_hold_is_not_renewed_by_a_host_pending_play() {
+        let mut room = test_helpers::create_room("r1", "host");
+        let clients = std::collections::HashMap::new();
+        room.guest_command_until = Instant::now().checked_sub(Duration::from_millis(1));
+
+        super::super::super::pending_play::prepare_scheduled_play(
+            &mut room, &clients, 42.0, 4000, 5000,
+        );
+
+        assert!(room.guest_command_until < room.command_cooldown_until);
     }
 }
