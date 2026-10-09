@@ -121,12 +121,13 @@ pub fn configure(
             .as_bytes(),
             false,
         )?;
-        if let Some(client) = &client {
+        if let (Some(client), Some(current)) = (&client, &original_plugin) {
             client.update_plugin_configuration(&crate::installer::plugin_configuration(
                 &config,
                 &secret,
-                original_plugin.as_ref(),
-            ))?;
+                Some(current),
+                current,
+            )?)?;
         }
         crate::installer::compose(paths, &["up", "-d", "--remove-orphans"])?;
         Ok(())
