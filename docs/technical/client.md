@@ -18,7 +18,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     ├── utils/               # Utility functions
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
-    │   ├── cards.js, header.js, home.js, indicators.js
+    │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -102,6 +102,8 @@ Defines global shared state and configuration constants.
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
+| `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
+| `guestPaused` | boolean | `true` while a guest has paused local playback |
 | `readyRoomId` | string | Room ID for which "ready" was sent |
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |

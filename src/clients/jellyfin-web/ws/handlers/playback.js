@@ -6,13 +6,13 @@
   const ui = OWP.ui;
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
-  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null) => {
+  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
     if (typeof position !== 'number' || !Number.isFinite(position)) return;
     const elapsed = projectPlaying && typeof eventServerTs === 'number'
       ? Math.max(0, utils.getServerNow() - eventServerTs) / 1000
       : 0;
     const target = position + elapsed;
-    if (Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
+    if (seekVideo && Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
     state.lastSyncPosition = target;
     state.lastSyncServerTs = utils.getServerNow();
   };
@@ -27,6 +27,7 @@
     const action = msg.payload.action;
     const position = msg.payload.position;
     const hostPlayState = msg.payload.play_state || (action === 'play' ? 'playing' : 'paused');
+    const applyToVideo = !state.guestPaused;
     state.pendingPlayUntil = 0;
     state.isInitialSync = false;
     state.initialSyncUntil = 0;
@@ -34,38 +35,42 @@
 
     switch (action) {
       case 'play':
-        applyPosition(video, position, true, msg.server_ts);
+        state.roomWaiting = false;
+        applyPosition(video, position, true, msg.server_ts, applyToVideo);
         state.lastSyncPlayState = 'playing';
         state.syncCooldownUntil = utils.nowMs() + 2000;
         state.syncStatus = 'syncing';
-        OWP.playback.safePlay(video, 'host play command');
+        if (applyToVideo) OWP.playback.safePlay(video, 'host play command');
         if (ui.showToast) ui.showToast('Host resumed playback');
         break;
       case 'pause':
-        applyPosition(video, position);
+        state.roomWaiting = false;
+        applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
         state.syncCooldownUntil = 0;
         state.syncStatus = 'synced';
-        video.pause();
+        if (applyToVideo) video.pause();
         if (ui.showToast) ui.showToast('Host paused playback');
         break;
       case 'seek':
-        applyPosition(video, position, hostPlayState === 'playing', msg.server_ts);
+        state.roomWaiting = false;
+        applyPosition(video, position, hostPlayState === 'playing', msg.server_ts, applyToVideo);
         state.lastSyncPlayState = hostPlayState;
         state.syncCooldownUntil = utils.nowMs() + 2000;
         if (hostPlayState === 'playing') {
           state.syncStatus = 'syncing';
-          OWP.playback.safePlay(video, 'host seek command');
+          if (applyToVideo) OWP.playback.safePlay(video, 'host seek command');
         } else {
           state.syncStatus = 'synced';
-          video.pause();
+          if (applyToVideo) video.pause();
         }
         break;
       case 'buffering':
-        applyPosition(video, position);
+        state.roomWaiting = true;
+        applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
         state.syncStatus = 'syncing';
-        video.pause();
+        if (applyToVideo) video.pause();
         break;
     }
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();

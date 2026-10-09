@@ -64,6 +64,23 @@
     }
   };
 
+  const trackGuestPause = () => {
+    if (state.inRoom && !state.isHost && state.lastSyncPlayState === 'playing') {
+      state.guestPaused = true;
+    }
+  };
+
+  const trackGuestPlay = () => {
+    if (!state.inRoom || state.isHost || !state.guestPaused) return;
+    state.guestPaused = false;
+    // Rejoining playback should catch up on the next sync tick, even if a
+    // host command set an initial-sync or command cooldown while paused.
+    state.isInitialSync = false;
+    state.initialSyncUntil = 0;
+    state.initialSyncTargetPos = null;
+    state.syncCooldownUntil = 0;
+  };
+
   const createVideoListeners = (video) => {
     return {
       waiting: () => {
@@ -100,9 +117,13 @@
       },
       play: () => {
         if (playback.markPlaybackResumed) playback.markPlaybackResumed();
+        trackGuestPlay();
         onHostEvent('play', video);
       },
-      pause: () => onHostEvent('pause', video),
+      pause: () => {
+        trackGuestPause();
+        onHostEvent('pause', video);
+      },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
         onHostEvent('seek', video);
@@ -138,6 +159,8 @@
     if (state.bound) return;
     state.bound = true;
     state.currentVideoElement = video;
+    // A pause belongs to the video it was made on.
+    state.guestPaused = false;
     const listeners = createVideoListeners(video);
     state.videoListeners = listeners;
     video.addEventListener('waiting', listeners.waiting);

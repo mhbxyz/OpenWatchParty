@@ -205,7 +205,7 @@ The sqrt curve corrects small drifts gently and larger ones faster, within 0.90x
 
 ### Paused Rooms
 
-While the room plays, the host's periodic `state_update` resumes a guest who paused. A paused room sends none (the server drops state updates that change nothing), so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
+While the room plays, a guest may pause locally without being resumed by periodic state updates or host commands. The client keeps recording the room position while paused; when the guest plays again, the normal sync loop catches up to that position. A paused room sends no unchanged state updates, so the loop pauses a guest whose video plays while the room is paused. It waits while a room command is being applied or a host play is scheduled.
 
 ### Manual Nudge (Sync Adjustment)
 

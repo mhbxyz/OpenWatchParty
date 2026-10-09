@@ -17,6 +17,7 @@
       state.clientId = msg.client;
     }
     state.isHost = (msg.payload.host_id === state.clientId);
+    if (state.isHost) state.guestPaused = false;
     if (!state.hasTimeSync && typeof msg.server_ts === 'number') {
       state.serverOffsetMs = msg.server_ts - utils.nowMs();
       state.hasTimeSync = true;
@@ -36,6 +37,7 @@
     state.lastSyncServerTs = stateServerTs;
     state.lastSyncPosition = basePos;
     state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
+    if (hostPlaying) state.roomWaiting = false;
     state.pendingPlayUntil = 0;
     state.syncStatus = hostPlaying ? 'syncing' : 'synced';
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
@@ -145,6 +147,14 @@
     state.playbackActionAttempt++;
     if (msg.payload) {
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
+      if (msg.payload.play_state === 'playing') state.roomWaiting = false;
+    }
+    if (state.guestPaused) {
+      state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
+      state.lastSyncPosition = typeof msg.payload.position === 'number'
+        ? msg.payload.position
+        : state.lastSyncPosition;
+      return;
     }
     if (msg.payload.play_state === 'playing' && video.paused) {
       utils.startSyncing();

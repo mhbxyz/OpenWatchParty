@@ -110,9 +110,11 @@ As the host, your actions control everyone:
 
 As a participant:
 
+While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. You can pause for yourself at any time; playing again catches up to the room's current position. You can resume only while the room is playing; when the host has paused or you are waiting for the host, the play control is dimmed and does nothing.
+
 | What Happens | What You See |
 |--------------|--------------|
-| Host plays | Video starts automatically |
+| Host plays | Video starts automatically unless you paused it for yourself |
 | Host pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
 | Host leaves or reloads | A compatible participant becomes host; otherwise the room closes |

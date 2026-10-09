@@ -214,6 +214,8 @@
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',
+    roomWaiting: false,
+    guestPaused: false,
     readyRoomId: '',
     isBuffering: false,
     wantsToPlay: false,

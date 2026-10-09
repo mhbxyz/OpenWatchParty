@@ -109,7 +109,7 @@ describe('plugin loader base path', () => {
     });
     const scripts = await waitForLoad(harness);
 
-    assert.equal(scripts.length, 30);
+    assert.equal(scripts.length, 31);
     assert.equal(scripts[0], 'http://localhost:8096/OpenWatchParty/Client/state.js?v=root-version');
     assert.ok(scripts.every(src => src.startsWith('http://localhost:8096/OpenWatchParty/Client/')));
   });
@@ -220,17 +220,17 @@ describe('plugin loader failure recovery', () => {
     const retriedModules = harness.scripts.slice(beforeRetry).map(script => script.module);
     assert.equal(loader.state, 'loaded');
     assert.equal(harness.OWP.__loaded, true);
-    assert.equal(loader.loadedModules.size, 30);
+    assert.equal(loader.loadedModules.size, 31);
     assert.equal(retriedModules.includes('state.js'), false);
     assert.equal(retriedModules.includes('utils/time.js'), false);
     assert.equal(harness.initCount, 1);
-    assert.equal(harness.scripts.length, 32);
+    assert.equal(harness.scripts.length, 33);
 
     const loadedPromise = loader.promise;
     assert.equal(loader.retry(), loadedPromise);
     harness.inject();
     assert.equal(harness.initCount, 1);
-    assert.equal(harness.scripts.length, 32);
+    assert.equal(harness.scripts.length, 33);
   });
 
   it('automatically retries a transient module failure', async () => {

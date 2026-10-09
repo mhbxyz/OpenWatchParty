@@ -18,6 +18,28 @@
     '.headerSyncButton, button[aria-controls="app-sync-play-menu"] { display: none !important; }';
 
   const CSS_STYLES = `
+    html.owp-guest-locked .videoOsdBottom .btnPreviousTrack,
+    html.owp-guest-locked .videoOsdBottom .btnNextTrack,
+    html.owp-guest-locked .videoOsdBottom .btnPreviousChapter,
+    html.owp-guest-locked .videoOsdBottom .btnNextChapter,
+    html.owp-guest-locked .videoOsdBottom .btnRewind,
+    html.owp-guest-locked .videoOsdBottom .btnFastForward {
+      opacity: 0.3 !important; cursor: not-allowed !important;
+    }
+    html.owp-guest-locked .videoOsdBottom .owp-position-slider-container {
+      opacity: 0.45 !important; pointer-events: none !important;
+    }
+    html.owp-guest-locked .videoOsdBottom .osdPositionSlider {
+      pointer-events: none !important;
+    }
+    html.owp-guest-play-locked .videoOsdBottom .btnPause {
+      opacity: 0.3 !important; cursor: not-allowed !important;
+    }
+    #owp-guest-lock-label {
+      display: flex; align-items: center; gap: 0.35em; margin: 0.6em 0 0.2em 0.5em;
+      font-size: 0.85em; color: rgba(255,255,255,0.75); pointer-events: none;
+    }
+    #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
       position: fixed; top: 72px; right: 20px; width: 360px; max-width: calc(100vw - 40px); max-height: min(450px, calc(100vh - 88px));
