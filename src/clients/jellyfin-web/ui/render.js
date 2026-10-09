@@ -113,6 +113,27 @@
     if (hint) hint.hidden = enabled;
   };
 
+  const SERVER_LABEL_ID = 'owp-server-label';
+
+  // Host and path, without the scheme and the /ws endpoint. Only the parts
+  // that are safe to show, should a URL ever carry more.
+  const serverLabel = (value) => {
+    try {
+      const url = new URL(value);
+      return `${url.host}${url.pathname.replace(/\/ws\/?$/, '').replace(/\/$/, '')}`;
+    } catch (err) {
+      return value.replace(/^wss?:\/\//, '').replace(/\/ws$/, '');
+    }
+  };
+
+  // The session server the client connects to: the one the plugin sends with
+  // the token, or the default it falls back to. It arrives after the lobby is
+  // first drawn, so the label is refreshed on every update.
+  const updateServerLabel = () => {
+    const label = document.getElementById(SERVER_LABEL_ID);
+    if (label) label.textContent = serverLabel(String(state.wsUrl || DEFAULT_WS_URL));
+  };
+
   const HELP_ID = 'owp-help';
   const HELP_BUTTON_ID = 'owp-btn-help';
   const HELP_TEXT = 'Watch movies and shows together, in sync. This panel opens from the Watch Party button, at the top of Jellyfin or in the player.';
@@ -211,11 +232,14 @@
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
-    footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
+    const server = createElement('span');
+    server.id = SERVER_LABEL_ID;
+    footer.append(document.createTextNode('Server: '), server);
     panel.replaceChildren(header, createLobbyHelp(), lobby, footer);
     applyLobbyHelp();
     ui.updateRoomListUI();
     updateCreateRoomButton();
+    updateServerLabel();
   };
 
   // Names when the server sends them (participant_list), otherwise the count,
@@ -641,6 +665,7 @@
       ui.updateSyncIndicator();
       ui.updateRoomListUI();
       updateCreateRoomButton();
+      updateServerLabel();
       ui.renderHomeWatchParties();
       return;
     }
