@@ -106,6 +106,28 @@ pub enum ClientMessageType {
     Unknown,
 }
 
+impl ClientMessageType {
+    /// The wire name, as serialized.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Auth => "auth",
+            Self::ListRooms => "list_rooms",
+            Self::CreateRoom => "create_room",
+            Self::JoinRoom => "join_room",
+            Self::Ready => "ready",
+            Self::LeaveRoom => "leave_room",
+            Self::CloseRoom => "close_room",
+            Self::PlayerEvent => "player_event",
+            Self::StateUpdate => "state_update",
+            Self::Ping => "ping",
+            Self::ClientLog => "client_log",
+            Self::ChatMessage => "chat_message",
+            Self::ParticipantStatus => "participant_status",
+            Self::Unknown => "unknown",
+        }
+    }
+}
+
 /// Outgoing message types from server (reserved for future use)
 #[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -207,6 +229,18 @@ mod tests {
     }
 
     #[test]
+    fn client_message_type_names_match_the_wire_and_the_metric_labels() {
+        for name in crate::metrics::CLIENT_MESSAGE_TYPES {
+            let parsed: ClientMessageType =
+                serde_json::from_value(serde_json::json!(name)).unwrap();
+            assert_eq!(parsed.as_str(), name);
+            if parsed != ClientMessageType::Unknown {
+                assert_eq!(serde_json::to_value(&parsed).unwrap(), name);
+            }
+        }
+    }
+
+    #[test]
     fn test_incoming_message_deserialize() {
         let json = r#"{"type": "ping", "ts": 12345}"#;
         let msg: IncomingMessage = serde_json::from_str(json).unwrap();
@@ -258,5 +292,35 @@ mod tests {
         assert!(json.get("command_cooldown_until").is_none());
         assert!(json["pending_play"].get("generation").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
+    }
+
+    #[test]
+    fn client_message_type_names_match_the_wire_format() {
+        use ClientMessageType::*;
+        for message_type in [
+            Auth,
+            ListRooms,
+            CreateRoom,
+            JoinRoom,
+            Ready,
+            LeaveRoom,
+            CloseRoom,
+            PlayerEvent,
+            StateUpdate,
+            Ping,
+            ClientLog,
+            ChatMessage,
+            ParticipantStatus,
+        ] {
+            let wire = serde_json::to_string(&message_type).unwrap();
+            assert_eq!(wire, format!("\"{}\"", message_type.as_str()));
+            // The metrics count every client message type under its own label.
+            assert!(
+                crate::metrics::CLIENT_MESSAGE_TYPES.contains(&message_type.as_str()),
+                "{} has no metrics label",
+                message_type.as_str()
+            );
+        }
+        assert_eq!(Unknown.as_str(), "unknown");
     }
 }

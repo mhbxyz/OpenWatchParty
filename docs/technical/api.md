@@ -283,7 +283,7 @@ The `SessionServerUrl` field determines how clients connect to the session serve
 
 ## Session Server API
 
-The session server exposes one additional HTTP endpoint beside `/health`.
+Besides `/health`, the session server exposes `/ready` and `/metrics` for operators (see the [Monitoring guide](../operations/monitoring.md)) and one endpoint for clients.
 
 ### POST /invite
 

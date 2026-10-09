@@ -2,6 +2,7 @@ use super::constants::CLIENT_CHANNEL_BUFFER;
 use super::dispatch::{client_msg, close_with_policy, is_authenticated, send_error, ErrorCode};
 use crate::auth::JwtConfig;
 use crate::messaging::{send_message, send_room_list, ClientSender};
+use crate::metrics::{metrics, CloseReason, InvalidMessage};
 use crate::types::{SharedState, WsMessage};
 use crate::utils::now_ms;
 use futures::StreamExt;
@@ -64,6 +65,12 @@ fn send_client_hello(client_id: &str, sender: Option<crate::messaging::ClientSen
     );
 }
 
+/// Whether a receive error is the WebSocket layer refusing a message over
+/// `max_message_size`. warp does not expose the error kind, only its text.
+fn is_message_too_large(error: &warp::Error) -> bool {
+    error.to_string().contains("Message too long")
+}
+
 fn should_send_initial_room_list(jwt_config: &JwtConfig) -> bool {
     !jwt_config.enabled
 }
@@ -122,7 +129,7 @@ pub async fn client_connection(
 
     let temp_id = uuid::Uuid::new_v4().to_string();
     info!(
-        "Client connected: {} (auth_required: {})",
+        "Client connected client_id={} auth_required={}",
         temp_id, jwt_config.enabled
     );
 
@@ -133,6 +140,7 @@ pub async fn client_connection(
         let sender = state.clients.get(&temp_id).map(|c| c.sender.clone());
         send_client_hello(&temp_id, sender);
     }
+    metrics().connection_opened();
 
     if should_send_initial_room_list(&jwt_config) {
         send_room_list(&temp_id, &state).await;
@@ -149,11 +157,15 @@ pub async fn client_connection(
     loop {
         tokio::select! {
             result = client_ws_rcv.next() => {
-                let Some(result) = result else { break };
+                let Some(result) = result else {
+                    metrics().connection_closed(CloseReason::ClientDisconnected);
+                    break;
+                };
                 match result {
                     Ok(msg) => {
+                        // client_msg counts the reason of a session it ends.
                         if client_msg(&temp_id, msg, &state, &jwt_config, &tasks).await {
-                            info!("Terminating WebSocket session for client {temp_id}");
+                            info!("Terminating WebSocket session client_id={temp_id}");
                             break;
                         }
                         if authentication_pending && is_authenticated(&temp_id, &state).await {
@@ -169,14 +181,29 @@ pub async fn client_connection(
                             }
                         }
                     },
-                    Err(_) => {
-                        warn!("WebSocket receive failed for client {temp_id}");
+                    Err(error) => {
+                        // The WebSocket layer enforces MAX_MESSAGE_SIZE itself and
+                        // ends the stream with a capacity error.
+                        if is_message_too_large(&error) {
+                            warn!(
+                                "Message over the size limit client_id={temp_id} error={:?}",
+                                error.to_string()
+                            );
+                            metrics().invalid_message(InvalidMessage::TooLarge);
+                            metrics().connection_closed(CloseReason::MessageTooLarge);
+                        } else {
+                            warn!(
+                                "WebSocket receive failed client_id={temp_id} error={:?}",
+                                error.to_string()
+                            );
+                            metrics().connection_closed(CloseReason::ReceiveError);
+                        }
                         break;
                     }
                 }
             }
             _ = &mut authentication_timeout, if authentication_pending => {
-                info!("Authentication timed out for client {temp_id}");
+                info!("Authentication timed out client_id={temp_id}");
                 send_error(
                     &temp_id,
                     &state,
@@ -184,6 +211,7 @@ pub async fn client_connection(
                     "Authentication timeout",
                 ).await;
                 close_with_policy(&temp_id, &state, "Authentication timeout").await;
+                metrics().connection_closed(CloseReason::AuthenticationTimeout);
                 break;
             }
             _ = &mut session_expiration_timer, if scheduled_expiration.0.is_some() => {
@@ -192,7 +220,7 @@ pub async fn client_connection(
                 if let Some(expiration) = current_expiration.0 {
                     let delay = expiration_delay(expiration, session_clock());
                     if delay.is_zero() {
-                        info!("Authentication expired for client {temp_id}");
+                        info!("Authentication expired client_id={temp_id}");
                         send_error(
                             &temp_id,
                             &state,
@@ -200,6 +228,7 @@ pub async fn client_connection(
                             "Authentication expired",
                         ).await;
                         close_with_policy(&temp_id, &state, "Authentication expired").await;
+                        metrics().connection_closed(CloseReason::AuthenticationExpired);
                         break;
                     }
                     session_expiration_timer.as_mut().reset(Instant::now() + delay);
@@ -207,8 +236,17 @@ pub async fn client_connection(
             }
             result = disconnect_requested.changed() => {
                 if result.is_err() || *disconnect_requested.borrow() {
-                    info!("Outbound queue failed for client {temp_id}");
-                    close_with_policy(&temp_id, &state, "Client cannot accept messages").await;
+                    // Only the zombie cleanup removes a client while its
+                    // connection task runs; that drops the disconnect signal.
+                    let removed = !state.read().await.clients.contains_key(&temp_id);
+                    if removed {
+                        info!("Session removed after the heartbeat client_id={temp_id}");
+                        metrics().connection_closed(CloseReason::HeartbeatTimeout);
+                    } else {
+                        info!("Outbound queue failed client_id={temp_id}");
+                        close_with_policy(&temp_id, &state, "Client cannot accept messages").await;
+                        metrics().connection_closed(CloseReason::OutboundQueueFailed);
+                    }
                     break;
                 }
             }
@@ -218,6 +256,7 @@ pub async fn client_connection(
                     state.clients.get(&temp_id).map(|client| client.sender.clone())
                 };
                 enqueue_going_away(sender).await;
+                metrics().connection_closed(CloseReason::ServerShutdown);
                 break;
             }
         }

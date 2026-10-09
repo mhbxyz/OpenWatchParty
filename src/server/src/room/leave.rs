@@ -138,17 +138,24 @@ pub fn send_leave_notification(notification: &LeaveNotification, context: &str) 
     }
 }
 
-pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
-    info!("Disconnecting client {client_id}");
-    {
+/// Removes a client and leaves its room. Returns whether the client was
+/// still registered.
+pub async fn handle_disconnect(client_id: &str, state: &SharedState) -> bool {
+    let removed = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
+        let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
+        info!(
+            "Disconnecting client client_id={client_id} room_id={}",
+            room_id.as_deref().unwrap_or("-")
+        );
         if let Some(notification) = handle_leave(client_id, clients, rooms) {
             send_leave_notification(&notification, "leave notification");
         }
-        clients.remove(client_id);
-    }
+        clients.remove(client_id).is_some()
+    };
     broadcast_room_list(state).await;
+    removed
 }
 
 #[cfg(test)]

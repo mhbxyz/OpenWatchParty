@@ -25,24 +25,24 @@ fn is_zombie(client: &crate::types::Client, now: Instant) -> bool {
 /// background tab and for receive-only clients that never send an application
 /// ping. Browsers answer a ping with a pong without any application logic.
 pub async fn send_heartbeats(state: &SharedState) {
-    let senders: Vec<crate::messaging::ClientSender> = {
+    let senders: Vec<(String, crate::messaging::ClientSender)> = {
         let locked_state = state.read().await;
         locked_state
             .clients
-            .values()
-            .map(|client| client.sender.clone())
+            .iter()
+            .map(|(id, client)| (id.clone(), client.sender.clone()))
             .collect()
     };
-    for sender in senders {
+    for (client_id, sender) in senders {
         // A heartbeat that does not fit must not disconnect a client that is
         // simply behind; only a closed channel means the writer is gone.
         match sender.try_send_keep_alive(Ok(warp::ws::Message::ping(Vec::new()))) {
             Ok(()) => {}
             Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                debug!("Skipping a heartbeat for a client whose buffer is momentarily full");
+                debug!("Skipping a heartbeat, buffer momentarily full client_id={client_id}");
             }
             Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                warn!("Heartbeat found a closed client channel");
+                warn!("Heartbeat found a closed channel client_id={client_id}");
             }
         }
     }
@@ -155,6 +155,15 @@ pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
     })
 }
 
+/// Removes a session that missed the heartbeat. Its connection task then
+/// ends with the `heartbeat_timeout` close reason.
+pub(crate) async fn remove_zombie(id: &str, state: &SharedState) {
+    if crate::room::handle_disconnect(id, state).await {
+        warn!("Removed zombie connection client_id={id}");
+        crate::metrics::metrics().zombie_removed();
+    }
+}
+
 pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
     let cancellation = tasks.cancellation_token();
     tasks.spawn(async move {
@@ -184,8 +193,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
                 if cancellation.is_cancelled() {
                     return;
                 }
-                warn!("Removing zombie connection: {id}");
-                crate::room::handle_disconnect(&id, &state).await;
+                remove_zombie(&id, &state).await;
             }
         }
     })

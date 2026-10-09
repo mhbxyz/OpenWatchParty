@@ -301,6 +301,7 @@ async fn handle_invite_request(
         }
     };
     if !limiter.allow(&claims.sub) {
+        crate::metrics::metrics().rate_limited(crate::metrics::RateLimitScope::Invites);
         return Ok(error_reply(
             warp::http::StatusCode::TOO_MANY_REQUESTS,
             "Rate limit exceeded",
@@ -474,9 +475,11 @@ fn build_ws_route_with_clock(
             let trusted_proxies = trusted_proxies.clone();
             async move {
                 let ip = client_ip(remote, forwarded_for.as_deref(), &trusted_proxies);
-                limiter
-                    .try_acquire(ip)
-                    .ok_or_else(|| warp::reject::custom(ConnectionLimitRejected))
+                limiter.try_acquire(ip).ok_or_else(|| {
+                    crate::metrics::metrics()
+                        .connection_rejected(crate::metrics::RejectionReason::ConnectionLimit);
+                    warp::reject::custom(ConnectionLimitRejected)
+                })
             }
         });
 
@@ -488,6 +491,8 @@ fn build_ws_route_with_clock(
                     Some(ref o) if is_origin_allowed(o, &allowed) => Ok(()),
                     Some(o) => {
                         warn!("Rejected connection from origin: {o}");
+                        crate::metrics::metrics()
+                            .connection_rejected(crate::metrics::RejectionReason::Origin);
                         Err(warp::reject::custom(OriginRejected))
                     }
                     None => Ok(()),
@@ -496,17 +501,19 @@ fn build_ws_route_with_clock(
         )
         .untuple_one();
 
+    // The upgrade is checked first, so a plain HTTP request to /ws neither
+    // takes a connection permit nor counts as a rejected connection.
     warp::path("ws")
+        .and(warp::ws())
         .and(origin_check)
         .and(admission)
-        .and(warp::ws())
         .and(state_filter)
         .and(jwt_filter)
         .and(clock_filter)
         .and(tasks_filter)
         .map(
-            move |permit,
-                  ws: warp::ws::Ws,
+            move |ws: warp::ws::Ws,
+                  permit,
                   state,
                   jwt_config: Arc<JwtConfig>,
                   session_clock,
@@ -588,6 +595,73 @@ pub fn build_health_route(
             }))
         })
         .with(cors)
+}
+
+/// Every route the server serves, as `main` runs them.
+pub fn build_routes(
+    state: SharedState,
+    jwt_config: Arc<JwtConfig>,
+    allowed_origins: Arc<Vec<String>>,
+    ingress_config: IngressConfig,
+    tasks: crate::tasks::AppTasks,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    build_ws_route_with_tasks(
+        state.clone(),
+        jwt_config.clone(),
+        allowed_origins.clone(),
+        ingress_config,
+        tasks.clone(),
+    )
+    .or(build_invite_route(
+        state.clone(),
+        jwt_config.clone(),
+        allowed_origins.clone(),
+    ))
+    .or(build_health_route(jwt_config, allowed_origins))
+    .or(build_metrics_route(state))
+    .or(build_ready_route(tasks))
+    .recover(handle_rejection)
+}
+
+/// `GET /metrics`: Prometheus text exposition. It is meant for a scraper on the
+/// internal network, so it has no CORS headers; keep it off the public proxy.
+pub fn build_metrics_route(
+    state: SharedState,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    let state_filter = warp::any().map(move || state.clone());
+    warp::path("metrics")
+        .and(warp::path::end())
+        .and(warp::get())
+        .and(state_filter)
+        .then(|state: SharedState| async move {
+            let text = crate::metrics::metrics().render(&*state.read().await);
+            warp::reply::with_header(
+                text,
+                "content-type",
+                "text/plain; version=0.0.4; charset=utf-8",
+            )
+        })
+}
+
+/// `GET /ready`: 200 while the server accepts new sessions, 503 once it has
+/// started shutting down. `/health` keeps answering until the process exits.
+pub fn build_ready_route(
+    tasks: crate::tasks::AppTasks,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
+    warp::path("ready")
+        .and(warp::path::end())
+        .and(warp::get())
+        .map(move || {
+            let (status, code) = if tasks.cancellation_token().is_cancelled() {
+                ("shutting_down", warp::http::StatusCode::SERVICE_UNAVAILABLE)
+            } else {
+                ("ready", warp::http::StatusCode::OK)
+            };
+            warp::reply::with_status(
+                warp::reply::json(&serde_json::json!({ "status": status })),
+                code,
+            )
+        })
 }
 
 #[cfg(test)]
@@ -1216,6 +1290,255 @@ mod tests {
                 .unwrap()
                 .session_expires_at,
             None
+        );
+    }
+
+    #[tokio::test]
+    async fn metrics_count_a_session_and_are_served_as_prometheus_text() {
+        use crate::metrics::{metrics, CloseReason, InvalidMessage, RejectionReason};
+        let metrics = metrics();
+        let before = (
+            metrics.connections(),
+            metrics.received("ping"),
+            metrics.sent("pong"),
+            metrics.sent("client_hello"),
+            metrics.invalid(InvalidMessage::InvalidJson),
+            metrics.errors("INVALID_JSON"),
+            metrics.closed(CloseReason::ClientClosed),
+            metrics.rejected(RejectionReason::Origin),
+        );
+        let state = crate::test_helpers::create_state();
+        let route = build_ws_route(
+            state.clone(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route.clone())
+            .await
+            .unwrap();
+        client.recv().await.unwrap(); // client_hello
+        client.recv().await.unwrap(); // room_list, sent at once without authentication
+        client.send_text(r#"{"type":"ping","ts":0}"#).await;
+        client.recv().await.unwrap(); // pong
+        client.send_text("not-json").await;
+        client.recv().await.unwrap(); // error
+
+        let response = warp::test::request()
+            .path("/metrics")
+            .reply(&build_metrics_route(state.clone()))
+            .await;
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers()["content-type"],
+            "text/plain; version=0.0.4; charset=utf-8"
+        );
+        let body = String::from_utf8(response.body().to_vec()).unwrap();
+        for line in [
+            "owp_connections_active 1".to_string(),
+            format!("owp_connections_total {}", metrics.connections()),
+            format!(
+                "owp_messages_received_total{{type=\"ping\"}} {}",
+                metrics.received("ping")
+            ),
+            format!(
+                "owp_messages_sent_total{{type=\"pong\"}} {}",
+                metrics.sent("pong")
+            ),
+        ] {
+            assert!(body.lines().any(|l| l == line), "missing: {line}");
+        }
+
+        client.send(warp::ws::Message::close()).await;
+        tokio::time::timeout(Duration::from_secs(1), client.recv_closed())
+            .await
+            .unwrap()
+            .unwrap();
+        for _ in 0..10 {
+            if state.read().await.clients.is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let rejected = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://elsewhere.example")
+            .handshake(route)
+            .await;
+        assert!(rejected.is_err());
+
+        let after = (
+            metrics.connections(),
+            metrics.received("ping"),
+            metrics.sent("pong"),
+            metrics.sent("client_hello"),
+            metrics.invalid(InvalidMessage::InvalidJson),
+            metrics.errors("INVALID_JSON"),
+            metrics.closed(CloseReason::ClientClosed),
+            metrics.rejected(RejectionReason::Origin),
+        );
+        assert_eq!(
+            after,
+            (
+                before.0 + 1,
+                before.1 + 1,
+                before.2 + 1,
+                before.3 + 1,
+                before.4 + 1,
+                before.5 + 1,
+                before.6 + 1,
+                before.7 + 1,
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn ready_reports_shutdown_while_health_stays_ok() {
+        let tasks = crate::tasks::AppTasks::new();
+        let route = build_routes(
+            crate::test_helpers::create_state(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+            tasks.clone(),
+        );
+        for path in ["/health", "/metrics", "/ready"] {
+            let response = warp::test::request().path(path).reply(&route).await;
+            assert_eq!(response.status(), 200, "{path}");
+        }
+        let response = warp::test::request().path("/ready").reply(&route).await;
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(response.body()).unwrap()["status"],
+            "ready"
+        );
+
+        tasks.cancel();
+        let response = warp::test::request().path("/ready").reply(&route).await;
+        assert_eq!(response.status(), 503);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(response.body()).unwrap()["status"],
+            "shutting_down"
+        );
+        let response = warp::test::request().path("/health").reply(&route).await;
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn plain_http_requests_to_ws_are_not_counted_as_rejected_connections() {
+        use crate::metrics::{metrics, RejectionReason};
+        let before = (
+            metrics().rejected(RejectionReason::Origin),
+            metrics().rejected(RejectionReason::ConnectionLimit),
+        );
+        let route = build_ws_route(
+            crate::test_helpers::create_state(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let response = warp::test::request()
+            .path("/ws")
+            .header("origin", "https://elsewhere.example")
+            .reply(&route)
+            .await;
+        assert_ne!(response.status(), 101);
+        assert_eq!(
+            (
+                metrics().rejected(RejectionReason::Origin),
+                metrics().rejected(RejectionReason::ConnectionLimit),
+            ),
+            before
+        );
+    }
+
+    #[tokio::test]
+    async fn a_message_over_the_size_limit_ends_the_session_with_its_own_reason() {
+        use crate::metrics::{metrics, CloseReason, InvalidMessage};
+        let before = (
+            metrics().closed(CloseReason::MessageTooLarge),
+            metrics().invalid(InvalidMessage::TooLarge),
+            metrics().closed(CloseReason::ReceiveError),
+        );
+        let state = crate::test_helpers::create_state();
+        let route = build_ws_route(
+            state.clone(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap(); // client_hello
+        client.recv().await.unwrap(); // room_list
+        client
+            .send_text("x".repeat(crate::ws::constants::MAX_MESSAGE_SIZE + 1))
+            .await;
+        let _ = tokio::time::timeout(Duration::from_secs(1), client.recv_closed()).await;
+        for _ in 0..20 {
+            if state.read().await.clients.is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(state.read().await.clients.is_empty());
+        assert_eq!(
+            (
+                metrics().closed(CloseReason::MessageTooLarge),
+                metrics().invalid(InvalidMessage::TooLarge),
+                metrics().closed(CloseReason::ReceiveError),
+            ),
+            (before.0 + 1, before.1 + 1, before.2)
+        );
+    }
+
+    #[tokio::test]
+    async fn a_zombie_session_is_counted_once_with_the_heartbeat_reason() {
+        use crate::metrics::{metrics, CloseReason};
+        let before = (
+            metrics().closed(CloseReason::HeartbeatTimeout),
+            metrics().closed(CloseReason::OutboundQueueFailed),
+            metrics().zombies(),
+        );
+        let state = crate::test_helpers::create_state();
+        let route = build_ws_route(
+            state.clone(),
+            test_jwt_config(false),
+            Arc::new(vec!["https://example.com".to_string()]),
+            test_ingress_config(Duration::from_secs(5)),
+        );
+        let mut client = warp::test::ws()
+            .path("/ws")
+            .header("origin", "https://example.com")
+            .handshake(route)
+            .await
+            .unwrap();
+        client.recv().await.unwrap(); // client_hello
+        let id = state.read().await.clients.keys().next().unwrap().clone();
+
+        crate::tasks::remove_zombie(&id, &state).await;
+        // A second sweep that finds it gone does not count it again.
+        crate::tasks::remove_zombie(&id, &state).await;
+        for _ in 0..20 {
+            if metrics().closed(CloseReason::HeartbeatTimeout) > before.0 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            (
+                metrics().closed(CloseReason::HeartbeatTimeout),
+                metrics().closed(CloseReason::OutboundQueueFailed),
+                metrics().zombies(),
+            ),
+            (before.0 + 1, before.1, before.2 + 1)
         );
     }
 }

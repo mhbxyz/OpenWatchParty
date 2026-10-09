@@ -1,5 +1,6 @@
 mod auth;
 mod messaging;
+mod metrics;
 mod room;
 mod routes;
 mod tasks;
@@ -18,7 +19,6 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use warp::Filter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -46,25 +46,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let state: SharedState = Arc::new(RwLock::new(ServerState::default()));
     let app_tasks = tasks::AppTasks::new();
+    metrics::metrics().record_start(utils::now_ms() / 1000);
 
     tasks::spawn_zombie_cleanup(state.clone(), &app_tasks);
     tasks::spawn_heartbeat(state.clone(), &app_tasks);
 
-    let invite_state = state.clone();
-    let routes = routes::build_ws_route_with_tasks(
+    let routes = routes::build_routes(
         state,
-        jwt_config.clone(),
-        allowed_origins.clone(),
+        jwt_config,
+        allowed_origins,
         ingress_config,
         app_tasks.clone(),
-    )
-    .or(routes::build_invite_route(
-        invite_state,
-        jwt_config.clone(),
-        allowed_origins.clone(),
-    ))
-    .or(routes::build_health_route(jwt_config, allowed_origins))
-    .recover(routes::handle_rejection);
+    );
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port: u16 = std::env::var("PORT")

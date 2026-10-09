@@ -105,7 +105,7 @@ pub(in crate::ws) async fn handle_participant_status(
         return;
     }
     let Some(status) = valid_status(parsed.payload.as_ref()) else {
-        debug!("Ignoring invalid participant status from {client_id}");
+        debug!("Ignoring invalid participant status client_id={client_id}");
         return;
     };
     let Some((room_id, flush_at, ticket)) =

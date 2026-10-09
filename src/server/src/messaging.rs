@@ -114,18 +114,22 @@ pub fn send_message(sender: Option<ClientSender>, msg: &WsMessage, client_id: Op
     match serde_json::to_string(msg) {
         Ok(json) => {
             if let Err(e) = sender.try_send(Ok(warp::ws::Message::text(json))) {
+                crate::metrics::metrics().send_failed();
                 log::warn!(
-                    "Failed to send to client {} (buffer full or closed): {}",
+                    "Failed to send, buffer full or closed client_id={} type={} error={:?}",
                     client_id.unwrap_or("unknown"),
-                    e
+                    msg.msg_type,
+                    e.to_string()
                 );
+            } else {
+                crate::metrics::metrics().message_delivered(msg);
             }
         }
         Err(e) => {
             log::error!(
-                "Failed to serialize message for client {}: {}",
+                "Failed to serialize message client_id={} error={:?}",
                 client_id.unwrap_or("unknown"),
-                e
+                e.to_string()
             );
         }
     }
@@ -148,14 +152,13 @@ pub fn send_to_senders(senders: &[ClientSender], msg: &WsMessage, context: &str)
         log::error!("Failed to serialize {context} message");
         return;
     };
-    send_serialized(senders, json, context);
-}
-
-pub fn send_serialized(senders: &[ClientSender], json: String, context: &str) {
     let warp_msg = warp::ws::Message::text(json);
     for sender in senders {
         if let Err(e) = sender.try_send(Ok(warp_msg.clone())) {
+            crate::metrics::metrics().send_failed();
             log::warn!("Failed to send {context} (buffer full or closed): {e}");
+        } else {
+            crate::metrics::metrics().message_delivered(msg);
         }
     }
 }
@@ -360,15 +363,42 @@ mod tests {
         let (fast, mut fast_rx, _fast_disconnect) = ClientSender::channel(8);
         slow.try_send(Ok(warp::ws::Message::text("already queued")))
             .unwrap();
+        let metrics = crate::metrics::metrics();
+        let failures = metrics.failures();
+        let sent = [
+            "room_closed",
+            "player_event",
+            "participants_update",
+            "room_state",
+        ]
+        .map(|msg_type| metrics.sent(msg_type));
 
         for msg_type in ["room_closed", "player_event", "participants_update"] {
             send_to_senders(&[slow.clone(), fast.clone()], &message(msg_type), msg_type);
         }
-        send_message(Some(slow), &message("room_state"), Some("slow"));
+        send_message(Some(slow.clone()), &message("room_state"), Some("slow"));
         send_message(Some(fast), &message("room_state"), Some("fast"));
 
         disconnect.changed().await.unwrap();
         assert!(*disconnect.borrow());
+        let errors = metrics.errors("ROOM_FULL");
+        let mut error = message("error");
+        error.payload = Some(serde_json::json!({ "code": "ROOM_FULL", "message": "Room is full" }));
+        send_to_senders(std::slice::from_ref(&slow), &error, "error");
+        assert_eq!(metrics.errors("ROOM_FULL"), errors);
+        assert_eq!(metrics.failures(), failures + 5);
+        // The slow client missed all four; the fast one got each once.
+
+        assert_eq!(
+            [
+                "room_closed",
+                "player_event",
+                "participants_update",
+                "room_state"
+            ]
+            .map(|msg_type| metrics.sent(msg_type)),
+            sent.map(|count| count + 1)
+        );
         let received: Vec<_> = std::iter::from_fn(|| test_helpers::recv_msg(&mut fast_rx))
             .map(|message| message.msg_type)
             .collect();

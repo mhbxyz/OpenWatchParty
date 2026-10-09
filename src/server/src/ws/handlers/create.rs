@@ -48,7 +48,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         .map(|v| v.to_string());
     let room_name = format!("{host_name}'s room");
 
-    info!("Creating room '{room_name}' ({room_id}) for {client_id}");
+    info!("Creating room room_id={room_id} client_id={client_id} name={room_name:?}");
 
     let state_server_ts = now_ms();
     Room {
@@ -82,6 +82,7 @@ fn insert_and_notify(
 ) -> (Option<ClientSender>, WsMessage) {
     let room_id = room.room_id.clone();
     locked_rooms.insert(room_id.clone(), room.clone());
+    crate::metrics::metrics().room_created();
     if let Some(client) = locked_clients.get_mut(client_id) {
         client.room_id = Some(room_id.clone());
         if let Some(ref name) = payload_name {
@@ -288,7 +289,9 @@ mod tests {
             server_ts: None,
         };
 
+        let rooms = crate::metrics::metrics().rooms();
         handle_create_room("host", &parsed, &state).await;
+        assert_eq!(crate::metrics::metrics().rooms(), rooms + 1);
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,

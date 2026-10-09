@@ -10,12 +10,18 @@ nav_order: 6
 
 ### Session Server Health
 
-The session server exposes a health endpoint:
+The session server exposes a health endpoint and a readiness endpoint:
 
 ```bash
 curl http://localhost:3000/health
-# Expected: 200 OK with "OK"
+# 200 {"status":"ok","auth_enabled":true,"version":"...","protocol_version":1}
+
+curl http://localhost:3000/ready
+# 200 {"status":"ready"} while the server accepts new sessions
+# 503 {"status":"shutting_down"} once a graceful shutdown has started
 ```
+
+`/health` answers until the process exits, so keep it for liveness and container health checks. Use `/ready` where a load balancer or orchestrator should stop sending new connections during a shutdown.
 
 ### Docker Health Check
 
@@ -78,9 +84,12 @@ docker logs --tail 100 session-server
 
 **Log format:**
 ```
-2024-01-15T10:30:00.000Z INFO  [session_server] Client connected: abc123
-2024-01-15T10:30:01.000Z INFO  [session_server] Room created: xyz789
+[2026-10-06T15:46:15Z INFO  session_server::ws::connection] Client connected client_id=4f2a... auth_required=true
+[2026-10-06T15:46:15Z INFO  session_server::ws::handlers::auth] Client authenticated client_id=4f2a... user="alice"
+[2026-10-06T15:47:02Z INFO  session_server::ws::handlers::create] Creating room room_id=9c1e... client_id=4f2a... name="alice's room"
 ```
+
+Session and room lifecycle lines (connect, authentication, create, join, leave, disconnect, close, rate limit, heartbeat) carry `client_id=` and, when a room is involved, `room_id=` as `key=value` fields after the message text, so a log collector can extract them, for example with Loki's `logfmt` parser. Values that come from a client or an error (user and room names, error text) are quoted and escaped.
 
 ### Log Aggregation
 
@@ -122,13 +131,77 @@ services:
 
 ## Metrics
 
-### Current Status
+The session server serves Prometheus metrics at `GET /metrics`, in the text exposition format (version 0.0.4), on the same port as `/ws` and `/health`:
 
-The session server doesn't currently expose Prometheus metrics, but you can monitor:
+```bash
+curl http://localhost:3000/metrics
+```
 
-- Container resource usage (CPU, memory)
-- Connection count (from logs)
-- Room count (from logs)
+`/metrics` has no authentication and no CORS headers: it is meant for a scraper on the internal network. Keep it off the public reverse proxy, which only needs to forward `/ws`. The metrics carry counts only, never a user name, room name, token or id, and every label value comes from a fixed list, so clients cannot create new series.
+
+### Metric Reference
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `owp_build_info` | Gauge | `version`, `protocol_version` | Always `1`; identifies the running build |
+| `owp_start_time_seconds` | Gauge | | Unix time the server started |
+| `owp_connections_active` | Gauge | | WebSocket sessions currently open |
+| `owp_clients_authenticated` | Gauge | | Open sessions that have authenticated |
+| `owp_rooms_active` | Gauge | | Rooms currently open |
+| `owp_room_participants` | Gauge | | Participants across all open rooms |
+| `owp_connections_total` | Counter | | WebSocket sessions opened |
+| `owp_connections_rejected_total` | Counter | `reason` | Upgrades refused before a session started: `origin`, `connection_limit` |
+| `owp_rooms_total` | Counter | | Rooms created |
+| `owp_messages_received_total` | Counter | `type` | Client messages parsed, by protocol type (`unknown` for unrecognized types) |
+| `owp_messages_sent_total` | Counter | `type` | Messages queued to clients, by protocol type (`other` for anything unlisted) |
+| `owp_send_failures_total` | Counter | | Messages dropped because a client's outbound queue was full or closed |
+| `owp_invalid_messages_total` | Counter | `reason` | Messages dropped before dispatch: `invalid_json`, `too_large` (over 64 KiB, which also ends the session), `unsupported_format` |
+| `owp_errors_sent_total` | Counter | `code` | `error` messages queued to clients, by error code (`ROOM_FULL`, `RATE_LIMITED`, ...); one that cannot be queued counts as a send failure instead |
+| `owp_rate_limited_total` | Counter | `scope` | Requests rejected by a rate limit: `messages` (per client), `invites` (per user) |
+| `owp_websocket_closes_total` | Counter | `reason` | Sessions ended, one per session (see below) |
+| `owp_zombie_connections_removed_total` | Counter | | Sessions removed after missing the heartbeat |
+
+Close reasons for `owp_websocket_closes_total`:
+
+| `reason` | Meaning |
+|----------|---------|
+| `client_closed` | The client sent a close frame (tab closed, page reloaded, leaving Jellyfin) |
+| `client_disconnected` | The connection ended without a close frame |
+| `receive_error` | Reading from the socket failed |
+| `rate_limited` | The client exceeded the message rate limit |
+| `authentication_timeout` | The client did not authenticate in time |
+| `authentication_expired` | The client's session token expired |
+| `outbound_queue_failed` | The client stopped reading and its outbound queue filled up or closed |
+| `server_shutdown` | The server is shutting down |
+| `message_too_large` | The client sent a message over the 64 KiB limit |
+| `heartbeat_timeout` | The session missed the heartbeat and was removed (also counted by `owp_zombie_connections_removed_total`) |
+
+### Prometheus Scrape Configuration
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: session-server
+    static_configs:
+      - targets: ['session-server:3000']
+```
+
+Useful queries:
+
+```promql
+# Open sessions and rooms
+owp_connections_active
+owp_rooms_active
+
+# Client messages per second, by type
+sum by (type) (rate(owp_messages_received_total[5m]))
+
+# Errors sent to clients, by code
+sum by (code) (rate(owp_errors_sent_total[5m]))
+
+# Why sessions ended in the last hour
+sum by (reason) (increase(owp_websocket_closes_total[1h]))
+```
 
 ### Container Metrics
 
@@ -150,19 +223,6 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
 ```
-
-### Planned Metrics
-
-Future versions may include:
-
-| Metric | Type | Description |
-|--------|------|-------------|
-| `owp_connections_total` | Counter | Total WebSocket connections |
-| `owp_connections_active` | Gauge | Current active connections |
-| `owp_rooms_total` | Counter | Total rooms created |
-| `owp_rooms_active` | Gauge | Current active rooms |
-| `owp_messages_total` | Counter | Total messages processed |
-| `owp_message_latency_seconds` | Histogram | Message processing time |
 
 ## Alerting
 
@@ -208,6 +268,21 @@ groups:
           severity: critical
         annotations:
           summary: "OpenWatchParty session server is down"
+
+      - alert: OWPConnectionLimitReached
+        expr: increase(owp_connections_rejected_total{reason="connection_limit"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenWatchParty refused connections at its connection limit"
+
+      - alert: OWPClientsFallingBehind
+        expr: rate(owp_send_failures_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenWatchParty is dropping messages for clients that cannot keep up"
 ```
 
 ### Uptime Monitoring
@@ -229,12 +304,31 @@ Add monitor for `http://session-server:3000/health`.
 
 ### Grafana Dashboard
 
-While waiting for native metrics, use Docker/container metrics:
+Combine the session server metrics with container metrics:
 
 ```json
 {
   "title": "OpenWatchParty",
   "panels": [
+    {
+      "title": "Sessions and Rooms",
+      "targets": [
+        { "expr": "owp_connections_active" },
+        { "expr": "owp_rooms_active" }
+      ]
+    },
+    {
+      "title": "Client Messages by Type",
+      "targets": [
+        { "expr": "sum by (type) (rate(owp_messages_received_total[5m]))" }
+      ]
+    },
+    {
+      "title": "Errors by Code",
+      "targets": [
+        { "expr": "sum by (code) (rate(owp_errors_sent_total[5m]))" }
+      ]
+    },
     {
       "title": "Container CPU",
       "targets": [
