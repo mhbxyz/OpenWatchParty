@@ -4,7 +4,7 @@
 
 globalThis.window = globalThis;
 globalThis.window.location = { protocol: 'https:', hostname: 'localhost', hash: '' };
-globalThis.document = { querySelector: () => null };
+globalThis.document = { documentElement: { lang: 'en' }, querySelector: () => null };
 globalThis.setTimeout = setTimeout;
 globalThis.clearTimeout = clearTimeout;
 
@@ -16,6 +16,7 @@ require('../utils/time.js');
 
 // Load url.js (defines strict session WebSocket URL validation)
 require('../utils/url.js');
+require('../utils/i18n.js');
 
 // Load misc.js (defines OWP.utils.suppress and shouldSend)
 require('../utils/misc.js');

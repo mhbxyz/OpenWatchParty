@@ -3,6 +3,7 @@
   const actions = OWP.actions = OWP.actions || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const t = OWP.i18n.t;
   const { PROTOCOL_VERSION, CLIENT_FEATURES } = OWP.constants;
   const TOKEN_REQUEST_TIMEOUT_MS = 10000;
 
@@ -177,17 +178,17 @@
         apiAccess = await waitForApiClient(isCurrentRequest);
       }
       if (!isCurrentRequest()) {
-        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+        return { mode: 'error', code: 'request_invalidated', message: t('authInvalidated') };
       }
       if (!apiAccess) {
         console.warn('[OpenWatchParty] ApiClient not available after waiting');
-        return authError('api_client_unavailable', 'Jellyfin authentication is not available', isCurrentRequest);
+        return authError('api_client_unavailable', t('authUnavailable'), isCurrentRequest);
       }
       const { accessToken, serverAddress } = apiAccess;
       const authHeaders = buildAuthHeaders(accessToken);
       if (!authHeaders) {
         console.warn('[OpenWatchParty] Jellyfin returned an unusable access token');
-        return authError('invalid_token', 'Jellyfin returned an unusable access token', isCurrentRequest);
+        return authError('invalid_token', t('authInvalidToken'), isCurrentRequest);
       }
       const tokenUrl = `${serverAddress}/OpenWatchParty/Token`;
       const controller = new AbortController();
@@ -200,18 +201,18 @@
         signal: controller.signal
       });
       if (!isCurrentRequest()) {
-        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+        return { mode: 'error', code: 'request_invalidated', message: t('authInvalidated') };
       }
       if (!response.ok) {
         const errors = {
-          401: ['unauthorized', 'Jellyfin rejected the OpenWatchParty token request (HTTP 401)'],
-          429: ['rate_limited', 'Too many OpenWatchParty token requests (HTTP 429)'],
-          500: ['server_error', 'The OpenWatchParty token endpoint failed (HTTP 500)'],
-          503: ['server_unavailable', 'JWT authentication is not configured or unavailable in the OpenWatchParty plugin (HTTP 503)']
+          401: ['unauthorized', t('authRejected')],
+          429: ['rate_limited', t('authRateLimited')],
+          500: ['server_error', t('authServerError')],
+          503: ['server_unavailable', t('authNotConfigured')]
         };
         const [code, message] = errors[response.status] || [
           'http_error',
-          `Could not obtain an OpenWatchParty token (HTTP ${response.status})`
+          t('authHttp', { status: response.status })
         ];
         console.warn('[OpenWatchParty] Failed to fetch auth token:', response.status);
         return authError(code, message, isCurrentRequest);
@@ -221,19 +222,19 @@
         data = await response.json();
       } catch (err) {
         if (!isCurrentRequest()) {
-          return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+          return { mode: 'error', code: 'request_invalidated', message: t('authInvalidated') };
         }
         console.warn('[OpenWatchParty] Invalid token endpoint JSON:', err);
-        return authError('invalid_json', 'OpenWatchParty token endpoint returned invalid JSON', isCurrentRequest);
+        return authError('invalid_json', t('authInvalidJson'), isCurrentRequest);
       }
       if (!isCurrentRequest()) {
-        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+        return { mode: 'error', code: 'request_invalidated', message: t('authInvalidated') };
       }
       if (!Object.prototype.hasOwnProperty.call(data, 'session_server_url')
           || typeof data.session_server_url !== 'string') {
         return authError(
           'invalid_response',
-          'OpenWatchParty token endpoint must explicitly provide session_server_url',
+          t('authMissingUrl'),
           isCurrentRequest
         );
       }
@@ -241,7 +242,7 @@
       if (!sessionServerUrl.valid) {
         return authError(
           'invalid_response',
-          `OpenWatchParty token endpoint returned an invalid session server URL: ${sessionServerUrl.error}`,
+          t('authBadUrl', { error: sessionServerUrl.error }),
           isCurrentRequest
         );
       }
@@ -279,21 +280,21 @@
       }
       return authError(
         'invalid_response',
-        'OpenWatchParty token endpoint returned an invalid authentication response',
+        t('authBadResponse'),
         isCurrentRequest
       );
     } catch (err) {
       if (!isCurrentRequest()) {
-        return { mode: 'error', code: 'request_invalidated', message: 'Authentication request was invalidated' };
+        return { mode: 'error', code: 'request_invalidated', message: t('authInvalidated') };
       }
       console.warn('[OpenWatchParty] Error fetching auth token:', err);
       if (timedOut) {
-        return authError('timeout', 'OpenWatchParty token request timed out', isCurrentRequest);
+        return authError('timeout', t('authTimeout'), isCurrentRequest);
       }
       if (err?.name === 'AbortError') {
-        return authError('aborted', 'OpenWatchParty token request was aborted', isCurrentRequest);
+        return authError('aborted', t('authAborted'), isCurrentRequest);
       }
-      return authError('network_error', 'Could not reach the OpenWatchParty token endpoint', isCurrentRequest);
+      return authError('network_error', t('authUnreachable'), isCurrentRequest);
     } finally {
       if (requestTimeout !== null) OWP.timers.clear(requestTimeout);
     }

@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const playback = OWP.playback = OWP.playback || {};
   const utils = OWP.utils;
+  const t = OWP.i18n.t;
 
   const tryPlayMethods = async (pm, item, isCurrent = () => true) => {
     const playOptions = { startPositionTicks: 0 };
@@ -99,7 +100,7 @@
     if (!result.success && !result.cancelled && !silent) {
       console.error('[OpenWatchParty] All playback methods failed:', result.errors);
       if (OWP.ui && OWP.ui.showToast) {
-        OWP.ui.showToast('Failed to start playback. Try refreshing the page.');
+        OWP.ui.showToast(t('playbackStartFailed'));
       }
     }
     return result.success;
@@ -132,7 +133,7 @@
       if (OWP.ui?.updateSyncIndicator) OWP.ui.updateSyncIndicator();
       if (!state.playbackFailureNotified && OWP.ui?.showToast) {
         state.playbackFailureNotified = true;
-        OWP.ui.showToast('Playback was blocked. Press Play in Jellyfin to continue.');
+        OWP.ui.showToast(t('playbackBlocked'));
       }
       return false;
     }

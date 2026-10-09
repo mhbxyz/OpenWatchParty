@@ -4,6 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
+  const t = OWP.i18n.t;
   const { DEFAULT_WS_URL } = OWP.constants;
 
   const INVITE_PARAM = utils.INVITE_PARAM || 'owp_invite';
@@ -63,7 +64,7 @@
     removeInviteParam();
     const roomId = decodeInviteRoom(ticket);
     if (!roomId) {
-      ui.showToast('This invite link is invalid');
+      ui.showToast(t('inviteInvalid'));
       return false;
     }
     state.inviteJoinPending = true;
@@ -109,7 +110,7 @@
   const copyInviteLink = async () => {
     if (!state.inRoom || !state.isHost) return false;
     if (!state.authToken) {
-      ui.showToast('Invite links require an authenticated watch party');
+      ui.showToast(t('inviteAuthRequired'));
       return false;
     }
     const sessionServerUrl = utils.normalizeSessionServerUrl(state.wsUrl || DEFAULT_WS_URL);
@@ -119,14 +120,14 @@
     }
     const endpoint = inviteEndpoint(sessionServerUrl.url);
     if (!endpoint) {
-      ui.showToast('The watch party server URL is invalid');
+      ui.showToast(t('serverUrlInvalid'));
       return false;
     }
     let response;
     try {
       response = await inviteRequest(endpoint, state.roomId, state.inviteTtlSeconds);
     } catch (err) {
-      ui.showToast('Could not reach the watch party server');
+      ui.showToast(t('serverUnreachable'));
       return false;
     }
     let data = null;
@@ -136,19 +137,25 @@
       data = null;
     }
     if (!response.ok || typeof data?.ticket !== 'string' || !data.ticket) {
-      const error = response.status === 404 && typeof data?.error !== 'string'
-        ? 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.'
-        : data?.error || `Could not create the invite link (HTTP ${response.status})`;
-      ui.showToast(error);
+      // The session server's error text is English: show the known statuses
+      // in the viewer's language, the others with their HTTP status. A 404
+      // that did not come from the session server means the proxy does not
+      // route /invite.
+      const fromSessionServer = typeof data?.error === 'string';
+      const key = response.status === 404 && !fromSessionServer
+        ? 'inviteUnreachable'
+        : { 403: 'inviteHostOnly', 404: 'errorRoomNotFound', 429: 'errorRateLimited', 503: 'inviteAuthRequired' }[response.status];
+      if (data?.error) console.warn('[OpenWatchParty] Invite link not created:', data.error);
+      ui.showToast(key ? t(key) : t('inviteCreateHttp', { status: response.status }));
       return false;
     }
     const link = utils.buildInviteUrl(data.ticket);
     if (!link) {
-      ui.showToast('Could not create the invite link');
+      ui.showToast(t('inviteCreateFailed'));
       return false;
     }
     const copied = await copyToClipboard(link);
-    ui.showToast(copied ? 'Invite link copied to the clipboard' : `Invite link: ${link}`);
+    ui.showToast(copied ? t('inviteCopied') : t('inviteLink', { link }));
     return true;
   };
 

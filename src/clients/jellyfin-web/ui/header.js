@@ -1,6 +1,7 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
+  const t = OWP.i18n.t;
   const {
     PANEL_ID,
     BTN_ID,
@@ -203,8 +204,8 @@
     button.type = 'button';
     button.id = id;
     button.className = `${className} ${HEADER_BTN_CLASS}`;
-    button.title = 'Watch Party';
-    button.setAttribute('aria-label', 'Watch Party');
+    button.title = t('watchParty');
+    button.setAttribute('aria-label', t('watchParty'));
     button.setAttribute('aria-controls', PANEL_ID);
     button.appendChild(ui.createWatchPartyIcon());
     button.addEventListener('click', togglePanelFromHeader);

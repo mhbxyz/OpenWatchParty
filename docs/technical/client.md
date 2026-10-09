@@ -392,6 +392,18 @@ Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following 
 #### `showToast(message: string) -> void`
 Shows a toast notification.
 
+## Localization
+
+`utils/i18n.js` reads the active Jellyfin display language from `document.documentElement.lang` at each lookup, then falls back to `navigator.language` and English. Locale matching tries the exact lower-case tag, its base language and finally `en`; the shipped catalogs are English (`en`), Spanish (`es`), French (`fr`) and German (`de`).
+
+The session server names every room `<host>'s room`; `localizeRoomName()` shows that default in the viewer's language (for example `Sala de <host>`) and leaves any other name as it is.
+
+The session server writes its errors and room-closed reasons in English. `localizeServerError()` shows the known ones in the viewer's language, by message first (several invite errors share an authentication code) and then by error code; `localizeRoomClosedReason()` does the same for the reasons. Anything else is shown as the server wrote it. The English catalog keeps the server's meaning, sometimes in shorter or clearer words.
+
+The configuration page (`configPage.html`) has its own `configMessages` catalog with the same languages and lookup. The plugin reports its diagnostic checks in English: the page shows the known check names and fixed summaries in the page language, and any other detail (an error message, for example) as the plugin wrote it. A test fails if one of those summaries is no longer reported by the plugin.
+
+To add a locale, copy the complete `en` catalog in `utils/i18n.js` (and in `configPage.html`), translate each value without changing its `{placeholders}`, and register the locale in `catalogs`. The localization tests enforce matching keys and placeholders in every shipped catalog. Plurals use `_one` and `_other` keys, which covers the shipped languages; a language with more plural forms (`few`, `many`) needs those keys added to `en` first.
+
 ## Module: `app.js`
 
 ### Description

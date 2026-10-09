@@ -43,7 +43,7 @@
     panel.className = 'hide';
     // A non-modal dialog: the page and the player stay usable while it is open.
     panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-label', 'Watch Party');
+    panel.setAttribute('aria-label', OWP.i18n.t('watchParty'));
     document.body.appendChild(panel);
     panelStopPropagation = (e) => e.stopPropagation();
     panel.addEventListener('click', panelStopPropagation);

@@ -175,6 +175,19 @@ describe('room invite links', () => {
       assert.equal(OWP.state.inviteJoinPending, false);
       assert.deepEqual(toasts, ['Invite ticket has expired']);
     });
+
+    it('shows a known server error in the Jellyfin language', () => {
+      document.documentElement = { lang: 'es' };
+      OWP.state.inviteJoinPending = true;
+      OWP.actions.resetRoomState = () => { OWP.state.inviteJoinPending = false; };
+
+      OWP._wsHandlers.handleError({
+        payload: { code: 'AUTHENTICATION_EXPIRED', message: 'Invite ticket has expired' }
+      });
+      OWP._wsHandlers.handleError({ payload: { code: 'INVALID_JSON', message: 'Invalid JSON' } });
+
+      assert.deepEqual(toasts, ['El enlace de invitación expiró', 'Invalid JSON']);
+    });
   });
 
   describe('copy invite link', () => {
@@ -229,6 +242,22 @@ describe('room invite links', () => {
       assert.equal(await OWP.actions.copyInviteLink(), false);
       assert.deepEqual(copied, []);
       assert.deepEqual(toasts, ['Only the room host can create invite links']);
+    });
+
+    it('shows the rejection in the Jellyfin language, or with its HTTP status', async () => {
+      document.documentElement = { lang: 'es' };
+      fetchResponse = jsonResponse(
+        { error: 'Only the room host can create invite links' },
+        { ok: false, status: 403 }
+      );
+      assert.equal(await OWP.actions.copyInviteLink(), false);
+      fetchResponse = jsonResponse({ error: 'Bad gateway' }, { ok: false, status: 502 });
+      assert.equal(await OWP.actions.copyInviteLink(), false);
+
+      assert.deepEqual(toasts, [
+        'Solo el anfitrión puede crear enlaces de invitación',
+        'No se pudo crear el enlace (HTTP 502)'
+      ]);
     });
 
     it('shows the session server error for a JSON 404 response', async () => {

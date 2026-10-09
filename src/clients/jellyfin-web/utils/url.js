@@ -1,6 +1,7 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const utils = OWP.utils = OWP.utils || {};
+  const t = (...args) => OWP.i18n ? OWP.i18n.t(...args) : args[0];
 
   const defaultPort = (protocol) => protocol === 'https:' || protocol === 'wss:' ? '443' : '80';
 
@@ -9,7 +10,7 @@
       return { valid: true, url: '', thirdParty: false };
     }
     if (typeof value !== 'string') {
-      return { valid: false, error: 'Session server URL must be a string' };
+      return { valid: false, error: t('urlString') };
     }
 
     const candidate = value.trim();
@@ -19,19 +20,19 @@
     try {
       url = new URL(candidate);
     } catch (err) {
-      return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host' };
+      return { valid: false, error: t('urlAbsolute') };
     }
     if (!['ws:', 'wss:'].includes(url.protocol) || !url.hostname) {
-      return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host' };
+      return { valid: false, error: t('urlAbsolute') };
     }
     if (url.username || url.password) {
-      return { valid: false, error: 'Session server URL must not contain credentials' };
+      return { valid: false, error: t('urlCredentials') };
     }
     if (candidate.includes('?') || candidate.includes('#')) {
-      return { valid: false, error: 'Session server URL must not contain a query string or fragment' };
+      return { valid: false, error: t('urlQuery') };
     }
     if (pageLocation?.protocol === 'https:' && url.protocol === 'ws:') {
-      return { valid: false, error: 'An HTTPS page requires a secure wss:// session server URL' };
+      return { valid: false, error: t('urlHttps') };
     }
 
     const pageHost = String(pageLocation?.hostname || '').toLowerCase();

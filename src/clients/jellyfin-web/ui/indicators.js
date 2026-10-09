@@ -2,28 +2,29 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
 
   const updateStatusIndicator = () => {
     const el = document.getElementById('owp-ws-indicator');
     if (!el) return;
     const connected = state.ws && state.ws.readyState === 1;
     el.className = `owp-ws-status ${connected ? 'online' : 'offline'}`;
-    el.textContent = connected ? 'Online' : 'Offline';
+    el.textContent = connected ? t('online') : t('offline');
   };
 
   // The sync state is a dot in the room bar (a spinner while a start is
   // pending); its label is the tooltip. The host is the reference, so it is
   // always shown as in sync.
   const describeSyncStatus = () => {
-    if (state.isHost) return { marker: 'synced', label: 'Hosting' };
+    if (state.isHost) return { marker: 'synced', label: t('hosting') };
     const status = state.syncStatus || 'synced';
-    if (status === 'blocked') return { marker: 'syncing', label: 'Playback blocked - press Play' };
+    if (status === 'blocked') return { marker: 'syncing', label: t('playbackBlockedLabel') };
     if (status === 'pending_play') {
       const remaining = Math.max(0, (state.pendingPlayUntil - (Date.now() + (state.serverOffsetMs || 0))) / 1000);
-      return { marker: 'spinner', label: `Waiting for sync... ${remaining.toFixed(1)}s` };
+      return { marker: 'spinner', label: t('waitingSync', { seconds: remaining.toFixed(1) }) };
     }
-    if (status === 'syncing') return { marker: 'syncing', label: 'Out of sync' };
-    return { marker: 'synced', label: 'In sync' };
+    if (status === 'syncing') return { marker: 'syncing', label: t('outOfSync') };
+    return { marker: 'synced', label: t('inSync') };
   };
 
   const paintSyncIndicator = (el) => {

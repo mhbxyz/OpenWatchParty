@@ -4,6 +4,7 @@
   const state = OWP.state;
   const utils = OWP.utils;
   const ui = OWP.ui;
+  const t = OWP.i18n.t;
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
   const applyPosition = (video, position, projectPlaying = false, eventServerTs = null) => {
@@ -39,7 +40,7 @@
         state.syncCooldownUntil = utils.nowMs() + 2000;
         state.syncStatus = 'syncing';
         OWP.playback.safePlay(video, 'host play command');
-        if (ui.showToast) ui.showToast('Host resumed playback');
+        if (ui.showToast) ui.showToast(t('hostResumed'));
         break;
       case 'pause':
         applyPosition(video, position);
@@ -47,7 +48,7 @@
         state.syncCooldownUntil = 0;
         state.syncStatus = 'synced';
         video.pause();
-        if (ui.showToast) ui.showToast('Host paused playback');
+        if (ui.showToast) ui.showToast(t('hostPaused'));
         break;
       case 'seek':
         applyPosition(video, position, hostPlayState === 'playing', msg.server_ts);

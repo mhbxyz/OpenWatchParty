@@ -3,6 +3,7 @@
   const playback = OWP.playback = OWP.playback || {};
   const state = OWP.state;
   const utils = OWP.utils;
+  const t = OWP.i18n.t;
   const {
     DRIFT_DEADZONE_SEC,
     DRIFT_SOFT_MAX_SEC,
@@ -62,7 +63,7 @@
         if (!timeoutReported) {
           if (state.pendingMediaId === mediaId) state.pendingMediaId = '';
           if (state.pendingMediaUntil === gateDeadline) state.pendingMediaUntil = 0;
-          if (OWP.ui?.showToast) OWP.ui.showToast('Still waiting for the watch party media');
+          if (OWP.ui?.showToast) OWP.ui.showToast(t('waitingForMedia'));
           timeoutReported = true;
         }
       }
@@ -204,7 +205,7 @@
     if (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil) return;
     utils.log('SYNC', { type: 'hold_room_pause', pos: video.currentTime });
     video.pause();
-    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast('Only the host can control playback');
+    if (OWP.ui && OWP.ui.showToast) OWP.ui.showToast(t('hostOnlyPlayback'));
   };
 
   // Where the host is now, from the last room update, while the room plays.

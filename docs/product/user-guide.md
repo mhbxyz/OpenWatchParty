@@ -120,6 +120,8 @@ As a participant:
 
 ## The Panel Interface
 
+The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
+
 ![Close-up of the room bar with the chat open: sync dot, latency, room name, participants, chat and leave]({{ '/assets/images/watch-party-panel-closeup.png' | relative_url }})
 
 ### Lobby View (Not in a room)

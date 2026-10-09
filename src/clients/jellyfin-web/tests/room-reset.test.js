@@ -146,4 +146,22 @@ describe('room state reset', () => {
 
     assertRoomStateReset(video);
   });
+
+  it('shows why the room closed in the Jellyfin language', () => {
+    const toasts = [];
+    const showToast = OWP.ui.showToast;
+    OWP.ui.showToast = message => toasts.push(message);
+    const documentElement = globalThis.document.documentElement;
+    globalThis.document.documentElement = { lang: 'es' };
+    try {
+      makeDirtyRoomState();
+      OWP._wsHandlers.handleRoomClosed({ payload: { reason: 'Host left the room' } });
+      makeDirtyRoomState();
+      OWP._wsHandlers.handleRoomClosed({ payload: { reason: 'Server maintenance' } });
+    } finally {
+      OWP.ui.showToast = showToast;
+      globalThis.document.documentElement = documentElement;
+    }
+    assert.deepEqual(toasts, ['El anfitrión salió de la sala', 'Server maintenance']);
+  });
 });

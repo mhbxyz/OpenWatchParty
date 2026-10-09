@@ -37,6 +37,7 @@ public class OpenWatchPartyController : ControllerBase
         "state.js",
         "utils/time.js",
         "utils/url.js",
+        "utils/i18n.js",
         "utils/video.js",
         "utils/misc.js",
         "utils/media.js",

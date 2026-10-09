@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
   const { PANEL_ID, BTN_ID, DEFAULT_WS_URL, ROOM_MODE_CLASS } = OWP.constants;
 
   const createElement = (tag, className, text) => {
@@ -91,15 +92,14 @@
   const createCloseButton = () => {
     const button = createElement('button', 'owp-close-btn owp-bar-btn');
     button.type = 'button';
-    button.title = 'Close panel';
-    button.setAttribute('aria-label', 'Close panel');
+    button.title = t('closePanel');
+    button.setAttribute('aria-label', t('closePanel'));
     button.appendChild(createIcon('x'));
     button.onclick = hidePanel;
     return button;
   };
 
   const CREATE_ROOM_HINT_ID = 'owp-create-hint';
-  const CREATE_ROOM_HINT = 'Start playing something to create a room.';
 
   // A room starts from what is playing; without it there is nothing to share.
   const canCreateRoom = () => Boolean(OWP.utils?.getPlayingItemId?.());
@@ -115,7 +115,6 @@
 
   const HELP_ID = 'owp-help';
   const HELP_BUTTON_ID = 'owp-btn-help';
-  const HELP_TEXT = 'Watch movies and shows together, in sync. This panel opens from the Watch Party button, at the top of Jellyfin or in the player.';
 
   const applyLobbyHelp = () => {
     const help = document.getElementById(HELP_ID);
@@ -156,15 +155,15 @@
   };
 
   // The first-run help opens the panel by itself, without moving focus.
-  const announceLobbyHelp = () => announce(`Watch Party: ${HELP_TEXT}`);
+  const announceLobbyHelp = () => announce(`${t('watchParty')}: ${t('lobbyHelp')}`);
 
   const createLobbyHelp = () => {
     const help = createElement('div', 'owp-help');
     help.id = HELP_ID;
-    const ok = createElement('button', 'owp-pill-btn secondary owp-help-ok', 'Got it');
+    const ok = createElement('button', 'owp-pill-btn secondary owp-help-ok', t('gotIt'));
     ok.type = 'button';
     ok.onclick = closeLobbyHelp;
-    help.append(createElement('span', '', HELP_TEXT), ok);
+    help.append(createElement('span', '', t('lobbyHelp')), ok);
     help.addEventListener('keydown', (event) => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
@@ -177,8 +176,8 @@
     const button = createElement('button', 'owp-bar-btn owp-help-btn', '?');
     button.id = HELP_BUTTON_ID;
     button.type = 'button';
-    button.title = 'Help';
-    button.setAttribute('aria-label', 'Help');
+    button.title = t('help');
+    button.setAttribute('aria-label', t('help'));
     button.setAttribute('aria-controls', HELP_ID);
     button.onclick = () => setLobbyHelpOpen(!state.lobbyHelpOpen);
     return button;
@@ -195,23 +194,23 @@
 
     const lobby = createElement('div', 'owp-lobby-container');
     const roomSection = createElement('div', 'owp-section');
-    roomSection.appendChild(createElement('div', 'owp-label', 'Available rooms'));
+    roomSection.appendChild(createElement('div', 'owp-label', t('availableRooms')));
     const roomList = createElement('div');
     roomList.id = 'owp-room-list';
     roomSection.appendChild(roomList);
     const createSection = createElement('div', 'owp-section owp-create-section');
-    const btn = createElement('button', 'owp-btn', 'Create Room');
+    const btn = createElement('button', 'owp-btn', t('createRoom'));
     btn.id = 'owp-btn-create';
     btn.style.width = '100%';
     btn.onclick = () => OWP.actions && OWP.actions.createRoom && OWP.actions.createRoom();
     btn.setAttribute('aria-describedby', CREATE_ROOM_HINT_ID);
-    const hint = createElement('div', 'owp-hint', CREATE_ROOM_HINT);
+    const hint = createElement('div', 'owp-hint', t('createRoomHint'));
     hint.id = CREATE_ROOM_HINT_ID;
     createSection.append(btn, hint);
     lobby.append(roomSection, createSection);
 
     const footer = createElement('div', 'owp-footer');
-    footer.append(document.createTextNode('Server: '), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
+    footer.append(document.createTextNode(t('server')), document.createTextNode(String(DEFAULT_WS_URL.replace(/^wss?:\/\//, '').replace('/ws', ''))));
     panel.replaceChildren(header, createLobbyHelp(), lobby, footer);
     applyLobbyHelp();
     ui.updateRoomListUI();
@@ -225,28 +224,28 @@
   // Each participant's status (participant_statuses), shown under the name with
   // a colored dot. Older servers and clients send none: the row stays as it was.
   const PARTICIPANT_STATUS = {
-    playing: { label: 'Playing', tone: 'good' },
-    paused: { label: 'Paused', tone: 'idle' },
-    in_sync: { label: 'In sync', tone: 'good' },
-    catching_up: { label: 'Catching up', tone: 'warn' },
-    buffering: { label: 'Buffering', tone: 'warn' },
-    loading: { label: 'Loading', tone: 'info' },
-    blocked: { label: 'Needs to press Play', tone: 'bad' },
-    not_watching: { label: 'Not watching', tone: 'idle' }
+    playing: { tone: 'good' },
+    paused: { tone: 'idle' },
+    in_sync: { tone: 'good' },
+    catching_up: { tone: 'warn' },
+    buffering: { tone: 'warn' },
+    loading: { tone: 'info' },
+    blocked: { tone: 'bad' },
+    not_watching: { tone: 'idle' }
   };
 
   const fillParticipantList = (list) => {
     if (!state.participants.length) {
-      list.replaceChildren(document.createTextNode(`Online: ${String(state.participantCount || 1)}`));
+      list.replaceChildren(document.createTextNode(t('onlineCount', { count: state.participantCount || 1 })));
       return;
     }
     list.replaceChildren(...state.participants.map((participant) => {
-      const name = participant.name || 'Guest';
+      const name = participant.name || t('guest');
       const item = createElement('div', 'owp-participant');
       const avatar = createElement('span', 'owp-participant-avatar', Array.from(name)[0].toUpperCase());
       avatar.setAttribute('aria-hidden', 'true');
       const nameEl = createElement('span', 'owp-participant-name', name);
-      const badge = participant.isHost ? createElement('span', 'owp-host-badge', 'Host') : null;
+      const badge = participant.isHost ? createElement('span', 'owp-host-badge', t('host')) : null;
       const status = PARTICIPANT_STATUS[participant.status];
       if (!status) {
         item.append(avatar, nameEl);
@@ -258,7 +257,7 @@
       line.appendChild(nameEl);
       if (badge) line.appendChild(badge);
       const main = createElement('span', 'owp-participant-main');
-      main.append(line, createElement('span', `owp-participant-status ${status.tone}`, status.label));
+      main.append(line, createElement('span', `owp-participant-status ${status.tone}`, t(`status_${participant.status}`)));
       item.append(avatar, main);
       return item;
     }));
@@ -267,7 +266,7 @@
   const participantTotal = () => state.participants.length || state.participantCount || 1;
 
   // Icon-only buttons: the count goes in the accessible name too.
-  const peopleLabel = () => `Participants, ${String(participantTotal())}`;
+  const peopleLabel = () => t('participantsCount', { count: participantTotal() });
 
   const updateParticipantList = () => {
     const list = document.getElementById('owp-participants-list');
@@ -306,23 +305,34 @@
   // host is the reference and never needs it.
   const offersSyncNudge = () => state.showSyncNudge && !state.isHost;
 
+  // Seconds and rates with the language's decimal separator.
+  const formatNumber = (value, min, max) => {
+    try {
+      return new Intl.NumberFormat(OWP.i18n.locale(), { minimumFractionDigits: min, maximumFractionDigits: max }).format(value);
+    } catch (err) {
+      return value.toFixed(max);
+    }
+  };
+
   const NUDGE_STATUS = {
-    behind: { marker: 'syncing', text: abs => `${abs.toFixed(1)} s behind the host` },
-    ahead: { marker: 'syncing', text: abs => `${abs.toFixed(1)} s ahead of the host` },
-    synced: { marker: 'synced', text: () => 'In sync with the host' },
-    busy: { marker: 'idle', text: () => 'Following the host...' },
-    paused: { marker: 'idle', text: () => 'The room is paused' },
-    loading: { marker: 'idle', text: () => 'Waiting for the video' },
-    unavailable: { marker: 'idle', text: () => 'Waiting for the video' }
+    behind: { marker: 'syncing', text: abs => t('nudgeBehind', { seconds: formatNumber(abs, 1, 1) }) },
+    ahead: { marker: 'syncing', text: abs => t('nudgeAhead', { seconds: formatNumber(abs, 1, 1) }) },
+    synced: { marker: 'synced', text: () => t('nudgeSynced') },
+    busy: { marker: 'idle', text: () => t('nudgeBusy') },
+    paused: { marker: 'idle', text: () => t('nudgePaused') },
+    loading: { marker: 'idle', text: () => t('nudgeLoading') },
+    unavailable: { marker: 'idle', text: () => t('nudgeLoading') }
   };
 
   // What the automatic correction is doing while the guest is out of sync.
   const describeAutoCorrection = (video) => {
     const seconds = state.outOfSyncSince ? Math.max(0, Math.round((Date.now() - state.outOfSyncSince) / 1000)) : 0;
     const rate = video ? video.playbackRate : 1;
-    const since = seconds ? ` for ${seconds} s` : '';
-    if (rate && rate !== 1) return `Automatic correction: ${rate.toFixed(2)}× speed${since}.`;
-    return seconds ? `Automatic correction: out of sync for ${seconds} s.` : 'Automatic correction: starting.';
+    if (rate && rate !== 1) {
+      const speed = formatNumber(rate, 2, 2);
+      return seconds ? t('autoRateFor', { rate: speed, seconds }) : t('autoRate', { rate: speed });
+    }
+    return seconds ? t('autoOutFor', { seconds }) : t('autoStarting');
   };
 
   // Refreshes the drop-down's text while it is open. The button keeps its
@@ -345,8 +355,8 @@
     }
     const button = document.getElementById('owp-btn-nudge');
     if (button) {
-      const step = outOfSync ? String(current.step) : '0.5';
-      button.textContent = current.kind === 'ahead' ? `Move back ${step} s` : `Move ahead ${step} s`;
+      const step = formatNumber(outOfSync ? current.step : 0.5, 1, 2);
+      button.textContent = t(current.kind === 'ahead' ? 'moveBack' : 'moveAhead', { step });
       button.setAttribute('aria-disabled', String(!outOfSync));
     }
   };
@@ -369,7 +379,7 @@
     row.append(status, nudge);
     const auto = createElement('div', 'owp-nudge-sub');
     auto.id = 'owp-nudge-auto';
-    const note = createElement('div', 'owp-nudge-sub', 'Only moves your video; the host stays in control.');
+    const note = createElement('div', 'owp-nudge-sub', t('nudgeNote'));
     section.append(row, auto, note);
     return section;
   };
@@ -422,7 +432,7 @@
     if (!confirm || !leaveBtn) return;
     const nextHost = nextHostParticipant();
     const canTransfer = Boolean(nextHost);
-    const label = state.isHost && !canTransfer ? 'Close room' : 'Leave room';
+    const label = state.isHost && !canTransfer ? t('closeRoom') : t('leaveRoom');
     leaveBtn.title = label;
     leaveBtn.setAttribute('aria-label', label);
 
@@ -430,7 +440,7 @@
     const hadFocus = Boolean(active && confirm.contains(active));
     const focusedId = hadFocus ? active.id : '';
     const focusedAction = hadFocus ? active.dataset.action || '' : '';
-    const cancel = createElement('button', 'owp-pill-btn secondary', 'Cancel');
+    const cancel = createElement('button', 'owp-pill-btn secondary', t('cancel'));
     cancel.id = 'owp-btn-cancel-leave';
     cancel.dataset.action = 'cancel';
     cancel.type = 'button';
@@ -441,11 +451,11 @@
     const question = createElement(
       'span',
       'owp-leave-question',
-      state.isHost && !canTransfer ? 'Close the room for everyone?' : 'Leave the room?'
+      state.isHost && !canTransfer ? t('closeRoomQuestion') : t('leaveRoomQuestion')
     );
     const buttons = [question, cancel];
     if (canTransfer) {
-      const leave = createElement('button', 'owp-pill-btn secondary', 'Leave');
+      const leave = createElement('button', 'owp-pill-btn secondary', t('leave'));
       leave.id = 'owp-btn-leave-room';
       leave.dataset.action = 'leave';
       leave.type = 'button';
@@ -455,7 +465,7 @@
     const confirmLeave = createElement(
       'button',
       'owp-pill-btn danger',
-      state.isHost ? (canTransfer ? 'Close for everyone' : 'Close room') : 'Leave'
+      state.isHost ? (canTransfer ? t('closeForEveryone') : t('closeRoom')) : t('leave')
     );
     confirmLeave.id = 'owp-btn-confirm-leave';
     confirmLeave.dataset.action = state.isHost ? 'close' : 'leave';
@@ -469,7 +479,7 @@
       buttons.push(createElement(
         'div',
         'owp-leave-hint',
-        `If you leave, ${nextHost.name || 'Guest'} becomes the host and the room stays open.`
+        t('leaveHint', { name: nextHost.name || t('guest') })
       ));
     }
     confirm.replaceChildren(...buttons);
@@ -488,7 +498,7 @@
     const bar = leaveBtn.parentNode;
     let inviteBtn = document.getElementById('owp-btn-invite');
     if (state.isHost && !inviteBtn) {
-      inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
+      inviteBtn = createBarButton('owp-btn-invite', t('invite'), 'share');
       inviteBtn.onclick = () => OWP.actions?.copyInviteLink?.();
       bar.insertBefore(inviteBtn, leaveBtn);
     } else if (!state.isHost && inviteBtn) {
@@ -500,7 +510,7 @@
     let syncBtn = document.getElementById('owp-btn-sync');
     const drop = document.getElementById('owp-room-drop');
     if (offersSyncNudge() && !syncBtn) {
-      syncBtn = createBarButton('owp-btn-sync', 'Sync adjustment', 'refresh', 'owp-sync-section');
+      syncBtn = createBarButton('owp-btn-sync', t('syncAdjustment'), 'refresh', 'owp-sync-section');
       syncBtn.onclick = () => toggleRoomSection('sync');
       bar.insertBefore(syncBtn, inviteBtn || leaveBtn);
       if (drop && !document.getElementById('owp-sync-section')) {
@@ -520,11 +530,11 @@
     const clientId = String(state.clientId).split('-')[1] || '...';
     // The last measured value, so a redraw does not blank it until the next pong.
     const latency = createElement('span', 'owp-latency', state.lastRttMs === null ? '-' : `${state.lastRttMs} ms`);
-    latency.title = `Latency to the watch party server (client ${clientId})`;
-    const roomName = createElement('span', 'owp-room-name', state.roomName);
-    roomName.title = state.roomName;
+    latency.title = t('latency', { client: clientId });
+    const roomName = createElement('span', 'owp-room-name', OWP.i18n.localizeRoomName(state.roomName));
+    roomName.title = roomName.textContent;
 
-    const peopleBtn = createBarButton('owp-btn-people', 'Participants', 'users', 'owp-people-section');
+    const peopleBtn = createBarButton('owp-btn-people', t('participants'), 'users', 'owp-people-section');
     peopleBtn.setAttribute('aria-label', peopleLabel());
     const peopleCount = createElement('span', 'owp-people-count', String(participantTotal()));
     peopleCount.id = 'owp-people-count';
@@ -533,28 +543,28 @@
     peopleBtn.append(peopleCount, arrow);
     peopleBtn.onclick = () => toggleRoomSection('people');
 
-    const chatBtn = createBarButton('owp-btn-chat', 'Chat', 'chat', 'owp-chat-section');
+    const chatBtn = createBarButton('owp-btn-chat', t('chat'), 'chat', 'owp-chat-section');
     const badge = createElement('span', 'owp-chat-badge');
     badge.id = 'owp-chat-badge';
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
     // Leaving always asks first; compatible hosts can pass the room on or close it.
-    const leaveBtn = createBarButton('owp-btn-leave', 'Leave room', 'logout', 'owp-leave-confirm');
+    const leaveBtn = createBarButton('owp-btn-leave', t('leaveRoom'), 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
     // Invite links are minted by the host: guests get no button at all.
     const roomActions = [peopleBtn, chatBtn];
     if (offersSyncNudge()) {
-      const syncBtn = createBarButton('owp-btn-sync', 'Sync adjustment', 'refresh', 'owp-sync-section');
+      const syncBtn = createBarButton('owp-btn-sync', t('syncAdjustment'), 'refresh', 'owp-sync-section');
       syncBtn.onclick = () => toggleRoomSection('sync');
       roomActions.push(syncBtn);
     } else if (state.roomBarSection === 'sync') {
       state.roomBarSection = '';
     }
     if (state.isHost) {
-      const inviteBtn = createBarButton('owp-btn-invite', 'Invite', 'share');
+      const inviteBtn = createBarButton('owp-btn-invite', t('invite'), 'share');
       inviteBtn.onclick = () => OWP.actions && OWP.actions.copyInviteLink && OWP.actions.copyInviteLink();
       roomActions.push(inviteBtn);
     }
@@ -583,13 +593,13 @@
     const input = createElement('input');
     input.id = 'owp-chat-input';
     input.type = 'text';
-    input.placeholder = 'Type a message...';
+    input.placeholder = t('typeMessage');
     input.maxLength = 500;
     const send = createElement('button');
     send.id = 'owp-chat-send';
     send.type = 'button';
-    send.title = 'Send message';
-    send.setAttribute('aria-label', 'Send message');
+    send.title = t('sendMessage');
+    send.setAttribute('aria-label', t('sendMessage'));
     send.appendChild(createIcon('send'));
     inputContainer.append(input, send);
     chatSection.append(messages, inputContainer);
@@ -713,7 +723,7 @@
     const btn = document.createElement('button');
     btn.id = BTN_ID;
     btn.className = 'paper-icon-button-light btnWatchParty autoSize';
-    btn.title = 'Watch Party';
+    btn.title = t('watchParty');
     btn.appendChild(createWatchPartyIcon());
     btn.onclick = (e) => {
       e.stopPropagation(); e.preventDefault();
@@ -728,11 +738,12 @@
       }
       btn.setAttribute('aria-expanded', String(!panel.classList.contains('hide')));
     };
-    btn.setAttribute('aria-label', 'Watch Party');
+    btn.setAttribute('aria-label', t('watchParty'));
     btn.setAttribute('aria-controls', PANEL_ID);
     const currentPanel = document.getElementById(PANEL_ID);
     btn.setAttribute('aria-expanded', String(!!currentPanel && !currentPanel.classList.contains('hide')));
-    const favBtn = videoOsd.querySelector('[title="Add to favorites"], [title="Remove from favorites"]');
+    // By class: its title follows the Jellyfin language.
+    const favBtn = videoOsd.querySelector('.btnUserRating');
     if (favBtn) {
       favBtn.insertAdjacentElement('beforebegin', btn);
     } else {

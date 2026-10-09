@@ -63,7 +63,10 @@ public class PluginConfigurationTests
         using var reader = new StreamReader(stream);
         var page = reader.ReadToEnd();
 
-        Assert.Contains("BLOCKED: configure a JWT secret", page, StringComparison.Ordinal);
+        // The page builds "BLOCKED: configure a JWT secret" from its English catalog.
+        Assert.Contains("blocked: 'BLOCKED: {message}'", page, StringComparison.Ordinal);
+        Assert.Contains("configureSecret: 'configure a JWT secret'", page, StringComparison.Ordinal);
+        Assert.Contains("configT('blocked', { message: configT('configureSecret') })", page, StringComparison.Ordinal);
         Assert.Contains("AllowInsecureNoAuth", page, StringComparison.Ordinal);
         Assert.Contains("AllowAutoDetectedSessionServer", page, StringComparison.Ordinal);
         Assert.Contains("automatically detected same-host port 3000", page, StringComparison.Ordinal);

@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const actions = OWP.actions = OWP.actions || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
   const utils = OWP.utils;
 
   const send = (type, payload = {}, roomOverride = null) => {
@@ -94,7 +95,7 @@
     const mediaId = utils.getPlayingItemId?.();
     // Rooms start from what is playing: never create an empty room.
     if (!v || !mediaId) {
-      if (OWP.ui?.showToast) OWP.ui.showToast('Start playing something to create a room.');
+      if (OWP.ui?.showToast) OWP.ui.showToast(t('createRoomHint'));
       return;
     }
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();

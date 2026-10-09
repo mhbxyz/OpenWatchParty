@@ -2,6 +2,7 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
   const state = OWP.state;
+  const t = OWP.i18n.t;
 
   const createElement = (tag, className, text) => {
     const element = document.createElement(tag);
@@ -10,11 +11,9 @@
     return element;
   };
 
-  const NO_MEDIA_JOIN_HINT = 'This room has no media. Start playing something, then join it from the player.';
-
   const drawRoomList = (roomList) => {
     if (state.rooms.length === 0) {
-      const empty = createElement('div', 'owp-room-empty', 'No active rooms.');
+      const empty = createElement('div', 'owp-room-empty', t('noActiveRooms'));
       roomList.replaceChildren(empty);
       return;
     }
@@ -22,21 +21,21 @@
     state.rooms.forEach(room => {
       const item = createElement('div', 'owp-room-item');
       const details = createElement('div');
-      const name = createElement('div', 'owp-room-title', room.name);
-      const count = createElement('div', 'owp-room-count', `${String(room.count)} ${room.count === 1 ? 'user' : 'users'}`);
+      const name = createElement('div', 'owp-room-title', OWP.i18n.localizeRoomName(room.name));
+      const count = createElement('div', 'owp-room-count', t('user', { count: room.count }));
       details.append(name, count);
       if (!room.media_id) {
-        const noMedia = createElement('div', 'owp-room-note', 'No media');
+        const noMedia = createElement('div', 'owp-room-note', t('noMedia'));
         details.appendChild(noMedia);
       }
-      const join = createElement('button', 'owp-btn secondary', 'Join');
+      const join = createElement('button', 'owp-btn secondary', t('join'));
       join.dataset.roomId = String(room.id);
       item.append(details, join);
       item.onclick = () => {
         // A room without media has nothing to start here. From the player,
         // joining still syncs whatever is playing.
         if (!room.media_id && !OWP.utils?.getPlayingItemId?.()) {
-          ui.showToast(NO_MEDIA_JOIN_HINT);
+          ui.showToast(t('noMediaJoinHint'));
           return;
         }
         if (OWP.actions && OWP.actions.joinRoom) OWP.actions.joinRoom(room.id);
@@ -74,7 +73,7 @@
   const fillCountBadge = (badge, count) => {
     const icon = createElement('span', 'material-icons', 'groups');
     icon.setAttribute('aria-hidden', 'true');
-    badge.replaceChildren(icon, createElement('span', 'owp-card-count-text', ` ${String(count)} watching`));
+    badge.replaceChildren(icon, createElement('span', 'owp-card-count-text', ` ${t('watching', { count })}`));
   };
 
   const updateRoomCardCount = (card, count) => {
@@ -101,6 +100,8 @@
 
     const overlay = createElement('div', 'cardOverlayContainer itemAction');
     const join = createElement('button', 'cardOverlayButton cardOverlayButton-hover cardOverlayFab-primary owp-join-btn paper-icon-button-light');
+    join.title = t('join');
+    join.setAttribute('aria-label', t('join'));
     const playIcon = createElement('span', 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow');
     playIcon.setAttribute('aria-hidden', 'true');
     join.appendChild(playIcon);
@@ -108,9 +109,9 @@
     scalable.append(padder, image, overlay);
 
     const name = createElement('div', 'cardText cardTextCentered cardText-first owp-card-name');
-    name.appendChild(createElement('bdi', '', room.name));
+    name.appendChild(createElement('bdi', '', OWP.i18n.localizeRoomName(room.name)));
     const media = createElement('div', 'cardText cardTextCentered cardText-secondary owp-card-media');
-    media.appendChild(createElement('bdi', 'owp-media-title', room.media_id ? 'Loading...' : 'No media'));
+    media.appendChild(createElement('bdi', 'owp-media-title', room.media_id ? t('loading') : t('noMedia')));
     box.append(scalable, name, media);
     return box;
   };
@@ -165,7 +166,7 @@
       }
     }).catch(() => {
       const titleEl = card.querySelector('.owp-media-title');
-      if (titleEl) titleEl.textContent = 'Unknown';
+      if (titleEl) titleEl.textContent = t('unknown');
     });
   };
 
@@ -176,7 +177,7 @@
         e.stopPropagation();
         console.log('[OpenWatchParty] Play button clicked for room:', room.id, 'media:', room.media_id);
         if (!room.media_id) {
-          ui.showToast('No media in this room');
+          ui.showToast(t('noMediaInRoom'));
           return;
         }
         state.pendingJoinRoomId = room.id;

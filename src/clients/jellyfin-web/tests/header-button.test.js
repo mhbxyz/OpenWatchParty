@@ -578,4 +578,18 @@ describe('header Watch Party button', () => {
     assert.match(css, new RegExp(`\\.osdHeader \\.${HEADER_BTN_CLASS} \\{ display: none !important; \\}`));
     assert.match(css, new RegExp(`#${MODERN_HEADER_BTN_ID} \\.material-icons \\{ font-size: 1\\.5rem; width: 1em; height: 1em; line-height: 1; \\}`));
   });
+
+  it('puts the player button before the favorites button in any Jellyfin language', () => {
+    const osd = element('div', 'videoOsdBottom');
+    const buttons = element('div', 'buttons');
+    const favorite = element('button', 'btnUserRating autoSize paper-icon-button-light', { title: 'Agregar a favoritos' });
+    buttons.append(element('button', 'btnAudio'), favorite, element('button', 'btnFullscreen'));
+    osd.appendChild(buttons);
+    document.body.appendChild(osd);
+
+    OWP.ui.injectOsdButton();
+
+    const order = buttons.children.map(button => button.id || button.className.split(' ')[0]);
+    assert.deepEqual(order, ['btnAudio', BTN_ID, 'btnUserRating', 'btnFullscreen']);
+  });
 });

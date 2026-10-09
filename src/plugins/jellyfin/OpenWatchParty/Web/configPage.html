@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>OpenWatchParty Configuration</title>
+    <title data-i18n="title">OpenWatchParty Configuration</title>
 </head>
 <body>
     <div data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button,emby-checkbox,emby-select">
@@ -10,116 +10,212 @@
                 <div class="verticalSection">
                     <div style="display:flex;align-items:center;justify-content:space-between;gap:1em">
                         <h2 class="sectionTitle">OpenWatchParty</h2>
-                        <span id="OverallHealthBadge" style="padding:.35em .7em;border-radius:999px;background:#374151">Unknown</span>
+                        <span id="OverallHealthBadge" data-i18n="unknown" style="padding:.35em .7em;border-radius:999px;background:#374151">Unknown</span>
                     </div>
-                    <p id="OverallHealthSummary" class="fieldDescription">Run diagnostics to verify the complete installation.</p>
+                    <p id="OverallHealthSummary" data-i18n="diagnosticsHelp" class="fieldDescription">Run diagnostics to verify the complete installation.</p>
                     <div style="display:flex;gap:1.5em;flex-wrap:wrap;margin:1em 0">
-                        <span>Plugin: <strong id="PluginVersion">—</strong></span>
-                        <span>Session: <strong id="SessionVersion">—</strong></span>
-                        <span>Jellyfin: <strong id="JellyfinVersion">—</strong></span>
+                        <span><span data-i18n="plugin">Plugin:</span> <strong id="PluginVersion">—</strong></span>
+                        <span><span data-i18n="session">Session:</span> <strong id="SessionVersion">—</strong></span>
+                        <span><span data-i18n="jellyfin">Jellyfin:</span> <strong id="JellyfinVersion">—</strong></span>
                     </div>
-                    <button is="emby-button" type="button" id="RunDiagnosticsButton" class="raised">Run diagnostics</button>
+                    <button is="emby-button" type="button" id="RunDiagnosticsButton" data-i18n="runDiagnostics" class="raised">Run diagnostics</button>
                 </div>
                 <form class="openwatchpartyConfigurationForm">
                     <!-- Authentication Settings -->
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Setup</h2>
+                        <h2 class="sectionTitle" data-i18n="setup">Setup</h2>
                         <div id="AuthStatus" style="padding:.8em;margin-bottom:1em;border-radius:.3em;font-weight:600"></div>
                         <div class="inputContainer">
                             <div style="display:flex;align-items:flex-end;gap:.5em">
                                 <div style="flex:1">
-                                    <input is="emby-input" type="password" id="JwtSecret" label="JWT Secret" autocomplete="new-password" />
+                                    <input is="emby-input" type="password" id="JwtSecret" label="JWT Secret" data-i18n-label="jwtSecret" autocomplete="new-password" />
                                 </div>
-                                <button is="emby-button" type="button" id="toggleJwtSecret" class="raised" style="margin-bottom:.3em;min-width:auto;padding:.4em .8em" title="Show/Hide">
+                                <button is="emby-button" type="button" id="toggleJwtSecret" data-i18n-title="showHide" class="raised" style="margin-bottom:.3em;min-width:auto;padding:.4em .8em" title="Show/Hide">
                                     <span class="material-icons" style="font-size:1.3em">visibility</span>
                                 </button>
                             </div>
-                            <div class="fieldDescription">Required for production: Base64/Base64URL generated from at least 32 random bytes.</div>
-                            <button is="emby-button" type="button" id="GenerateSecretButton" class="raised" style="margin-top:.5em">Generate secure secret</button>
+                            <div class="fieldDescription" data-i18n="secretHelp">Required for production: Base64/Base64URL generated from at least 32 random bytes.</div>
+                            <button is="emby-button" type="button" id="GenerateSecretButton" data-i18n="generateSecret" class="raised" style="margin-top:.5em">Generate secure secret</button>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input is="emby-checkbox" type="checkbox" id="AllowInsecureNoAuth" />
-                                <span>Allow insecure unauthenticated development</span>
+                                <span data-i18n="allowInsecure">Allow insecure unauthenticated development</span>
                             </label>
-                            <div class="fieldDescription checkboxFieldDescription">Explicit development-only override. Never enable this on an exposed server.</div>
+                            <div class="fieldDescription checkboxFieldDescription" data-i18n="insecureHelp">Explicit development-only override. Never enable this on an exposed server.</div>
                         </div>
                         <details id="AdvancedSettings" style="margin-top:1.5em">
-                        <summary class="sectionTitle">Advanced</summary>
+                        <summary class="sectionTitle" data-i18n="advanced">Advanced</summary>
                         <div class="inputContainer">
-                            <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" />
-                            <div class="fieldDescription">Audience claim for JWT tokens. Must match the session server configuration.</div>
+                            <input is="emby-input" type="text" id="JwtAudience" label="JWT Audience" data-i18n-label="jwtAudience" />
+                            <div class="fieldDescription" data-i18n="audienceHelp">Audience claim for JWT tokens. Must match the session server configuration.</div>
                         </div>
                         <div class="inputContainer">
-                            <input is="emby-input" type="text" id="JwtIssuer" label="JWT Issuer" />
-                            <div class="fieldDescription">Issuer claim for JWT tokens. Must match the session server configuration.</div>
+                            <input is="emby-input" type="text" id="JwtIssuer" label="JWT Issuer" data-i18n-label="jwtIssuer" />
+                            <div class="fieldDescription" data-i18n="issuerHelp">Issuer claim for JWT tokens. Must match the session server configuration.</div>
                         </div>
                         <div class="inputContainer">
-                            <input is="emby-input" type="number" id="TokenTtlSeconds" label="Token TTL (seconds)" min="60" max="86400" step="60" />
-                            <div class="fieldDescription">How long tokens remain valid (60-86400 seconds). Default: 3600 (1 hour).</div>
+                            <input is="emby-input" type="number" id="TokenTtlSeconds" label="Token TTL (seconds)" data-i18n-label="tokenTtl" min="60" max="86400" step="60" />
+                            <div class="fieldDescription" data-i18n="tokenTtlHelp">How long tokens remain valid (60-86400 seconds). Default: 3600 (1 hour).</div>
                         </div>
                         </details>
                     </div>
 
                     <!-- Server Settings -->
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Session Server</h2>
+                        <h2 class="sectionTitle" data-i18n="sessionServer">Session Server</h2>
                         <div class="inputContainer">
-                            <input is="emby-input" type="text" id="SessionServerUrl" label="Session Server URL" placeholder="Auto-detect (same host, port 3000)" />
-                            <div class="fieldDescription">Absolute ws:// or wss:// URL without credentials, query, or fragment. Leave empty for auto-detection.</div>
+                            <input is="emby-input" type="text" id="SessionServerUrl" label="Session Server URL" data-i18n-label="sessionServerUrl" placeholder="Auto-detect (same host, port 3000)" data-i18n-placeholder="autoDetect" />
+                            <div class="fieldDescription" data-i18n="urlHelp">Absolute ws:// or wss:// URL without credentials, query, or fragment. Leave empty for auto-detection.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input is="emby-checkbox" type="checkbox" id="AllowAutoDetectedSessionServer" />
-                                <span>Trust automatic same-host port 3000 session server</span>
+                                <span data-i18n="trustAuto">Trust automatic same-host port 3000 session server</span>
                             </label>
-                            <div class="fieldDescription checkboxFieldDescription">Explicitly permits sending OpenWatchParty tokens to ws(s)://this-host:3000/ws.</div>
+                            <div class="fieldDescription checkboxFieldDescription" data-i18n="trustAutoHelp">Explicitly permits sending OpenWatchParty tokens to ws(s)://this-host:3000/ws.</div>
                         </div>
                         <div class="inputContainer">
-                            <button is="emby-button" type="button" id="PreparePairingButton" class="raised">Prepare asymmetric pairing key</button>
-                            <div id="PairingKeyStatus" class="fieldDescription">No pairing key inspected.</div>
+                            <button is="emby-button" type="button" id="PreparePairingButton" data-i18n="preparePairing" class="raised">Prepare asymmetric pairing key</button>
+                            <div id="PairingKeyStatus" class="fieldDescription" data-i18n="noPairing">No pairing key inspected.</div>
                         </div>
                     </div>
 
                     <!-- Web Client Settings -->
                     <div class="verticalSection">
-                        <h2 class="sectionTitle">Web Client</h2>
+                        <h2 class="sectionTitle" data-i18n="webClient">Web Client</h2>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input is="emby-checkbox" type="checkbox" id="HideNativeSyncPlayButton" />
-                                <span>Hide Jellyfin's SyncPlay button</span>
+                                <span data-i18n="hideSyncPlay">Hide Jellyfin's SyncPlay button</span>
                             </label>
-                            <div class="fieldDescription checkboxFieldDescription">Hides the built-in SyncPlay button in Jellyfin Web, leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded.</div>
+                            <div class="fieldDescription checkboxFieldDescription" data-i18n="hideSyncPlayHelp">Hides the built-in SyncPlay button in Jellyfin Web, leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input is="emby-checkbox" type="checkbox" id="ShowSyncNudgeButton" />
-                                <span>Show the sync adjustment button in rooms</span>
+                                <span data-i18n="showSyncNudge">Show the sync adjustment button in rooms</span>
                             </label>
-                            <div class="fieldDescription checkboxFieldDescription">Lets guests move their own video 0.5 s toward the host when automatic correction cannot keep them in sync. It only moves their video; the host keeps control of playback. Off by default. Applies after Jellyfin Web is reloaded.</div>
+                            <div class="fieldDescription checkboxFieldDescription" data-i18n="showSyncNudgeHelp">Lets guests move their own video 0.5 s toward the host when automatic correction cannot keep them in sync. It only moves their video; the host keeps control of playback. Off by default. Applies after Jellyfin Web is reloaded.</div>
                         </div>
                     </div>
 
                     <div>
                         <button is="emby-button" type="submit" class="raised button-submit block">
-                            <span>Save</span>
+                            <span data-i18n="save">Save</span>
                         </button>
                     </div>
                 </form>
                 <div class="verticalSection">
-                    <h2 class="sectionTitle">Health checks</h2>
+                    <h2 class="sectionTitle" data-i18n="healthChecks">Health checks</h2>
                     <div id="HealthChecks" aria-live="polite"></div>
                 </div>
                 <div class="verticalSection">
-                    <h2 class="sectionTitle">Support</h2>
-                    <p class="fieldDescription">The support report excludes secrets, tokens, user IDs and room IDs. It includes the detected versions, the diagnostic checks, the page origin and the browser user agent.</p>
-                    <button is="emby-button" type="button" id="CopySupportReportButton" class="raised">Copy support report</button>
-                    <button is="emby-button" type="button" id="DownloadSupportReportButton" class="raised">Download JSON</button>
+                    <h2 class="sectionTitle" data-i18n="support">Support</h2>
+                    <p class="fieldDescription" data-i18n="supportHelp">The support report excludes secrets, tokens, user IDs and room IDs. It includes the detected versions, the diagnostic checks, the page origin and the browser user agent.</p>
+                    <button is="emby-button" type="button" id="CopySupportReportButton" data-i18n="copySupport" class="raised">Copy support report</button>
+                    <button is="emby-button" type="button" id="DownloadSupportReportButton" data-i18n="downloadJson" class="raised">Download JSON</button>
                 </div>
             </div>
         </div>
 
         <script type="text/javascript">
+            var configMessages = {
+                en: {
+                    showSyncNudge: 'Show the sync adjustment button in rooms', showSyncNudgeHelp: 'Lets guests move their own video 0.5 s toward the host when automatic correction cannot keep them in sync. It only moves their video; the host keeps control of playback. Off by default. Applies after Jellyfin Web is reloaded.',
+                    title: 'OpenWatchParty Configuration', jellyfin: 'Jellyfin:', unknown: 'Unknown', diagnosticsHelp: 'Run diagnostics to verify the complete installation.', plugin: 'Plugin:', session: 'Session:', runDiagnostics: 'Run diagnostics', setup: 'Setup', jwtSecret: 'JWT Secret', showHide: 'Show/Hide', secretHelp: 'Required for production: Base64/Base64URL generated from at least 32 random bytes.', generateSecret: 'Generate secure secret', allowInsecure: 'Allow insecure unauthenticated development', insecureHelp: 'Explicit development-only override. Never enable this on an exposed server.', advanced: 'Advanced', jwtAudience: 'JWT Audience', audienceHelp: 'Audience claim for JWT tokens. Must match the session server configuration.', jwtIssuer: 'JWT Issuer', issuerHelp: 'Issuer claim for JWT tokens. Must match the session server configuration.', tokenTtl: 'Token TTL (seconds)', tokenTtlHelp: 'How long tokens remain valid (60-86400 seconds). Default: 3600 (1 hour).', sessionServer: 'Session Server', sessionServerUrl: 'Session Server URL', autoDetect: 'Auto-detect (same host, port 3000)', urlHelp: 'Absolute ws:// or wss:// URL without credentials, query, or fragment. Leave empty for auto-detection.', trustAuto: 'Trust automatic same-host port 3000 session server', trustAutoHelp: 'Explicitly permits sending OpenWatchParty tokens to ws(s)://this-host:3000/ws.', preparePairing: 'Prepare asymmetric pairing key', noPairing: 'No pairing key inspected.', webClient: 'Web Client', hideSyncPlay: "Hide Jellyfin's SyncPlay button", hideSyncPlayHelp: 'Hides the built-in SyncPlay button in Jellyfin Web, leaving the Watch Party button as the only group-watching control. Applies after Jellyfin Web is reloaded.', save: 'Save', healthChecks: 'Health checks', support: 'Support', supportHelp: 'The support report excludes secrets, tokens, user IDs and room IDs. It includes the detected versions, the diagnostic checks, the page origin and the browser user agent.', copySupport: 'Copy support report', downloadJson: 'Download JSON', blocked: 'BLOCKED: {message}', authEnabled: 'Authentication enabled', insecureMode: 'INSECURE DEVELOPMENT MODE', configureSecret: 'configure a JWT secret', jwtWhitespace: 'JWT secret must not contain whitespace', jwtChars: 'JWT secret must contain at least 32 Unicode characters', jwtBase64: 'JWT secret must be valid Base64 or Base64URL', jwtBytes: 'JWT secret must encode at least 32 random bytes', jwtDiversity: 'JWT secret must contain at least 80 bits of estimated diversity', jwtSequence: 'JWT secret contains an obvious sequential pattern', urlAbsolute: 'Session server URL must be an absolute ws:// or wss:// URL with a host.', urlCredentials: 'Session server URL must not contain credentials.', urlQuery: 'Session server URL must not contain a query string or fragment.', urlHttps: 'This HTTPS page requires a secure wss:// session server URL.', checking: 'Checking…', diagnosticsReady: 'Plugin, injection and session server are ready.', reviewChecks: 'Review the checks below before using OpenWatchParty.', generatingKey: 'Generating or loading RSA-3072 key…', active: 'Active', readyPair: 'Ready to pair', pairingFailed: 'Pairing key failed: {error}', loadFailed: 'Failed to load configuration: {error}', unknownError: 'Unknown error', configureAuth: 'Configure a JWT secret or explicitly enable insecure development mode.', enterUrl: 'Enter a session server URL or explicitly trust automatic same-host port 3000 detection.', confirmAuto: 'Allow OpenWatchParty tokens to be sent to the automatically detected same-host port 3000 session server?', confirmThird: 'The session server uses a different hostname or port ({target}). Save this destination?', saveFailed: 'Failed to save configuration: {error}', checkAuthentication: 'Authentication', checkDestination: 'Session destination', checkInjection: 'Client injection', checkSessionServer: 'Session server', authValid: 'Authentication configuration is valid', autoTrusted: 'Same-host auto-detection is explicitly trusted', explicitValid: 'Explicit WebSocket destination is valid', destinationMissing: 'Session destination is not configured', injectionSeen: 'Native client injection has been observed', injectionNotSeen: 'Native injection has not been observed since Jellyfin started', protocolIncompatible: 'Session protocol is incompatible', sessionVersion: 'Session {version}, protocol {protocol}', sessionHttp: 'Session server returned HTTP {status}', connectionFailed: 'Connection failed for the configured session destination'
+                },
+                es: {
+                    showSyncNudge: 'Mostrar el botón de ajuste de sincronización en las salas', showSyncNudgeHelp: 'Permite a los invitados mover su propio video 0,5 s hacia el anfitrión cuando la corrección automática no logra sincronizarlos. Solo mueve su video; el anfitrión sigue controlando la reproducción. Desactivado por defecto. Se aplica al recargar Jellyfin Web.',
+                    title: 'Configuración de OpenWatchParty', jellyfin: 'Jellyfin:', unknown: 'Desconocido', diagnosticsHelp: 'Ejecutar el diagnóstico para verificar la instalación.', plugin: 'Complemento:', session: 'Sesión:', runDiagnostics: 'Ejecutar diagnóstico', setup: 'Configuración', jwtSecret: 'Secreto JWT', showHide: 'Mostrar/Ocultar', secretHelp: 'Necesario en producción: Base64/Base64URL generado con al menos 32 bytes aleatorios.', generateSecret: 'Generar secreto seguro', allowInsecure: 'Permitir desarrollo inseguro sin autenticación', insecureHelp: 'Excepción solo para desarrollo. No habilitar en un servidor expuesto.', advanced: 'Avanzado', jwtAudience: 'Audiencia JWT', audienceHelp: 'Audiencia de los tokens JWT. Debe coincidir con el servidor de sesión.', jwtIssuer: 'Emisor JWT', issuerHelp: 'Emisor de los tokens JWT. Debe coincidir con el servidor de sesión.', tokenTtl: 'Duración del token (segundos)', tokenTtlHelp: 'Validez del token (60-86400 segundos). Predeterminado: 3600 (1 hora).', sessionServer: 'Servidor de sesión', sessionServerUrl: 'URL del servidor de sesión', autoDetect: 'Detección automática (mismo host, puerto 3000)', urlHelp: 'URL absoluta ws:// o wss:// sin credenciales, consulta ni fragmento. Dejar vacía para detectar.', trustAuto: 'Confiar en el servidor automático del puerto 3000', trustAutoHelp: 'Permite enviar tokens de OpenWatchParty a ws(s)://este-host:3000/ws.', preparePairing: 'Preparar clave de emparejamiento', noPairing: 'No se inspeccionó ninguna clave.', webClient: 'Cliente web', hideSyncPlay: 'Ocultar el botón SyncPlay de Jellyfin', hideSyncPlayHelp: 'Oculta SyncPlay y deja Watch Party como único control grupal. Se aplica al recargar Jellyfin Web.', save: 'Guardar', healthChecks: 'Comprobaciones', support: 'Soporte', supportHelp: 'El informe excluye secretos, tokens e identificadores. Incluye versiones, comprobaciones, origen y agente del navegador.', copySupport: 'Copiar informe', downloadJson: 'Descargar JSON', blocked: 'BLOQUEADO: {message}', authEnabled: 'Autenticación habilitada', insecureMode: 'MODO DE DESARROLLO INSEGURO', configureSecret: 'configurar un secreto JWT', jwtWhitespace: 'El secreto JWT no debe contener espacios', jwtChars: 'El secreto JWT debe tener al menos 32 caracteres Unicode', jwtBase64: 'El secreto JWT debe ser Base64 o Base64URL válido', jwtBytes: 'El secreto JWT debe codificar al menos 32 bytes aleatorios', jwtDiversity: 'El secreto JWT debe tener al menos 80 bits de diversidad estimada', jwtSequence: 'El secreto JWT contiene una secuencia evidente', urlAbsolute: 'La URL debe ser absoluta, ws:// o wss://, y tener un host.', urlCredentials: 'La URL no debe contener credenciales.', urlQuery: 'La URL no debe contener consulta ni fragmento.', urlHttps: 'Esta página HTTPS requiere una URL segura wss://.', checking: 'Comprobando…', diagnosticsReady: 'El complemento, la inyección y el servidor están listos.', reviewChecks: 'Revisar las comprobaciones antes de usar OpenWatchParty.', generatingKey: 'Generando o cargando la clave RSA-3072…', active: 'Activa', readyPair: 'Lista para emparejar', pairingFailed: 'Falló la clave: {error}', loadFailed: 'No se pudo cargar la configuración: {error}', unknownError: 'Error desconocido', configureAuth: 'Configurar un secreto JWT o habilitar el modo de desarrollo inseguro.', enterUrl: 'Indicar una URL o confiar en la detección automática del puerto 3000.', confirmAuto: '¿Permitir enviar tokens al servidor detectado en el puerto 3000 del mismo host?', confirmThird: 'El servidor usa otro host o puerto ({target}). ¿Guardar este destino?', saveFailed: 'No se pudo guardar la configuración: {error}', checkAuthentication: 'Autenticación', checkDestination: 'Destino de la sesión', checkInjection: 'Inyección en el cliente', checkSessionServer: 'Servidor de sesión', authValid: 'La configuración de autenticación es válida', autoTrusted: 'La detección automática en el mismo host está permitida explícitamente', explicitValid: 'El destino WebSocket explícito es válido', destinationMissing: 'El destino de la sesión no está configurado', injectionSeen: 'Se observó la inyección en el cliente nativo', injectionNotSeen: 'No se observó la inyección en el cliente desde que se inició Jellyfin', protocolIncompatible: 'El protocolo de la sesión no es compatible', sessionVersion: 'Sesión {version}, protocolo {protocol}', sessionHttp: 'El servidor de sesión respondió HTTP {status}', connectionFailed: 'No se pudo conectar con el destino de sesión configurado'
+                },
+                fr: {
+                    showSyncNudge: 'Afficher le bouton de réglage de la synchronisation dans les salles', showSyncNudgeHelp: 'Permet aux invités de déplacer leur propre vidéo de 0,5 s vers l’hôte quand la correction automatique ne suffit pas. Seule leur vidéo bouge ; l’hôte garde le contrôle de la lecture. Désactivé par défaut. S’applique après rechargement.',
+                    title: 'Configuration d’OpenWatchParty', jellyfin: 'Jellyfin :', unknown: 'Inconnu', diagnosticsHelp: 'Lancez le diagnostic pour vérifier toute l’installation.', plugin: 'Extension :', session: 'Session :', runDiagnostics: 'Lancer le diagnostic', setup: 'Configuration', jwtSecret: 'Secret JWT', showHide: 'Afficher/Masquer', secretHelp: 'Requis en production : Base64/Base64URL généré avec au moins 32 octets aléatoires.', generateSecret: 'Générer un secret sûr', allowInsecure: 'Autoriser le développement non authentifié', insecureHelp: 'Dérogation réservée au développement. Ne jamais activer sur un serveur exposé.', advanced: 'Avancé', jwtAudience: 'Audience JWT', audienceHelp: 'Audience des jetons JWT. Doit correspondre au serveur de session.', jwtIssuer: 'Émetteur JWT', issuerHelp: 'Émetteur des jetons JWT. Doit correspondre au serveur de session.', tokenTtl: 'Durée du jeton (secondes)', tokenTtlHelp: 'Validité du jeton (60 à 86400 secondes). Par défaut : 3600 (1 heure).', sessionServer: 'Serveur de session', sessionServerUrl: 'URL du serveur de session', autoDetect: 'Détection auto. (même hôte, port 3000)', urlHelp: 'URL ws:// ou wss:// absolue sans identifiants, requête ni fragment. Vide pour la détection.', trustAuto: 'Faire confiance au serveur automatique du port 3000', trustAutoHelp: 'Autorise l’envoi des jetons à ws(s)://cet-hôte:3000/ws.', preparePairing: 'Préparer la clé d’association', noPairing: 'Aucune clé examinée.', webClient: 'Client Web', hideSyncPlay: 'Masquer le bouton SyncPlay de Jellyfin', hideSyncPlayHelp: 'Masque SyncPlay et laisse Watch Party comme seul contrôle de groupe. S’applique après rechargement.', save: 'Enregistrer', healthChecks: 'Contrôles de santé', support: 'Assistance', supportHelp: 'Le rapport exclut secrets, jetons et identifiants. Il inclut versions, contrôles, origine et agent du navigateur.', copySupport: 'Copier le rapport', downloadJson: 'Télécharger le JSON', blocked: 'BLOQUÉ : {message}', authEnabled: 'Authentification activée', insecureMode: 'MODE DÉVELOPPEMENT NON SÉCURISÉ', configureSecret: 'configurez un secret JWT', jwtWhitespace: 'Le secret JWT ne doit pas contenir d’espaces', jwtChars: 'Le secret JWT doit contenir au moins 32 caractères Unicode', jwtBase64: 'Le secret JWT doit être un Base64 ou Base64URL valide', jwtBytes: 'Le secret JWT doit encoder au moins 32 octets aléatoires', jwtDiversity: 'Le secret JWT doit avoir au moins 80 bits de diversité estimée', jwtSequence: 'Le secret JWT contient une séquence évidente', urlAbsolute: 'L’URL doit être absolue, en ws:// ou wss://, avec un hôte.', urlCredentials: 'L’URL ne doit pas contenir d’identifiants.', urlQuery: 'L’URL ne doit contenir ni requête ni fragment.', urlHttps: 'Cette page HTTPS exige une URL sécurisée wss://.', checking: 'Vérification…', diagnosticsReady: 'L’extension, l’injection et le serveur sont prêts.', reviewChecks: 'Examinez les contrôles avant d’utiliser OpenWatchParty.', generatingKey: 'Génération ou chargement de la clé RSA-3072…', active: 'Active', readyPair: 'Prête à associer', pairingFailed: 'Échec de la clé : {error}', loadFailed: 'Chargement impossible : {error}', unknownError: 'Erreur inconnue', configureAuth: 'Configurez un secret JWT ou activez explicitement le mode développement non sécurisé.', enterUrl: 'Saisissez une URL ou autorisez la détection automatique du port 3000.', confirmAuto: 'Autoriser l’envoi des jetons au serveur détecté sur le port 3000 du même hôte ?', confirmThird: 'Le serveur utilise un autre hôte ou port ({target}). Enregistrer cette destination ?', saveFailed: 'Enregistrement impossible : {error}', checkAuthentication: 'Authentification', checkDestination: 'Destination de session', checkInjection: 'Injection client', checkSessionServer: 'Serveur de session', authValid: 'La configuration d’authentification est valide', autoTrusted: 'La détection automatique sur le même hôte est explicitement autorisée', explicitValid: 'La destination WebSocket explicite est valide', destinationMissing: 'La destination de session n’est pas configurée', injectionSeen: 'L’injection dans le client natif a été observée', injectionNotSeen: 'L’injection dans le client n’a pas été observée depuis le démarrage de Jellyfin', protocolIncompatible: 'Le protocole de session est incompatible', sessionVersion: 'Session {version}, protocole {protocol}', sessionHttp: 'Le serveur de session a répondu HTTP {status}', connectionFailed: 'Échec de la connexion à la destination de session configurée'
+                },
+                de: {
+                    showSyncNudge: 'Schaltfläche zur Synchronisationsanpassung in Räumen anzeigen', showSyncNudgeHelp: 'Gäste können ihr eigenes Video um 0,5 s zum Host verschieben, wenn die automatische Korrektur nicht ausreicht. Nur ihr Video bewegt sich; der Host behält die Kontrolle. Standardmäßig aus. Gilt nach dem Neuladen.',
+                    title: 'OpenWatchParty-Konfiguration', jellyfin: 'Jellyfin:', unknown: 'Unbekannt', diagnosticsHelp: 'Diagnose ausführen, um die Installation zu prüfen.', plugin: 'Plugin:', session: 'Sitzung:', runDiagnostics: 'Diagnose starten', setup: 'Einrichtung', jwtSecret: 'JWT-Geheimnis', showHide: 'Anzeigen/Ausblenden', secretHelp: 'Für Produktion erforderlich: Base64/Base64URL aus mindestens 32 Zufallsbytes.', generateSecret: 'Sicheres Geheimnis erzeugen', allowInsecure: 'Unsichere Entwicklung ohne Anmeldung erlauben', insecureHelp: 'Nur für Entwicklung. Nie auf einem öffentlich erreichbaren Server aktivieren.', advanced: 'Erweitert', jwtAudience: 'JWT-Zielgruppe', audienceHelp: 'Zielgruppe der JWT-Tokens. Muss zum Sitzungsserver passen.', jwtIssuer: 'JWT-Aussteller', issuerHelp: 'Aussteller der JWT-Tokens. Muss zum Sitzungsserver passen.', tokenTtl: 'Token-Gültigkeit (Sekunden)', tokenTtlHelp: 'Gültigkeit (60–86400 Sekunden). Standard: 3600 (1 Stunde).', sessionServer: 'Sitzungsserver', sessionServerUrl: 'Sitzungsserver-URL', autoDetect: 'Automatisch (gleicher Host, Port 3000)', urlHelp: 'Absolute ws://- oder wss://-URL ohne Zugangsdaten, Abfrage oder Fragment. Leer für Auto-Erkennung.', trustAuto: 'Automatischem Server auf Port 3000 vertrauen', trustAutoHelp: 'Erlaubt Tokens an ws(s)://dieser-host:3000/ws zu senden.', preparePairing: 'Kopplungsschlüssel vorbereiten', noPairing: 'Kein Schlüssel geprüft.', webClient: 'Webclient', hideSyncPlay: 'Jellyfin-SyncPlay-Schaltfläche ausblenden', hideSyncPlayHelp: 'Blendet SyncPlay aus; Watch Party bleibt die einzige Gruppensteuerung. Gilt nach dem Neuladen.', save: 'Speichern', healthChecks: 'Statusprüfungen', support: 'Support', supportHelp: 'Der Bericht enthält keine Geheimnisse, Tokens oder IDs. Enthalten sind Versionen, Prüfungen, Ursprung und Browserkennung.', copySupport: 'Supportbericht kopieren', downloadJson: 'JSON herunterladen', blocked: 'BLOCKIERT: {message}', authEnabled: 'Authentifizierung aktiv', insecureMode: 'UNSICHERER ENTWICKLUNGSMODUS', configureSecret: 'JWT-Geheimnis einrichten', jwtWhitespace: 'JWT-Geheimnis darf keine Leerzeichen enthalten', jwtChars: 'JWT-Geheimnis muss mindestens 32 Unicode-Zeichen enthalten', jwtBase64: 'JWT-Geheimnis muss gültiges Base64 oder Base64URL sein', jwtBytes: 'JWT-Geheimnis muss mindestens 32 Zufallsbytes kodieren', jwtDiversity: 'JWT-Geheimnis braucht mindestens 80 Bit geschätzte Vielfalt', jwtSequence: 'JWT-Geheimnis enthält ein offensichtliches Muster', urlAbsolute: 'Die URL muss absolut sein und ws:// oder wss:// mit Host verwenden.', urlCredentials: 'Die URL darf keine Zugangsdaten enthalten.', urlQuery: 'Die URL darf weder eine Abfrage noch ein Fragment enthalten.', urlHttps: 'Diese HTTPS-Seite erfordert eine sichere wss://-URL.', checking: 'Prüfung…', diagnosticsReady: 'Plugin, Einbindung und Sitzungsserver sind bereit.', reviewChecks: 'Prüfungen vor der Nutzung von OpenWatchParty kontrollieren.', generatingKey: 'RSA-3072-Schlüssel wird erzeugt oder geladen…', active: 'Aktiv', readyPair: 'Kopplungsbereit', pairingFailed: 'Schlüssel fehlgeschlagen: {error}', loadFailed: 'Konfiguration konnte nicht geladen werden: {error}', unknownError: 'Unbekannter Fehler', configureAuth: 'JWT-Geheimnis einrichten oder unsicheren Entwicklungsmodus aktivieren.', enterUrl: 'Server-URL eingeben oder der automatischen Erkennung auf Port 3000 vertrauen.', confirmAuto: 'Tokens an den automatisch erkannten Server auf Port 3000 desselben Hosts senden?', confirmThird: 'Der Server nutzt einen anderen Host oder Port ({target}). Ziel speichern?', saveFailed: 'Konfiguration konnte nicht gespeichert werden: {error}', checkAuthentication: 'Authentifizierung', checkDestination: 'Sitzungsziel', checkInjection: 'Client-Injektion', checkSessionServer: 'Sitzungsserver', authValid: 'Die Authentifizierungskonfiguration ist gültig', autoTrusted: 'Die automatische Erkennung auf demselben Host ist ausdrücklich erlaubt', explicitValid: 'Das explizite WebSocket-Ziel ist gültig', destinationMissing: 'Das Sitzungsziel ist nicht konfiguriert', injectionSeen: 'Die Injektion in den nativen Client wurde beobachtet', injectionNotSeen: 'Die Injektion in den Client wurde seit dem Start von Jellyfin nicht beobachtet', protocolIncompatible: 'Das Sitzungsprotokoll ist inkompatibel', sessionVersion: 'Sitzung {version}, Protokoll {protocol}', sessionHttp: 'Der Sitzungsserver antwortete mit HTTP {status}', connectionFailed: 'Verbindung zum konfigurierten Sitzungsziel fehlgeschlagen'
+                }
+            };
+            var configLocale = function() {
+                var documentLanguage = typeof document !== 'undefined' && document.documentElement
+                    ? document.documentElement.lang : '';
+                var navigatorLanguage = typeof navigator !== 'undefined' ? navigator.language : '';
+                var requested = String(documentLanguage || navigatorLanguage || 'en').trim().toLowerCase() || 'en';
+                if (configMessages[requested]) return requested;
+                var base = requested.split('-')[0];
+                return configMessages[base] ? base : 'en';
+            };
+            var configStatusMessages = {
+                en: { ready: 'READY', degraded: 'DEGRADED', blocked: 'BLOCKED', pass: 'PASS', fail: 'FAIL', warn: 'WARN', warning: 'WARN', unknown: 'UNKNOWN' },
+                es: { ready: 'LISTO', degraded: 'DEGRADADO', blocked: 'BLOQUEADO', pass: 'CORRECTO', fail: 'FALLO', warn: 'AVISO', warning: 'AVISO', unknown: 'DESCONOCIDO' },
+                fr: { ready: 'PRÊT', degraded: 'DÉGRADÉ', blocked: 'BLOQUÉ', pass: 'OK', fail: 'ÉCHEC', warn: 'AVERT.', warning: 'AVERT.', unknown: 'INCONNU' },
+                de: { ready: 'BEREIT', degraded: 'EINGESCHRÄNKT', blocked: 'BLOCKIERT', pass: 'OK', fail: 'FEHLER', warn: 'WARNUNG', warning: 'WARNUNG', unknown: 'UNBEKANNT' }
+            };
+            var configT = function(key, params) {
+                var language = configLocale();
+                var value = configMessages[language][key] || configMessages.en[key] || key;
+                return String(value).replace(/\{([A-Za-z0-9_]+)\}/g, function(match, name) {
+                    return params && Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
+                });
+            };
+            var configStatus = function(value) {
+                var status = String(value || 'unknown').toLowerCase();
+                var language = configLocale();
+                var own = function(catalog) {
+                    return Object.prototype.hasOwnProperty.call(catalog, status) ? catalog[status] : null;
+                };
+                return own(configStatusMessages[language]) || own(configStatusMessages.en) || status.toUpperCase();
+            };
+            // The plugin reports its checks in English. Known checks and fixed
+            // summaries are shown in the page language; any other detail (an
+            // error message, for example) is shown as the plugin wrote it.
+            var configCheckLabels = {
+                authentication_configuration: 'checkAuthentication',
+                session_destination: 'checkDestination',
+                native_injection: 'checkInjection',
+                session_http: 'checkSessionServer'
+            };
+            var configCheckSummaries = {
+                'Authentication configuration is valid': 'authValid',
+                'Same-host auto-detection is explicitly trusted': 'autoTrusted',
+                'Explicit WebSocket destination is valid': 'explicitValid',
+                'Session destination is not configured': 'destinationMissing',
+                'Native client injection has been observed': 'injectionSeen',
+                'Native injection has not been observed since Jellyfin started': 'injectionNotSeen',
+                'Session protocol is incompatible': 'protocolIncompatible',
+                'Connection failed for the configured session destination': 'connectionFailed'
+            };
+            var configCheckLabel = function(id) {
+                var key = Object.prototype.hasOwnProperty.call(configCheckLabels, id) ? configCheckLabels[id] : null;
+                return key ? configT(key) : String(id || '');
+            };
+            var configCheckSummary = function(summary) {
+                var text = String(summary || '');
+                if (Object.prototype.hasOwnProperty.call(configCheckSummaries, text)) return configT(configCheckSummaries[text]);
+                var session = /^Session (.+), protocol (\d+)$/.exec(text);
+                if (session) return configT('sessionVersion', { version: session[1], protocol: session[2] });
+                var http = /^Session server returned HTTP (\d+)$/.exec(text);
+                if (http) return configT('sessionHttp', { status: http[1] });
+                return text;
+            };
+            var localizeConfigurationPage = function() {
+                if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return;
+                document.title = configT('title');
+                var root = typeof document.querySelector === 'function'
+                    ? (document.querySelector('.pluginConfigurationPage') || document) : document;
+                Array.from(root.querySelectorAll('[data-i18n]')).forEach(function(element) {
+                    element.textContent = configT(element.getAttribute('data-i18n'));
+                });
+                ['label', 'placeholder', 'title'].forEach(function(attribute) {
+                    Array.from(root.querySelectorAll('[data-i18n-' + attribute + ']')).forEach(function(element) {
+                        element.setAttribute(attribute, configT(element.getAttribute('data-i18n-' + attribute)));
+                    });
+                });
+            };
+            localizeConfigurationPage();
+
             var OpenWatchPartyConfigurationPage = {
                 // Fallback GUID (should match Plugin.PluginGuid constant)
                 pluginId: "0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d",
@@ -142,43 +238,43 @@
                     var status = $('#AuthStatus', page);
                     var validationError = this.validateJwtSecret(config.JwtSecret || '');
                     if ((config.JwtSecret || '').trim() && validationError) {
-                        status.text('BLOCKED: ' + validationError).css({ background: '#5b1d1d', color: '#ffaaaa' });
+                        status.text(configT('blocked', { message: validationError })).css({ background: '#5b1d1d', color: '#ffaaaa' });
                     } else if ((config.JwtSecret || '').trim()) {
-                        status.text('Authentication enabled').css({ background: '#173d2a', color: '#8ee6b5' });
+                        status.text(configT('authEnabled')).css({ background: '#173d2a', color: '#8ee6b5' });
                     } else if (config.AllowInsecureNoAuth) {
-                        status.text('INSECURE DEVELOPMENT MODE').css({ background: '#573d00', color: '#ffd36a' });
+                        status.text(configT('insecureMode')).css({ background: '#573d00', color: '#ffd36a' });
                     } else {
-                        status.text('BLOCKED: configure a JWT secret').css({ background: '#5b1d1d', color: '#ffaaaa' });
+                        status.text(configT('blocked', { message: configT('configureSecret') })).css({ background: '#5b1d1d', color: '#ffaaaa' });
                     }
                 },
 
                 validateJwtSecret: function(secret) {
                     var symbols = Array.from(secret || '');
                     if (/\s/.test(secret)) {
-                        return 'JWT secret must not contain whitespace';
+                        return configT('jwtWhitespace');
                     }
                     if (symbols.length < 32) {
-                        return 'JWT secret must contain at least 32 Unicode characters';
+                        return configT('jwtChars');
                     }
                     var hasStandardSymbols = /[+/]/.test(secret);
                     var hasUrlSafeSymbols = /[-_]/.test(secret);
                     if (hasStandardSymbols && hasUrlSafeSymbols) {
-                        return 'JWT secret must be valid Base64 or Base64URL';
+                        return configT('jwtBase64');
                     }
                     var normalized = hasUrlSafeSymbols ? secret.replace(/-/g, '+').replace(/_/g, '/') : secret;
                     var remainder = normalized.length % 4;
                     if (remainder === 1 || (hasStandardSymbols && remainder !== 0)) {
-                        return 'JWT secret must be valid Base64 or Base64URL';
+                        return configT('jwtBase64');
                     }
                     while ((normalized.length % 4) !== 0) normalized += '=';
                     var decoded;
                     try {
                         decoded = atob(normalized);
                         if (decoded.length < 32) {
-                            return 'JWT secret must encode at least 32 random bytes';
+                            return configT('jwtBytes');
                         }
                     } catch (err) {
-                        return 'JWT secret must be valid Base64 or Base64URL';
+                        return configT('jwtBase64');
                     }
                     var frequencies = new Map();
                     Array.from(decoded).forEach(function(symbol) {
@@ -190,7 +286,7 @@
                         entropyPerSymbol -= probability * Math.log2(probability);
                     });
                     if ((entropyPerSymbol * decoded.length) < 80) {
-                        return 'JWT secret must contain at least 80 bits of estimated diversity';
+                        return configT('jwtDiversity');
                     }
                     var hasSequence = function(value) {
                         for (var index = 0; index <= value.length - 4; index++) {
@@ -205,7 +301,7 @@
                         return false;
                     };
                     if (hasSequence(secret) || hasSequence(decoded)) {
-                        return 'JWT secret contains an obvious sequential pattern';
+                        return configT('jwtSequence');
                     }
                     return '';
                 },
@@ -217,19 +313,19 @@
                     try {
                         url = new URL(candidate);
                     } catch (err) {
-                        return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host.' };
+                        return { valid: false, error: configT('urlAbsolute') };
                     }
                     if ((url.protocol !== 'ws:' && url.protocol !== 'wss:') || !url.hostname) {
-                        return { valid: false, error: 'Session server URL must be an absolute ws:// or wss:// URL with a host.' };
+                        return { valid: false, error: configT('urlAbsolute') };
                     }
                     if (url.username || url.password) {
-                        return { valid: false, error: 'Session server URL must not contain credentials.' };
+                        return { valid: false, error: configT('urlCredentials') };
                     }
                     if (candidate.indexOf('?') !== -1 || candidate.indexOf('#') !== -1) {
-                        return { valid: false, error: 'Session server URL must not contain a query string or fragment.' };
+                        return { valid: false, error: configT('urlQuery') };
                     }
                     if (window.location.protocol === 'https:' && url.protocol === 'ws:') {
-                        return { valid: false, error: 'This HTTPS page requires a secure wss:// session server URL.' };
+                        return { valid: false, error: configT('urlHttps') };
                     }
                     var defaultPort = function(protocol) {
                         return protocol === 'https:' || protocol === 'wss:' ? '443' : '80';
@@ -261,7 +357,7 @@
                     var self = this;
                     var button = document.getElementById('RunDiagnosticsButton');
                     button.disabled = true;
-                    button.textContent = 'Checking…';
+                    button.textContent = configT('checking');
                     return fetch(ApiClient.getUrl('OpenWatchParty/Diagnostics/' + (active ? 'Run' : 'Status')), {
                         method: active ? 'POST' : 'GET',
                         headers: self.authHeaders(),
@@ -288,22 +384,22 @@
                         self.renderDiagnostics(failure);
                     }).finally(function() {
                         button.disabled = false;
-                        button.textContent = 'Run diagnostics';
+                        button.textContent = configT('runDiagnostics');
                     });
                 },
 
                 renderDiagnostics: function(result) {
                     var status = (result.OverallStatus || 'unknown').toLowerCase();
                     var badge = document.getElementById('OverallHealthBadge');
-                    badge.textContent = status.toUpperCase();
+                    badge.textContent = configStatus(status);
                     badge.style.background = status === 'ready' ? '#166534' : status === 'degraded' ? '#854d0e' : '#7f1d1d';
                     document.getElementById('OverallHealthSummary').textContent = status === 'ready'
-                        ? 'Plugin, injection and session server are ready.'
-                        : 'Review the checks below before using OpenWatchParty.';
+                        ? configT('diagnosticsReady')
+                        : configT('reviewChecks');
                     document.getElementById('PluginVersion').textContent = result.PluginVersion || '—';
                     document.getElementById('JellyfinVersion').textContent = result.JellyfinVersion || '—';
                     var sessionCheck = (result.Checks || []).find(function(check) { return check.Id === 'session_http'; });
-                    document.getElementById('SessionVersion').textContent = sessionCheck ? sessionCheck.Summary : '—';
+                    document.getElementById('SessionVersion').textContent = sessionCheck ? configCheckSummary(sessionCheck.Summary) : '—';
                     var container = document.getElementById('HealthChecks');
                     container.replaceChildren();
                     (result.Checks || []).forEach(function(check) {
@@ -311,10 +407,10 @@
                         row.style.padding = '.65em 0';
                         row.style.borderBottom = '1px solid rgba(255,255,255,.12)';
                         var title = document.createElement('strong');
-                        title.textContent = (check.Status || 'unknown').toUpperCase() + ' · ' + check.Id;
+                        title.textContent = configStatus(check.Status) + ' · ' + configCheckLabel(check.Id);
                         var summary = document.createElement('div');
                         summary.className = 'fieldDescription';
-                        summary.textContent = check.Summary || '';
+                        summary.textContent = configCheckSummary(check.Summary);
                         row.append(title, summary);
                         container.appendChild(row);
                     });
@@ -374,7 +470,7 @@
 
             $('#PreparePairingButton').on('click', function() {
                 var status = document.getElementById('PairingKeyStatus');
-                status.textContent = 'Generating or loading RSA-3072 key…';
+                status.textContent = configT('generatingKey');
                 fetch(ApiClient.getUrl('OpenWatchParty/SigningKey'), {
                     headers: OpenWatchPartyConfigurationPage.authHeaders(),
                     credentials: 'same-origin'
@@ -382,10 +478,10 @@
                     if (!response.ok) throw new Error('HTTP ' + response.status);
                     return response.json();
                 }).then(function(result) {
-                    status.textContent = (result.active ? 'Active' : 'Ready to pair')
+                    status.textContent = (result.active ? configT('active') : configT('readyPair'))
                         + ' · kid ' + result.jwk.kid + ' · ' + result.issuer;
                 }).catch(function(error) {
-                    status.textContent = 'Pairing key failed: ' + error.message;
+                    status.textContent = configT('pairingFailed', { error: error.message });
                 });
             });
 
@@ -404,6 +500,7 @@
 
             $('.pluginConfigurationPage').on('pageshow', function () {
                 var page = this;
+                localizeConfigurationPage();
                 Dashboard.showLoadingMsg();
 
                 // Initialize plugin ID then load configuration
@@ -430,7 +527,7 @@
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {
                     Dashboard.hideLoadingMsg();
-                    Dashboard.alert('Failed to load configuration: ' + (err.message || 'Unknown error'));
+                    Dashboard.alert(configT('loadFailed', { error: err.message || configT('unknownError') }));
                 });
             });
 
@@ -450,7 +547,7 @@
                     $('#AllowInsecureNoAuth', page).prop('checked', false);
                 }
                 if (!jwtSecret && !allowInsecure) {
-                    Dashboard.alert('Configure a JWT secret or explicitly enable insecure development mode.');
+                    Dashboard.alert(configT('configureAuth'));
                     return false;
                 }
 
@@ -461,16 +558,16 @@
                 }
                 var allowAutoDetected = $('#AllowAutoDetectedSessionServer', page).prop('checked') === true;
                 if (!sessionServerUrl.url && !allowAutoDetected) {
-                    Dashboard.alert('Enter a session server URL or explicitly trust automatic same-host port 3000 detection.');
+                    Dashboard.alert(configT('enterUrl'));
                     return false;
                 }
                 if (!sessionServerUrl.url && !window.confirm(
-                    'Allow OpenWatchParty tokens to be sent to the automatically detected same-host port 3000 session server?'
+                    configT('confirmAuto')
                 )) {
                     return false;
                 }
                 if (sessionServerUrl.thirdParty && !window.confirm(
-                    'The session server uses a different hostname or port (' + sessionServerUrl.target + '). Save this destination?'
+                    configT('confirmThird', { target: sessionServerUrl.target })
                 )) {
                     return false;
                 }
@@ -500,7 +597,7 @@
                     Dashboard.processPluginConfigurationUpdateResult();
                 }).catch(function (err) {
                     Dashboard.hideLoadingMsg();
-                    Dashboard.alert('Failed to save configuration: ' + (err.message || 'Unknown error'));
+                    Dashboard.alert(configT('saveFailed', { error: err.message || configT('unknownError') }));
                 });
             });
         </script>
