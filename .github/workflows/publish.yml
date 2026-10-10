@@ -128,7 +128,7 @@ jobs:
         run: mkdir -p artifacts
 
       - name: Generate image SPDX SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ env.IMAGE_REF }}
           format: spdx-json
@@ -138,7 +138,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate image CycloneDX SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           image: ${{ env.IMAGE_REF }}
           format: cyclonedx-json
@@ -186,7 +186,7 @@ jobs:
 
       - name: Upload signed image metadata
         if: github.event_name == 'release'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-supply-chain
           path: artifacts/*
@@ -206,14 +206,14 @@ jobs:
         run: infra/scripts/package-plugin.sh
 
       - name: Upload plugin artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: jellyfin-plugin
           path: dist/OpenWatchParty-v*.zip
           if-no-files-found: error
 
       - name: Upload canonical release metadata
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: jellyfin-plugin-version
           path: version.json
@@ -233,7 +233,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Download plugin artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: jellyfin-plugin
           path: artifacts
@@ -248,7 +248,7 @@ jobs:
           printf 'name=%s\n' "$(basename -- "${archives[0]}")" >> "$GITHUB_OUTPUT"
 
       - name: Generate plugin SPDX SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           file: ${{ steps.plugin.outputs.path }}
           format: spdx-json
@@ -258,7 +258,7 @@ jobs:
           upload-release-assets: false
 
       - name: Generate plugin CycloneDX SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
         with:
           file: ${{ steps.plugin.outputs.path }}
           format: cyclonedx-json
@@ -312,7 +312,7 @@ jobs:
           cp -- "$PROVENANCE_BUNDLE" "$PLUGIN_PATH.provenance.jsonl"
 
       - name: Upload signed plugin assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plugin-supply-chain
           path: artifacts/*
@@ -391,7 +391,7 @@ jobs:
           PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
         run: cp "$PROVENANCE_BUNDLE" "artifacts/${{ matrix.artifact }}.provenance.jsonl"
       - name: Upload owpctl supply-chain assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: owpctl-supply-chain-${{ matrix.artifact }}
           path: artifacts/*
@@ -406,19 +406,19 @@ jobs:
       contents: write
     steps:
       - name: Download image supply-chain assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: image-supply-chain
           path: artifacts
 
       - name: Download plugin supply-chain assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: plugin-supply-chain
           path: artifacts
 
       - name: Download owpctl supply-chain assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: owpctl-supply-chain-*
           merge-multiple: true
@@ -445,13 +445,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download plugin artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: jellyfin-plugin
           path: artifacts
 
       - name: Download canonical release metadata
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: jellyfin-plugin-version
           path: artifacts/release-version
