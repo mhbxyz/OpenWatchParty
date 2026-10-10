@@ -201,6 +201,7 @@ mod tests {
                 clients: vec!["a".to_string(), "b".to_string()],
                 ready_clients: HashSet::new(),
                 pending_play: None,
+                pending_host_reconnect: None,
                 state: PlaybackState {
                     position: 0.0,
                     play_state: "paused".to_string(),
@@ -224,6 +225,7 @@ mod tests {
                 clients: vec!["c".to_string()],
                 ready_clients: HashSet::new(),
                 pending_play: None,
+                pending_host_reconnect: None,
                 state: PlaybackState {
                     position: 10.0,
                     play_state: "playing".to_string(),

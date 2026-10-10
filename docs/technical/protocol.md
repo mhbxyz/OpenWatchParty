@@ -163,7 +163,13 @@ Leave the current room.
 - Otherwise: broadcast `client_left`, then `participant_list` and `participant_statuses` (the leaving client's status is dropped)
 - Broadcast `room_list` to all
 
-A WebSocket disconnect has the same room behavior as `leave_room`.
+A non-host WebSocket disconnect has the same room behavior as `leave_room`. When a
+transfer-capable host disconnects, the server reserves the host role for 10 seconds,
+keyed by the authenticated Jellyfin user ID. A new connection for that user can join
+the room during the grace period and reclaim the role with its new client ID. If the
+grace period expires first, the server promotes the earliest transfer-capable member,
+or closes the room when no such member remains. An explicit `leave_room` still
+transfers or closes the room immediately.
 
 ### `close_room`
 
@@ -455,7 +461,8 @@ It is a separate message so that `room_state`, `participants_update` and `client
 
 ### `host_changed`
 
-Sent to the remaining room members after `client_left` and before the updated `participant_list` when host transfer succeeds.
+Sent before the updated `participant_list` when host transfer succeeds or when the
+same authenticated host reclaims the role after reconnecting.
 
 ```json
 {
@@ -542,7 +549,9 @@ Periodic state update relayed from host.
 
 ### `room_closed`
 
-Room was closed because the host explicitly closed it, no transfer-capable member remained after the host left or disconnected, or the room became empty.
+Room was closed because the host explicitly closed it, no transfer-capable member
+remained after the host left or after its reconnect grace period expired, or the room
+became empty.
 
 ```json
 {

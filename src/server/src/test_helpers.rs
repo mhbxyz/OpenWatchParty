@@ -42,6 +42,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         clients: vec![host_id.to_string()],
         ready_clients: HashSet::from([host_id.to_string()]),
         pending_play: None,
+        pending_host_reconnect: None,
         state: PlaybackState {
             position: 0.0,
             play_state: "paused".to_string(),

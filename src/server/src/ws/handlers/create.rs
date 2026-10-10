@@ -59,6 +59,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         clients: vec![client_id.to_string()],
         ready_clients: HashSet::from([client_id.to_string()]),
         pending_play: None,
+        pending_host_reconnect: None,
         state: PlaybackState {
             position: start_pos,
             play_state: "paused".to_string(),

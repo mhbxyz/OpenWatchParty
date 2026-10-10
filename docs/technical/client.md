@@ -254,7 +254,13 @@ Synchronization loop called every 500 ms (`SYNC_LOOP_MS`, non-hosts only).
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and advertises `features: ["host_transfer"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and advertises `features: ["host_transfer", "participant_status"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+
+After an unexpected close, the client buffers a `WS_CLOSE` diagnostic containing the
+WebSocket close code, clean flag, and truncated reason. On the next connection it
+sends `auth` first, then flushes that diagnostic through `client_log`. A host that
+rejoins during the server's 10-second grace period regains the host role under its
+new connection ID.
 
 ### Functions
 
@@ -284,7 +290,7 @@ Closes the room when invoked by the host. It sends `close_room` when the server 
 
 #### `connect() -> void`
 Establishes WebSocket connection.
-- **Auto-reconnect**: If `autoReconnect === true`, reconnects after 3 seconds.
+- **Auto-reconnect**: If `autoReconnect === true`, retries with exponential backoff starting at 1 second and capped at 30 seconds.
 
 ### Message Handler (`handleMessage`)
 

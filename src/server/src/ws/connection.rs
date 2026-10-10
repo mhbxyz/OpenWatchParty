@@ -169,8 +169,8 @@ pub async fn client_connection(
                             }
                         }
                     },
-                    Err(_) => {
-                        warn!("WebSocket receive failed for client {temp_id}");
+                    Err(error) => {
+                        warn!("WebSocket receive failed for client {temp_id}: {error}");
                         break;
                     }
                 }
@@ -223,7 +223,7 @@ pub async fn client_connection(
         }
     }
 
-    crate::room::handle_disconnect(&temp_id, &state).await;
+    crate::room::handle_disconnect(&temp_id, &state, &tasks).await;
     if tokio::time::timeout(
         Duration::from_millis(super::constants::WRITER_SHUTDOWN_TIMEOUT_MS),
         &mut writer_task.0,

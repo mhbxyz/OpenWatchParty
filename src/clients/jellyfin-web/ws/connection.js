@@ -89,7 +89,6 @@
     state.lastAuthToastMessage = '';
     state.lastAuthToastAt = 0;
     state.serverFeatures = [];
-    if (utils.flushLogBuffer) utils.flushLogBuffer();
     // The version is always declared: it is what lets the server negotiate
     // even when the client has no token or identity to authenticate with.
     const authPayload = { protocol_version: PROTOCOL_VERSION, features: CLIENT_FEATURES };
@@ -97,6 +96,7 @@
     if (state.userName) authPayload.user_name = state.userName;
     if (state.userId) authPayload.user_id = state.userId;
     socket.send(JSON.stringify({ type: 'auth', payload: authPayload, ts: utils.nowMs() }));
+    if (utils.flushLogBuffer) utils.flushLogBuffer();
     actions.send('ping', { client_ts: utils.nowMs() });
     schedulePing();
     if (!token) handleAuthenticatedConnection();
@@ -110,6 +110,13 @@
     if (socket !== state.ws) return;
     console.log('[OpenWatchParty] WebSocket closed:', e.code, e.reason);
     state.ws = null;
+    if (utils.log) {
+      utils.log('WS_CLOSE', {
+        code: Number.isInteger(e?.code) ? e.code : 0,
+        clean: Boolean(e?.wasClean),
+        reason: String(e?.reason || '').slice(0, 120) || 'none'
+      });
+    }
     state.isConnecting = false;
     state.connectionPhase = 'disconnected';
     state.successfulPings = 0;

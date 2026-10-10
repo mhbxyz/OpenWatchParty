@@ -102,7 +102,8 @@ As the host, your actions control everyone:
 | Seek | All clients jump to that position |
 | Invite | Copies a short-lived room invite link |
 | Close panel | Room stays active |
-| Leave the player or disconnect | Host role passes to the earliest participant using a compatible client; the room stays open |
+| Leave the player | Host role passes immediately to the earliest participant using a compatible client; the room stays open |
+| Connection drops | Your host role is held for 10 seconds while the client reconnects; after that it passes to a compatible participant |
 | Leave room | When another participant can take over, leaves while the room stays open with that participant as host |
 | Close for everyone | Room closes for everyone |
 
@@ -115,7 +116,8 @@ As a participant:
 | Host plays | Video starts automatically |
 | Host pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
-| Host leaves or reloads | A compatible participant becomes host; otherwise the room closes |
+| Host leaves | A compatible participant becomes host; otherwise the room closes |
+| Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
 
 ## The Panel Interface

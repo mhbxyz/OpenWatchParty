@@ -41,7 +41,7 @@ class FakeWebSocket {
 
   serverClose() {
     this.readyState = FakeWebSocket.CLOSED;
-    this.onclose({ code: 1006, reason: 'network lost' });
+    this.onclose({ code: 1006, reason: 'network lost', wasClean: false });
   }
 
   close(code = 1000, reason = '') {
@@ -69,6 +69,7 @@ require('../ws/send.js');
 require('../ws/validation.js');
 require('../ws/handlers/room.js');
 require('../ws/handlers/sync.js');
+require('../utils/log.js');
 require('../ws/connection.js');
 require('../app/cleanup.js');
 
@@ -112,7 +113,8 @@ describe('room reconnection lifecycle', () => {
       roomRejoinTimer: null,
       currentVideoElement: null,
       successfulPings: 0,
-      timeSyncSamples: []
+      timeSyncSamples: [],
+      logBuffer: []
     });
   });
 
@@ -174,6 +176,24 @@ describe('room reconnection lifecycle', () => {
       { name: 'Host', isHost: true, status: null },
       { name: 'Guest', isHost: false, status: null }
     ]);
+  });
+
+  it('reports the previous WebSocket close after reconnecting', async () => {
+    await OWP.actions.connect();
+    const first = sockets[0];
+    first.open();
+    first.serverClose();
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    const second = sockets[1];
+    second.open();
+
+    assert.equal(second.sent[0].type, 'auth');
+    const closeLog = second.sent.find(message => message.type === 'client_log');
+    assert.equal(closeLog.payload.category, 'WS_CLOSE');
+    assert.match(closeLog.payload.message, /code=1006/);
+    assert.match(closeLog.payload.message, /clean=false/);
+    assert.match(closeLog.payload.message, /reason=network lost/);
   });
 
   it('does not try to rejoin a host room after disconnecting from a server without host transfer', async () => {

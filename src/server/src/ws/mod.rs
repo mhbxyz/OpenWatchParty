@@ -124,9 +124,10 @@ mod concurrency_tests {
         });
 
         let disconnect_state = state.clone();
+        let disconnect_tasks = tasks.clone();
         let disconnect = tokio::spawn(async move {
             for _ in 0..40 {
-                handle_disconnect("disconnect", &disconnect_state).await;
+                handle_disconnect("disconnect", &disconnect_state, &disconnect_tasks).await;
                 tokio::task::yield_now().await;
             }
         });

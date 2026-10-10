@@ -38,6 +38,10 @@ pub struct Room {
     pub clients: Vec<String>,
     pub ready_clients: HashSet<String>,
     pub pending_play: Option<PendingPlay>,
+    /// A host whose transport disappeared may reclaim the room with a new
+    /// connection id before the grace-period task expires.
+    #[serde(skip)]
+    pub pending_host_reconnect: Option<PendingHostReconnect>,
     pub state: PlaybackState,
     #[serde(skip)]
     pub state_server_ts: u64,
@@ -54,6 +58,12 @@ pub struct Room {
     pub statuses: HashMap<String, &'static str>,
     #[serde(skip)]
     pub status_broadcast: StatusBroadcast,
+}
+
+#[derive(Debug, Clone)]
+pub struct PendingHostReconnect {
+    pub user_id: String,
+    pub generation: u64,
 }
 
 /// When the room last got `participant_statuses` for a status change, and the
@@ -79,6 +89,13 @@ pub struct PendingPlay {
 }
 
 pub(crate) fn next_pending_play_generation() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+    NEXT_GENERATION.fetch_add(1, Ordering::Relaxed)
+}
+
+pub(crate) fn next_host_reconnect_generation() -> u64 {
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);

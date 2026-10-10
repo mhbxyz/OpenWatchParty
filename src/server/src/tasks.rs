@@ -157,6 +157,7 @@ pub fn spawn_heartbeat(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
 
 pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<()> {
     let cancellation = tasks.cancellation_token();
+    let app_tasks = tasks.clone();
     tasks.spawn(async move {
         loop {
             tokio::select! {
@@ -185,7 +186,7 @@ pub fn spawn_zombie_cleanup(state: SharedState, tasks: &AppTasks) -> JoinHandle<
                     return;
                 }
                 warn!("Removing zombie connection: {id}");
-                crate::room::handle_disconnect(&id, &state).await;
+                crate::room::handle_disconnect(&id, &state, &app_tasks).await;
             }
         }
     })

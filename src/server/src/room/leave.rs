@@ -1,9 +1,13 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
 use crate::room::{close_room_parts, participant_list_message, participant_statuses_message};
-use crate::types::{Client, Room, SharedState, WsMessage};
+use crate::tasks::AppTasks;
+use crate::types::{Client, PendingHostReconnect, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
 use log::info;
 use std::collections::HashMap;
+use std::time::Duration;
+
+const HOST_RECONNECT_GRACE: Duration = Duration::from_secs(10);
 
 /// Senders of the remaining room members, and the messages to send them in order.
 pub type LeaveNotification = (Vec<ClientSender>, Vec<WsMessage>);
@@ -24,6 +28,43 @@ fn client_left_message(room_id: &str, client_id: &str, participant_count: usize)
     }
 }
 
+pub(crate) fn host_changed_message(room_id: &str, host_id: &str, host_name: &str) -> WsMessage {
+    WsMessage {
+        msg_type: "host_changed".to_string(),
+        room: Some(room_id.to_string()),
+        client: None,
+        payload: Some(serde_json::json!({
+            "host_id": host_id,
+            "host_name": host_name,
+        })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    }
+}
+
+fn promote_next_host(
+    room_id: &str,
+    room: &mut Room,
+    clients: &HashMap<String, Client>,
+) -> Option<WsMessage> {
+    let new_host_id = room
+        .clients
+        .iter()
+        .find(|id| {
+            clients
+                .get(*id)
+                .is_some_and(|client| client.supports_host_transfer)
+        })?
+        .clone();
+    let host_name = clients
+        .get(&new_host_id)
+        .map(|client| client.user_name.clone())
+        .unwrap_or_default();
+    room.host_id = new_host_id.clone();
+    room.pending_host_reconnect = None;
+    Some(host_changed_message(room_id, &new_host_id, &host_name))
+}
+
 fn detach_client_from_room(
     client_id: &str,
     clients: &mut HashMap<String, Client>,
@@ -41,7 +82,7 @@ fn detach_client_from_room(
         room.pending_play = None;
     }
 
-    if room.clients.is_empty() {
+    if room.clients.is_empty() && room.pending_host_reconnect.is_none() {
         Some(LeaveOutcome::Close(room_id))
     } else {
         let client_left = client_left_message(&room_id, client_id, room.clients.len());
@@ -50,36 +91,110 @@ fn detach_client_from_room(
             if !allow_host_transfer {
                 return Some(LeaveOutcome::Close(room_id));
             }
-            let Some(new_host_id) = room.clients.iter().find(|id| {
-                clients
-                    .get(*id)
-                    .is_some_and(|client| client.supports_host_transfer)
-            }) else {
+            room.pending_host_reconnect = None;
+            let Some(host_changed) = promote_next_host(&room_id, room, clients) else {
                 return Some(LeaveOutcome::Close(room_id));
             };
-            let new_host_id = new_host_id.clone();
-            let host_name = clients
-                .get(&new_host_id)
-                .map(|client| client.user_name.clone())
-                .unwrap_or_default();
-            room.host_id = new_host_id.clone();
-            messages.push(WsMessage {
-                msg_type: "host_changed".to_string(),
-                room: Some(room_id.clone()),
-                client: None,
-                payload: Some(serde_json::json!({
-                    "host_id": new_host_id,
-                    "host_name": host_name,
-                })),
-                ts: now_ms(),
-                server_ts: Some(now_ms()),
-            });
+            messages.push(host_changed);
         }
         messages.push(participant_list_message(room, clients));
         messages.push(participant_statuses_message(room));
         let senders = collect_room_senders(room, clients, None);
         Some(LeaveOutcome::Left((senders, messages)))
     }
+}
+
+fn begin_host_reconnect_grace(
+    client_id: &str,
+    clients: &mut HashMap<String, Client>,
+    rooms: &mut HashMap<String, Room>,
+) -> Option<(String, u64, LeaveNotification)> {
+    let client = clients.get_mut(client_id)?;
+    let room_id = client.room_id.clone()?;
+    if client.user_id.is_empty()
+        || client.session_expires_at.is_none()
+        || !client.supports_host_transfer
+    {
+        return None;
+    }
+    let room = rooms.get_mut(&room_id)?;
+    if room.host_id != client_id {
+        return None;
+    }
+
+    let generation = crate::types::next_host_reconnect_generation();
+    let user_id = client.user_id.clone();
+    client.room_id = None;
+    room.clients.retain(|id| id != client_id);
+    room.ready_clients.remove(client_id);
+    room.statuses.remove(client_id);
+    room.pending_play = None;
+    room.pending_host_reconnect = Some(PendingHostReconnect {
+        user_id,
+        generation,
+    });
+
+    let messages = vec![
+        client_left_message(&room_id, client_id, room.clients.len()),
+        participant_list_message(room, clients),
+        participant_statuses_message(room),
+    ];
+    let senders = collect_room_senders(room, clients, None);
+    Some((room_id, generation, (senders, messages)))
+}
+
+async fn expire_host_reconnect(room_id: String, generation: u64, state: SharedState) {
+    let notification = {
+        let mut state = state.write().await;
+        let crate::types::ServerState { clients, rooms } = &mut *state;
+        let matches_pending = rooms
+            .get(&room_id)
+            .and_then(|room| room.pending_host_reconnect.as_ref())
+            .is_some_and(|pending| pending.generation == generation);
+        if !matches_pending {
+            None
+        } else {
+            let room = rooms.get_mut(&room_id).expect("pending room still exists");
+            room.pending_host_reconnect = None;
+            if let Some(host_changed) = promote_next_host(&room_id, room, clients) {
+                info!("Host reconnect grace expired for room {room_id}; transferred host role");
+                let messages = vec![
+                    host_changed,
+                    participant_list_message(room, clients),
+                    participant_statuses_message(room),
+                ];
+                Some((collect_room_senders(room, clients, None), messages))
+            } else {
+                info!("Host reconnect grace expired for room {room_id}; closing room");
+                let (senders, message) = close_and_notify(&room_id, clients, rooms);
+                Some((senders, vec![message]))
+            }
+        }
+    };
+
+    if let Some(notification) = notification {
+        send_leave_notification(&notification, "host reconnect grace expiry");
+        broadcast_room_list(&state).await;
+    }
+}
+
+fn schedule_host_reconnect_expiry(
+    room_id: String,
+    generation: u64,
+    state: SharedState,
+    tasks: &AppTasks,
+) {
+    let cancellation = tasks.cancellation_token();
+    drop(tasks.spawn(async move {
+        tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            _ = tokio::time::sleep(HOST_RECONNECT_GRACE) => {}
+        }
+        if !cancellation.is_cancelled() {
+            expire_host_reconnect(room_id, generation, state).await;
+        }
+    }));
 }
 
 fn close_and_notify(
@@ -138,15 +253,23 @@ pub fn send_leave_notification(notification: &LeaveNotification, context: &str) 
     }
 }
 
-pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
+pub async fn handle_disconnect(client_id: &str, state: &SharedState, tasks: &AppTasks) {
     info!("Disconnecting client {client_id}");
-    {
+    let reconnect_grace = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
-        if let Some(notification) = handle_leave(client_id, clients, rooms) {
+        let reconnect_grace = begin_host_reconnect_grace(client_id, clients, rooms);
+        if let Some((room_id, _, notification)) = &reconnect_grace {
+            info!("Holding host role in room {room_id} for reconnect grace");
+            send_leave_notification(notification, "host reconnect grace");
+        } else if let Some(notification) = handle_leave(client_id, clients, rooms) {
             send_leave_notification(&notification, "leave notification");
         }
         clients.remove(client_id);
+        reconnect_grace.map(|(room_id, generation, _)| (room_id, generation))
+    };
+    if let Some((room_id, generation)) = reconnect_grace {
+        schedule_host_reconnect_expiry(room_id, generation, state.clone(), tasks);
     }
     broadcast_room_list(state).await;
 }
@@ -154,6 +277,7 @@ pub async fn handle_disconnect(client_id: &str, state: &SharedState) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tasks::AppTasks;
     use crate::test_helpers;
     use crate::types::PendingPlay;
 
@@ -226,7 +350,7 @@ mod tests {
             locked.rooms.insert("room".to_string(), room);
         }
 
-        handle_disconnect("host", &state).await;
+        handle_disconnect("host", &state, &AppTasks::new()).await;
 
         let locked = state.read().await;
         assert!(!locked.rooms.contains_key("room"));
@@ -258,7 +382,7 @@ mod tests {
             locked.rooms.insert("room".to_string(), room);
         }
 
-        handle_disconnect("guest", &state).await;
+        handle_disconnect("guest", &state, &AppTasks::new()).await;
 
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
@@ -351,12 +475,14 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn host_disconnect_transfers_and_removes_the_old_host() {
+    #[tokio::test(start_paused = true)]
+    async fn host_disconnect_waits_before_transferring_and_removes_the_old_host() {
         let state = test_helpers::create_state();
         let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
         let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
         host.room_id = Some("room".to_string());
+        host.supports_host_transfer = true;
+        host.session_expires_at = Some(u64::MAX);
         guest.room_id = Some("room".to_string());
         guest.supports_host_transfer = true;
         {
@@ -373,17 +499,41 @@ mod tests {
             locked.rooms.insert("room".to_string(), room);
         }
 
-        handle_disconnect("host", &state).await;
+        let tasks = AppTasks::new();
+        handle_disconnect("host", &state, &tasks).await;
+        tokio::task::yield_now().await;
 
-        let locked = state.read().await;
-        assert!(!locked.clients.contains_key("host"));
-        assert_eq!(locked.rooms["room"].host_id, "guest");
-        assert!(locked.rooms["room"].pending_play.is_none());
-        drop(locked);
+        {
+            let locked = state.read().await;
+            assert!(!locked.clients.contains_key("host"));
+            assert_eq!(locked.rooms["room"].host_id, "host");
+            assert!(locked.rooms["room"].pending_host_reconnect.is_some());
+            assert!(locked.rooms["room"].pending_play.is_none());
+        }
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             "client_left"
         );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "participant_list"
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "participant_statuses"
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            "room_list"
+        );
+
+        tokio::time::advance(HOST_RECONNECT_GRACE).await;
+        tokio::task::yield_now().await;
+
+        let locked = state.read().await;
+        assert_eq!(locked.rooms["room"].host_id, "guest");
+        assert!(locked.rooms["room"].pending_host_reconnect.is_none());
+        drop(locked);
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             "host_changed"
@@ -392,6 +542,9 @@ mod tests {
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             "participant_list"
         );
+
+        tasks.cancel();
+        tasks.wait().await;
     }
 
     #[tokio::test]

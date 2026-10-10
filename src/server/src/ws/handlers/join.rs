@@ -4,8 +4,8 @@ use super::super::validation::sanitize_name;
 use crate::auth::{InviteTicketError, JwtConfig};
 use crate::messaging::{collect_room_senders, send_message, send_to_senders, ClientSender};
 use crate::room::{
-    handle_leave_without_transfer, participant_list_message, participant_statuses_message,
-    send_leave_notification,
+    handle_leave_without_transfer, host_changed_message, participant_list_message,
+    participant_statuses_message, send_leave_notification,
 };
 use crate::types::{Client, IncomingMessage, Room, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -20,13 +20,35 @@ type JoinNotifications = (
     Option<(Vec<ClientSender>, WsMessage)>,
 );
 
+fn can_reclaim_pending_host(
+    client_id: &str,
+    room: &Room,
+    clients: &HashMap<String, Client>,
+) -> bool {
+    room.pending_host_reconnect
+        .as_ref()
+        .zip(clients.get(client_id))
+        .is_some_and(|(pending, client)| {
+            !client.user_id.is_empty()
+                && client.session_expires_at.is_some()
+                && client.supports_host_transfer
+                && client.user_id == pending.user_id
+        })
+}
+
 fn add_client_to_room(
     client_id: &str,
     room: &mut Room,
     locked_clients: &mut HashMap<String, Client>,
     payload_name: &Option<String>,
-) {
-    if !room.clients.contains(&client_id.to_string()) {
+) -> bool {
+    let reclaims_host = can_reclaim_pending_host(client_id, room, locked_clients);
+    if reclaims_host {
+        room.clients.retain(|id| id != client_id);
+        room.clients.insert(0, client_id.to_string());
+        room.host_id = client_id.to_string();
+        room.pending_host_reconnect = None;
+    } else if !room.clients.iter().any(|id| id == client_id) {
         room.clients.push(client_id.to_string());
     }
     room.ready_clients.remove(client_id);
@@ -36,6 +58,7 @@ fn add_client_to_room(
             client.user_name = name.clone();
         }
     }
+    reclaims_host
 }
 
 fn prepare_join_notifications(
@@ -201,8 +224,12 @@ pub(in crate::ws) async fn handle_join_room(
             ((sender, error, None), None, None)
         } else {
             let room = state.rooms.get(room_id).expect("room existence checked");
-            let full = !room.clients.iter().any(|id| id == client_id)
-                && room.clients.len() >= MAX_CLIENTS_PER_ROOM;
+            let reclaims_host = can_reclaim_pending_host(client_id, room, &state.clients);
+            let reserved_size =
+                room.clients.len() + usize::from(room.pending_host_reconnect.is_some());
+            let full = !reclaims_host
+                && !room.clients.iter().any(|id| id == client_id)
+                && reserved_size >= MAX_CLIENTS_PER_ROOM;
             if full {
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 (
@@ -233,13 +260,23 @@ pub(in crate::ws) async fn handle_join_room(
                 };
                 let crate::types::ServerState { clients, rooms } = &mut *state;
                 let room = rooms.get_mut(room_id).expect("room existence checked");
-                add_client_to_room(client_id, room, clients, &payload_name);
+                let reclaimed_host = add_client_to_room(client_id, room, clients, &payload_name);
                 let notifications = prepare_join_notifications(client_id, room, clients);
                 let participants = (
                     collect_room_senders(room, clients, None),
+                    reclaimed_host.then(|| {
+                        let host_name = clients
+                            .get(client_id)
+                            .map(|client| client.user_name.as_str())
+                            .unwrap_or_default();
+                        host_changed_message(room_id, client_id, host_name)
+                    }),
                     participant_list_message(room, clients),
                     participant_statuses_message(room),
                 );
+                if reclaimed_host {
+                    info!("Client {client_id} reclaimed host role in room {room_id}");
+                }
                 (notifications, previous_leave, Some(participants))
             }
         };
@@ -247,7 +284,10 @@ pub(in crate::ws) async fn handle_join_room(
             send_leave_notification(&notification, "previous room leave");
         }
         enqueue_join_notifications(client_id, notifications);
-        if let Some((senders, list, statuses)) = participants {
+        if let Some((senders, host_changed, list, statuses)) = participants {
+            if let Some(message) = host_changed {
+                send_to_senders(&senders, &message, "host reconnect");
+            }
             send_to_senders(&senders, &list, "participant list");
             send_to_senders(&senders, &statuses, "participant statuses");
         }
@@ -266,6 +306,7 @@ fn enqueue_join_notifications(client_id: &str, notifications: JoinNotifications)
 mod tests {
     use super::*;
     use crate::auth::{InviteClaims, INVITE_TICKET_MARKER};
+    use crate::tasks::AppTasks;
     use crate::test_helpers;
     use crate::types::{ClientMessageType, IncomingMessage};
     use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
@@ -349,7 +390,12 @@ mod tests {
         clients.insert("guest-1".to_string(), client);
         let mut room = test_helpers::create_room("room-1", "host-1");
 
-        add_client_to_room("guest-1", &mut room, &mut clients, &None);
+        assert!(!add_client_to_room(
+            "guest-1",
+            &mut room,
+            &mut clients,
+            &None
+        ));
 
         assert!(room.clients.contains(&"guest-1".to_string()));
         assert_eq!(
@@ -366,7 +412,12 @@ mod tests {
         let mut room = test_helpers::create_room("room-1", "host-1");
         room.ready_clients.insert("guest-1".to_string());
 
-        add_client_to_room("guest-1", &mut room, &mut clients, &None);
+        assert!(!add_client_to_room(
+            "guest-1",
+            &mut room,
+            &mut clients,
+            &None
+        ));
 
         assert!(!room.ready_clients.contains("guest-1"));
     }
@@ -379,9 +430,135 @@ mod tests {
         let mut room = test_helpers::create_room("room-1", "host-1");
 
         let payload_name = Some("NewName".to_string());
-        add_client_to_room("guest-1", &mut room, &mut clients, &payload_name);
+        assert!(!add_client_to_room(
+            "guest-1",
+            &mut room,
+            &mut clients,
+            &payload_name
+        ));
 
         assert_eq!(clients.get("guest-1").unwrap().user_name, "NewName");
+    }
+
+    #[test]
+    fn reconnecting_same_user_reclaims_host_role_with_new_connection_id() {
+        let mut clients = HashMap::new();
+        let (mut host, _rx) = test_helpers::create_client_with_rx("user-host", "Host", true);
+        host.supports_host_transfer = true;
+        host.session_expires_at = Some(u64::MAX);
+        clients.insert("new-host".to_string(), host);
+        let mut room = test_helpers::create_room("room-1", "old-host");
+        room.clients = vec!["guest".to_string()];
+        room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
+            user_id: "user-host".to_string(),
+            generation: 1,
+        });
+
+        assert!(add_client_to_room(
+            "new-host",
+            &mut room,
+            &mut clients,
+            &None
+        ));
+
+        assert_eq!(room.host_id, "new-host");
+        assert_eq!(room.clients[0], "new-host");
+        assert!(room.pending_host_reconnect.is_none());
+        assert_eq!(clients["new-host"].room_id.as_deref(), Some("room-1"));
+    }
+
+    #[test]
+    fn a_different_user_cannot_reclaim_pending_host_role() {
+        let mut clients = HashMap::new();
+        let (mut guest, _rx) = test_helpers::create_client_with_rx("user-guest", "Guest", true);
+        guest.supports_host_transfer = true;
+        guest.session_expires_at = Some(u64::MAX);
+        clients.insert("guest".to_string(), guest);
+        let mut room = test_helpers::create_room("room-1", "old-host");
+        room.clients.clear();
+        room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
+            user_id: "user-host".to_string(),
+            generation: 1,
+        });
+
+        assert!(!add_client_to_room("guest", &mut room, &mut clients, &None));
+        assert_eq!(room.host_id, "old-host");
+        assert!(room.pending_host_reconnect.is_some());
+    }
+
+    #[test]
+    fn insecure_identity_cannot_reclaim_pending_host_role() {
+        let mut clients = HashMap::new();
+        let (mut client, _rx) = test_helpers::create_client_with_rx("anonymous", "Guest", true);
+        client.supports_host_transfer = true;
+        clients.insert("guest".to_string(), client);
+        let mut room = test_helpers::create_room("room-1", "old-host");
+        room.clients.clear();
+        room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
+            user_id: "anonymous".to_string(),
+            generation: 1,
+        });
+
+        assert!(!add_client_to_room("guest", &mut room, &mut clients, &None));
+        assert_eq!(room.host_id, "old-host");
+        assert!(room.pending_host_reconnect.is_some());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn authenticated_host_rejoins_with_role_before_grace_expires() {
+        let state = test_helpers::create_state();
+        let (mut old_host, _old_host_rx) =
+            test_helpers::create_client_with_rx("user-host", "Host", true);
+        old_host.room_id = Some("room".to_string());
+        old_host.supports_host_transfer = true;
+        old_host.session_expires_at = Some(u64::MAX);
+        let (mut guest, _guest_rx) =
+            test_helpers::create_client_with_rx("user-guest", "Guest", true);
+        guest.room_id = Some("room".to_string());
+        guest.supports_host_transfer = true;
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("old-host".to_string(), old_host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "old-host");
+            room.clients.push("guest".to_string());
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        let tasks = AppTasks::new();
+        crate::room::handle_disconnect("old-host", &state, &tasks).await;
+        tokio::task::yield_now().await;
+
+        let (mut replacement, _replacement_rx) =
+            test_helpers::create_client_with_rx("user-host", "Host", true);
+        replacement.supports_host_transfer = true;
+        replacement.session_expires_at = Some(u64::MAX);
+        state
+            .write()
+            .await
+            .clients
+            .insert("new-host".to_string(), replacement);
+
+        handle_join_room(
+            "new-host",
+            &join_message("room"),
+            &state,
+            &test_jwt_config(),
+        )
+        .await;
+
+        {
+            let locked = state.read().await;
+            assert_eq!(locked.rooms["room"].host_id, "new-host");
+            assert!(locked.rooms["room"].pending_host_reconnect.is_none());
+        }
+
+        tokio::time::advance(std::time::Duration::from_secs(11)).await;
+        tokio::task::yield_now().await;
+        assert_eq!(state.read().await.rooms["room"].host_id, "new-host");
+
+        tasks.cancel();
+        tasks.wait().await;
     }
 
     #[test]
