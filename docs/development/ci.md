@@ -131,7 +131,7 @@ CI copies JavaScript files (including subdirectories) to the `Web/` directory be
     cp -r ../../clients/jellyfin-web/* OpenWatchParty/Web/
 ```
 
-**Note:** The `cp -r` is required because JS modules are now organized in subdirectories (`utils/`, `ui/`, `playback/`, `chat/`, `ws/`, `app/`). The `justfile` handles this correctly via `client_js_files` variable.
+**Note:** The `cp -r` is required because JS modules are now organized in subdirectories (`utils/`, `ui/`, `playback/`, `chat/`, `ws/`, `app/`). The `just` build and test recipes copy the same modules through the single `client_js_files` list in `infra/just/common.just`.
 
 ## Troubleshooting
 

@@ -153,6 +153,12 @@ jobs:
       - name: Test pre-commit hook
         run: infra/scripts/tests/pre-commit.test.sh
 
+      - name: Verify client module and protocol parity
+        run: python3 infra/scripts/verify-client-contract.py
+
+      - name: Test client contract verifier
+        run: python3 -m unittest discover -s infra/scripts/tests -p test_client_contract.py
+
       - name: Verify least-privilege workflow permissions
         run: infra/scripts/verify-workflow-permissions.py
 

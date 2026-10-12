@@ -43,6 +43,8 @@ client:
 [doc('Run release script tests')]
 release:
     @echo -e "{{GREEN}}▶ Running release script tests...{{RESET}}"
+    @python3 infra/scripts/verify-client-contract.py
+    @python3 -m unittest discover -s infra/scripts/tests -p test_client_contract.py
     @infra/scripts/verify-workflow-permissions.py
     @infra/scripts/verify-pins.sh
     @infra/scripts/tests/verify-pins.test.sh

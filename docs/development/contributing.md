@@ -66,6 +66,23 @@ dotnet format
 - Avoid globals (use IIFE pattern)
 - Comment complex logic
 
+When adding or removing a client module, keep the loader's `load()` calls,
+`client_js_files` in `infra/just/common.just` (the only copy: the just modules
+that copy client files import it), and the controller's
+`AllowedClientModules` in sync. The module must exist and be nonempty; duplicate
+entries are rejected even in the C# set. A protocol change must update the
+literal version declarations in JavaScript `state.js`, Rust `ws/constants.rs`
+and the C# controller together.
+
+Run `python3 infra/scripts/verify-client-contract.py` to check these contracts.
+It also runs in `just test release` and CI, alongside its regression tests.
+Any other just file that declares `client_js_files` must list the same modules.
+The verifier reads the current literal declaration syntax; if that syntax
+changes, update the verifier and tests too. It checks module membership, not
+loader dependency ordering or wire compatibility. The existing plugin packaging
+checks still validate embedded resources and the archive; protocol tests still
+validate message behavior. This check does not generate or rewrite source code.
+
 ## Commit Messages
 
 Format:
