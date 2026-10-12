@@ -221,7 +221,9 @@
   };
 
   // Both endpoint configuration and authentication failures use the same
-  // watchdog bookkeeping and toast suppression window.
+  // watchdog bookkeeping and toast suppression window. An endpoint failure is
+  // recorded like any other blocked authentication, so the retry watchdog
+  // backs off instead of reconnecting on every UI tick.
   const blockConnection = (message) => {
     state.isConnecting = false;
     state.authBlocked = true;

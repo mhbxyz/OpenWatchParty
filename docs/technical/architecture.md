@@ -268,7 +268,10 @@ OWP.state = {
 - **Authorization**: Only hosts can seek or publish state updates. Guests can
   play/pause the room when shared playback control is negotiated for the room.
 - **Transport**: WebSocket (ws://) or secure WebSocket (wss://)
-- **Rate limiting**: 30 tokens per fixed minute per user
+- **Rate limiting**: the plugin issues at most 30 tokens per user in a fixed
+  one-minute window (`MaxTokensPerMinute`); the session server accepts at most
+  30 messages per connection in a fixed window that restarts once more than
+  one second has passed (`RATE_LIMIT_MESSAGES`, `RATE_LIMIT_WINDOW_MS`)
 - **Message size**: 64KB maximum
 
 See [Security Guide](../operations/security.md) for detailed security configuration.

@@ -17,6 +17,10 @@
     }
   };
 
+  // Last step of cleanup: the application/UI part of the reset described in
+  // client-state.md. Clearing `initialized` lets a later init() build the panel
+  // and header buttons again, and stops a header module that finishes loading
+  // after cleanup from injecting its buttons.
   const resetApplicationUI = () => {
     state.initialized = false;
   };
