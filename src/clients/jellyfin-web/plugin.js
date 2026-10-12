@@ -143,7 +143,14 @@
       load('ui/indicators.js'),
       load('ui/toasts.js'),
       load('ui/cards.js'),
+      load('ui/panel-elements.js'),
     ]);
+    await Promise.all([
+      load('ui/lobby.js'),
+      load('ui/participants.js'),
+      load('ui/leave-confirm.js'),
+    ]);
+    await load('ui/room.js');
     await Promise.all([
       load('ui/home.js'),
       load('ui/guest-controls.js'),

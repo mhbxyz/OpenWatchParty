@@ -17,7 +17,7 @@ require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 OWP.constants.DEFAULT_WS_URL = `ws://${SCRIPT}/ws`;
-require('../ui/render.js');
+require('./load-panel-views.js');
 OWP.constants.DEFAULT_WS_URL = defaultWsUrl;
 
 const renderHomeWatchParties = OWP.ui.renderHomeWatchParties;

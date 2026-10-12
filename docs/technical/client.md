@@ -22,6 +22,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   ├── log.js, media.js, misc.js, time.js, video.js
     ├── ui/                  # User interface
     │   ├── cards.js, guest-controls.js, header.js, home.js, indicators.js
+    │   ├── panel-elements.js, lobby.js, participants.js, leave-confirm.js, room.js
     │   ├── render.js, styles.js, toasts.js
     ├── playback/            # Video playback management
     │   ├── bind.js, play.js, sync.js
@@ -37,6 +38,19 @@ plugin.js                    # Loader - loads modules in parallel waves
 
 Modules are loaded in dependency waves, parallelizing where possible:
 `state.js` → `utils/*` → `ui/*` → `playback/*` → `chat/*` → `ws/send` → `ws/auth` → `ws/handlers/*` → `ws/connection` → `app/*`
+
+### Panel views
+
+`render.js` coordinates redraws and the OSD entry point. Shared controls and
+focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
+participant presentation in `participants.js`; leave confirmation in
+`leave-confirm.js`; room sections and chat input setup in `room.js`.
+
+The loader initializes shared elements first, then lobby, participants and leave
+confirmation in parallel, then room controls, and finally the renderer. The
+private `OWP.ui._panelViews` namespace connects these modules. Public `OWP.ui`
+entry points remain unchanged. Redraws preserve chat nodes, draft, scroll and
+focus, and labels still use the localization catalog.
 
 ## Module: `state.js`
 

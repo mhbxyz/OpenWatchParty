@@ -109,7 +109,7 @@ describe('plugin loader base path', () => {
     });
     const scripts = await waitForLoad(harness);
 
-    assert.equal(scripts.length, 32);
+    assert.equal(scripts.length, 37);
     assert.equal(scripts[0], 'http://localhost:8096/OpenWatchParty/Client/state.js?v=root-version');
     assert.ok(scripts.every(src => src.startsWith('http://localhost:8096/OpenWatchParty/Client/')));
   });
@@ -220,17 +220,37 @@ describe('plugin loader failure recovery', () => {
     const retriedModules = harness.scripts.slice(beforeRetry).map(script => script.module);
     assert.equal(loader.state, 'loaded');
     assert.equal(harness.OWP.__loaded, true);
-    assert.equal(loader.loadedModules.size, 32);
+    assert.equal(loader.loadedModules.size, 37);
     assert.equal(retriedModules.includes('state.js'), false);
     assert.equal(retriedModules.includes('utils/time.js'), false);
     assert.equal(harness.initCount, 1);
-    assert.equal(harness.scripts.length, 34);
+    assert.equal(harness.scripts.length, 39);
 
     const loadedPromise = loader.promise;
     assert.equal(loader.retry(), loadedPromise);
     harness.inject();
     assert.equal(harness.initCount, 1);
-    assert.equal(harness.scripts.length, 34);
+    assert.equal(harness.scripts.length, 39);
+  });
+
+  it('recovers a failed room view before loading the renderer or initializing', async () => {
+    let failRoom = true;
+    const harness = createHarness({ behavior(script, h) {
+      queueMicrotask(() => failRoom && script.module === 'ui/room.js' ? h.error(script) : h.load(script));
+    } });
+    const loader = harness.OWP.loader;
+    await assert.rejects(loader.promise, /Failed to load ui\/room\.js/);
+    for (const name of ['ui/panel-elements.js', 'ui/lobby.js', 'ui/participants.js', 'ui/leave-confirm.js']) {
+      assert.equal(loader.loadedModules.has(name), true);
+    }
+    assert.equal(harness.scripts.some(script => script.module === 'ui/render.js'), false);
+    assert.equal(harness.initCount, 0);
+    failRoom = false;
+    await loader.retry();
+    assert.equal(harness.scripts.filter(script => script.module === 'ui/room.js').length, 2);
+    assert.equal(harness.scripts.filter(script => script.module === 'ui/lobby.js').length, 1);
+    assert.equal(loader.loadedModules.has('ui/render.js'), true);
+    assert.equal(harness.initCount, 1);
   });
 
   it('automatically retries a transient module failure', async () => {

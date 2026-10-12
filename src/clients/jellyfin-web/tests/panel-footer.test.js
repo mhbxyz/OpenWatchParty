@@ -11,7 +11,7 @@ require('../ui/indicators.js');
 require('../ui/cards.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
-require('../ui/render.js');
+require('./load-panel-views.js');
 require('../ws/auth.js');
 
 const { PANEL_ID } = OWP.constants;

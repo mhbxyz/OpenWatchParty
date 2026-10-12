@@ -123,3 +123,28 @@ it('keeps English sentences out of the client code', () => {
   }
   assert.deepEqual(violations, [], `English sentences outside the catalog:\n${violations.join('\n')}`);
 });
+
+
+it('follows destructured private view exports without treating selectors as labels', () => {
+  const helper = "(() => { const OWP = window.OpenWatchParty; const ui = OWP.ui; const views = ui._panelViews = ui._panelViews || {}; const button = (selector, text) => { document.querySelector(selector).textContent = text; }; Object.assign(views, { button }); })();";
+  const caller = text => "(() => { const OWP = window.OpenWatchParty; const ui = OWP.ui; const views = ui._panelViews; const { button: makeButton } = views; makeButton('.join-button', " + text + "); })();";
+  assert.deepEqual(findUnlocalizedSources([
+    { filename: 'helper.js', source: helper },
+    { filename: 'caller.js', source: caller("t('join')") }
+  ]), []);
+  assert.deepEqual(findUnlocalizedSources([
+    { filename: 'helper.js', source: helper },
+    { filename: 'caller.js', source: caller("'Join'") }
+  ]), ['caller.js:1: Uncatalogued UI literal: Join']);
+  assert.equal(findUnlocalizedLiterals("const { announce } = OWP.ui; announce('Join');").length, 1);
+});
+
+it('rejects a raw label injected into an extracted production view', () => {
+  const sources = clientSources();
+  const view = sources.find(source => source.filename === 'ui/leave-confirm.js');
+  assert.ok(view.source.includes("t('cancel')"));
+  view.source = view.source.replace("t('cancel')", "'Cancel'");
+  const violations = findUnlocalizedSources(sources);
+  assert.equal(violations.length, 1);
+  assert.match(violations[0], /^ui\/leave-confirm\.js:\d+: Uncatalogued UI literal: Cancel$/);
+});

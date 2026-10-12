@@ -41,7 +41,12 @@ const findUnlocalizedSources = sources => {
           if (node.name === 'OWP') return 'OWP';
           for (const def of variable(node)?.defs || []) {
             if (def.type === 'Variable') {
-              const value = namespace(def.node.init, seen);
+              let value = namespace(def.node.init, seen);
+              if (value && def.node.id.type === 'ObjectPattern') {
+                const property = def.node.id.properties.find(item => item.type === 'Property' && item.value === def.name);
+                const key = property && nameOf(property.key);
+                value = typeof key === 'string' ? `${value}.${key}` : null;
+              }
               if (value) return value;
             }
           }
@@ -88,6 +93,18 @@ const findUnlocalizedSources = sources => {
         CallExpression(node) {
           const filename = location(node.loc.start.line).filename;
           calls.push(node);
+          if (node.callee.type === 'MemberExpression' && node.callee.object.name === 'Object'
+            && nameOf(node.callee.property) === 'assign') {
+            const owner = namespace(node.arguments[0]);
+            if (owner) for (const source of node.arguments.slice(1)) {
+              if (source.type !== 'ObjectExpression') continue;
+              for (const property of source.properties) {
+                if (property.type !== 'Property') continue;
+                const key = property.computed ? property.key.value : nameOf(property.key);
+                if (typeof key === 'string') exports.set(`${owner}.${key}`, property.value);
+              }
+            }
+          }
           const name = callName(node);
           if (['createTextNode', 'showToast', 'confirm', 'alert'].includes(name)) sinks.push(node.arguments[0]);
           if (name === 'createElement' && !(filename === 'ui/cards.js' && node.arguments[1]?.value === 'material-icons' && node.arguments[2]?.value === 'groups')) sinks.push(node.arguments[2]);

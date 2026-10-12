@@ -89,7 +89,7 @@ describe('localized rendering', () => {
     OWP.utils.getPlayingItemId = () => '';
     require('../ui/indicators.js');
     require('../ui/cards.js');
-    require('../ui/render.js');
+    require('./load-panel-views.js');
     OWP.ui.renderHomeWatchParties = () => {};
     OWP.actions = OWP.actions || {};
 

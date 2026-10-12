@@ -17,7 +17,7 @@ require('../chat/messages.js');
 require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
-require('../ui/render.js');
+require('./load-panel-views.js');
 require('../ws/validation.js');
 require('../ws/handlers/room.js');
 require('../ws/handlers/sync.js');

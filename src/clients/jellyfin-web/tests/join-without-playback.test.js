@@ -11,7 +11,7 @@ require('../ui/cards.js');
 require('../chat/messages.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
-require('../ui/render.js');
+require('./load-panel-views.js');
 require('../ws/send.js');
 require('../playback/play.js');
 
