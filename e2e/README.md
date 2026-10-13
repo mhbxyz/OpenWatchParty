@@ -82,5 +82,6 @@ of initial-sync/suppression, so control tests cannot click before events are bou
 
 `.github/workflows/e2e.yml` runs `just e2e` on pull requests that touch the
 client, server, plugin, stack or this directory. The job creates an ephemeral JWT
-key and starts both components in authenticated mode. The Playwright report and
-traces are uploaded when the job fails.
+key and starts both components in authenticated mode. When the job fails, it
+uploads the Playwright report and traces and prints the session server
+container's status and last 200 log lines.

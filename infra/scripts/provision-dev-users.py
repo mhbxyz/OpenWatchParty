@@ -46,6 +46,19 @@ def retry_request(path, data=None, token=None, attempts=30, delay=2):
     raise RuntimeError(f"Unreachable: {path}")
 
 
+def session_server_health(timeout=30):
+    """Fail before the tests start when the session server never comes up."""
+    url = f"http://localhost:{os.environ.get('SESSION_SERVER_PORT', '3000')}/health"
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=2) as response:
+                return json.loads(response.read())
+        except (URLError, ConnectionError, TimeoutError):
+            time.sleep(1)
+    raise RuntimeError(f"Session server is not answering {url}; check docker logs owp-session-server")
+
+
 def main():
     if not PASSWORD:
         raise RuntimeError("OWP_DEV_PASSWORD must not be empty")
@@ -109,6 +122,8 @@ def main():
     plugin_token = retry_request("/OpenWatchParty/Token", token=token)
     if plugin_token["auth_enabled"] != bool(secret):
         raise RuntimeError("Plugin and session server authentication modes do not match")
+    if session_server_health()["auth_enabled"] != bool(secret):
+        raise RuntimeError("Session server authentication mode does not match JWT_SECRET")
 
     folders = retry_request("/Library/VirtualFolders", token=token)
     for folder in folders:

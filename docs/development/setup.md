@@ -79,7 +79,9 @@ The automated instance stores its configuration in the ignored
 scratch, stop it with `just down`, remove only `config-auto/`, then run `just up`.
 `just up` also configures the plugin's WebSocket URL and authentication to match
 the session server (`JWT_SECRET` from `.env`, or explicit insecure local mode
-when it is empty).
+when it is empty). It then waits up to 30 seconds for the session server's
+`/health` and stops with an error if the server isn't answering or runs in the
+other authentication mode.
 
 ## First-Time Setup
 
