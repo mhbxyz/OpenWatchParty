@@ -125,10 +125,10 @@
     .owp-pill-btn {
       height: 24px; padding: 0 8px; border-radius: 12px; cursor: pointer; font-family: inherit; font-size: 12px;
     }
-    .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.25); color: #a6a59f; }
-    .owp-pill-btn.danger { background: #791f1f; border: none; color: #f09595; }
-    .owp-pill-btn.primary { background: #0c447c; border: none; color: #85b7eb; }
-    .owp-pill-btn.primary:hover { background: #185fa5; color: #e6f1fb; }
+    .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.45); color: #ecebe6; }
+    .owp-pill-btn.danger { background: #a83232; border: none; color: #fff; }
+    .owp-pill-btn.primary { background: #1a63ad; border: none; color: #fff; }
+    .owp-pill-btn.primary:hover { background: #2274c7; color: #fff; }
     .owp-pill-btn.primary[aria-disabled="true"] { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     /* The sync adjustment drop-down: where the guest is, and the nudge */
     .owp-nudge-row { display: flex; align-items: center; gap: 8px; }
@@ -172,10 +172,10 @@
     .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
       height: 26px; padding: 0 12px; border: none; border-radius: 13px; cursor: pointer;
-      background: #0c447c; color: #85b7eb; font-family: inherit; font-size: 12px; font-weight: 500;
+      background: #1a63ad; color: #fff; font-family: inherit; font-size: 12px; font-weight: 500;
     }
-    .owp-btn:hover { background: #185fa5; color: #e6f1fb; }
-    .owp-btn.danger { background: #791f1f; color: #f09595; }
+    .owp-btn:hover { background: #2274c7; color: #fff; }
+    .owp-btn.danger { background: #a83232; color: #fff; }
     .owp-btn:disabled { background: rgba(255,255,255,0.06); color: #85847e; cursor: not-allowed; }
     .owp-hint { font-size: 11px; color: #9a9993; margin-top: 6px; text-align: center; }
     /* The lobby help and its "?" button; the button turns blue while it is open */
