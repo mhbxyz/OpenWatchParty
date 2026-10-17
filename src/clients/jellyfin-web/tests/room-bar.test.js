@@ -24,7 +24,7 @@ const realRoomActions = {
 OWP.actions = { schedulePing: () => {} };
 require('../ws/handlers/clock.js');
 
-const { PANEL_ID, BTN_ID, ROOM_MODE_CLASS } = OWP.constants;
+const { PANEL_ID, ROOM_MODE_CLASS } = OWP.constants;
 const realStopPlayerCapture = OWP.ui.stopPlayerCapture;
 const updateRoomListUI = OWP.ui.updateRoomListUI;
 let focused = null;
@@ -712,57 +712,6 @@ describe('room bar', () => {
     assert.equal(focused, null);
   });
 
-  it('tells assistive technology whether the player button has the panel open', () => {
-    const osd = document.createElement('div');
-    osd.className = 'videoOsdBottom';
-    const buttons = document.createElement('div');
-    buttons.className = 'buttons';
-    osd.appendChild(buttons);
-    document.body.appendChild(osd);
-    panel().classList.add('hide');
-    OWP.state.inRoom = false;
-
-    OWP.ui.injectOsdButton();
-    const button = byId(BTN_ID);
-    assert.equal(button.getAttribute('aria-label'), 'Watch Party');
-    assert.equal(button.getAttribute('aria-controls'), PANEL_ID);
-    assert.equal(button.getAttribute('aria-expanded'), 'false');
-
-    focused = null;
-    button.dispatchEvent({ type: 'click', detail: 1, preventDefault() {}, stopPropagation() {} });
-    assert.equal(panel().classList.contains('hide'), false);
-    assert.equal(button.getAttribute('aria-expanded'), 'true');
-    // A mouse click leaves focus alone.
-    assert.equal(focused, null);
-    button.dispatchEvent({ type: 'click', detail: 1, preventDefault() {}, stopPropagation() {} });
-    assert.equal(button.getAttribute('aria-expanded'), 'false');
-  });
-
-  it('moves focus into the panel when the player button is used from the keyboard', () => {
-    const osd = document.createElement('div');
-    osd.className = 'videoOsdBottom';
-    const buttons = document.createElement('div');
-    buttons.className = 'buttons';
-    osd.appendChild(buttons);
-    document.body.appendChild(osd);
-    panel().classList.add('hide');
-    Object.assign(OWP.state, {
-      inRoom: true,
-      roomId: 'room-1',
-      roomName: "FrancoTosky's room",
-      clientId: 'client-a5be',
-      isHost: false,
-      participantCount: 2,
-      participants: [{ name: 'FrancoTosky', isHost: true }, { name: 'Ana', isHost: false }]
-    });
-    OWP.ui.injectOsdButton();
-
-    focused = null;
-    byId(BTN_ID).dispatchEvent({ type: 'click', detail: 0, preventDefault() {}, stopPropagation() {} });
-
-    assert.equal(focused, byId('owp-btn-people'));
-  });
-
   it('puts keyboard focus on the first control of the room list, before its close button', () => {
     OWP.state.inRoom = false;
     OWP.ui.render(true);
@@ -947,18 +896,10 @@ describe('room bar', () => {
     OWP.ui.updateRoomListUI = () => {};
   });
 
-  it('draws the Watch Party icon in the player button, on the 24 grid of the native icons', () => {
-    const osd = document.createElement('div');
-    osd.className = 'videoOsdBottom';
-    const buttons = document.createElement('div');
-    buttons.className = 'buttons';
-    osd.appendChild(buttons);
-    document.body.appendChild(osd);
-
-    OWP.ui.injectOsdButton();
-
-    const icon = byId(OWP.constants.BTN_ID).querySelector('.material-icons.owp-watch-party-icon');
-    assert.ok(icon);
+  it('draws the Watch Party icon on the 24 grid of the native icons', () => {
+    const icon = OWP.ui.createWatchPartyIcon();
+    assert.ok(icon.classList.contains('material-icons'));
+    assert.ok(icon.classList.contains('owp-watch-party-icon'));
     assert.equal(icon.getAttribute('aria-hidden'), 'true');
     const svg = icon.querySelector('svg');
     assert.equal(svg.getAttribute('viewBox'), '0 0 24 24');
@@ -967,7 +908,7 @@ describe('room bar', () => {
     // The screen is a 2-unit line, like Jellyfin's Cast icon; the rest is filled.
     assert.equal(svg.children[0].getAttribute('fill'), 'none');
     assert.equal(svg.children[0].getAttribute('stroke-width'), '2');
-    assert.equal(byId(OWP.constants.BTN_ID).querySelector('.theaters'), null);
+    assert.equal(icon.querySelector('.theaters'), null);
   });
 
   it('drops the room style back in the lobby', () => {

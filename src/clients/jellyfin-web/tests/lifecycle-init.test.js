@@ -22,7 +22,6 @@ OWP.ui = {
     styleAttempts++;
     if (styleAttempts === 1) throw new Error('style injection failed');
   },
-  injectOsdButton: () => {},
   injectGlobalButton: () => {},
   injectHeaderButtons: () => { headerInjections++; },
   renderHomeWatchParties: () => {}

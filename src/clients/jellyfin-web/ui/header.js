@@ -4,7 +4,6 @@
   const t = OWP.i18n.t;
   const {
     PANEL_ID,
-    BTN_ID,
     HEADER_BTN_CLASS,
     LEGACY_HEADER_BTN_ID,
     MODERN_HEADER_BTN_ID,
@@ -23,13 +22,16 @@
 
   // The legacy header. Jellyfin also renders it, hidden, under the MUI layout.
   const LEGACY_CONTAINER_SELECTOR = '.skinHeader .headerRight';
-  // Jellyfin 12's MUI app bar keeps SyncPlay, Cast and Search in one box. These
-  // attributes do not depend on the interface language, and the `header`
-  // prefix skips the sort and filter toolbars of library pages.
+  // Jellyfin 12's MUI app bar keeps SyncPlay, Cast and Search in one box, and
+  // the player's own header (`.osdHeader`) keeps SyncPlay and Cast. These
+  // attributes do not depend on the interface language, and the prefixes skip
+  // the sort and filter toolbars of library pages.
   const MODERN_ANCHOR_SELECTOR = [
     'header.MuiAppBar-root [aria-controls="app-sync-play-menu"]',
     'header.MuiAppBar-root [aria-controls="app-remote-play-menu"]',
-    'header.MuiAppBar-root a[href="#/search"]'
+    'header.MuiAppBar-root a[href="#/search"]',
+    '.osdHeader [aria-controls="app-sync-play-menu"]',
+    '.osdHeader [aria-controls="app-remote-play-menu"]'
   ].join(', ');
   const LEGACY_BUTTON_CLASSES = 'headerButton headerButtonRight paper-icon-button-light';
   // Both containers above live in one of these.
@@ -81,7 +83,8 @@
 
   // The panel must be shown, so that its width can be measured.
   const placePanelBelowHeader = (panel, button) => {
-    const header = button.closest('header, .skinHeader') || button;
+    // The player header is taller than its row of buttons: hang below the row.
+    const header = button.closest('.osdHeader .MuiToolbar-root') || button.closest('header, .skinHeader') || button;
     const top = Math.round(header.getBoundingClientRect().bottom) + PANEL_GAP_PX;
     panel.classList.add(PANEL_HEADER_CLASS);
     panel.style.top = `${top}px`;
@@ -113,13 +116,10 @@
     else applyDefaultPlacement(panel);
   };
 
-  // The header buttons and the player's OSD button all toggle the panel.
-  const panelToggleButtons = () => [...headerButtons(), document.getElementById(BTN_ID)].filter(Boolean);
-
   const syncExpandedState = () => {
     const panel = document.getElementById(PANEL_ID);
     const expanded = String(!!panel && !panel.classList.contains('hide'));
-    panelToggleButtons().forEach(button => {
+    headerButtons().forEach(button => {
       if (button.getAttribute('aria-expanded') !== expanded) button.setAttribute('aria-expanded', expanded);
     });
   };
@@ -280,7 +280,10 @@
 
   const injectHeaderButtons = () => {
     ensureButton(document.querySelector(LEGACY_CONTAINER_SELECTOR), LEGACY_HEADER_BTN_ID, LEGACY_BUTTON_CLASSES);
-    const anchor = document.querySelector(MODERN_ANCHOR_SELECTOR);
+    // While the player opens or closes, the app bar and the player header can
+    // both be in the page: follow the one that is shown.
+    const anchors = Array.from(document.querySelectorAll(MODERN_ANCHOR_SELECTOR));
+    const anchor = anchors.find(isShown) || anchors[0];
     if (anchor) ensureButton(anchor.parentNode, MODERN_HEADER_BTN_ID, nativeIconButtonClasses(anchor));
     syncExpandedState();
     updatePanelPlacement();

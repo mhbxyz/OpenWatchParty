@@ -94,7 +94,6 @@
 
   OWP.constants = OWP.constants || {
     PANEL_ID: 'owp-panel',
-    BTN_ID: 'owp-osd-btn',
     HEADER_BTN_CLASS: 'owp-header-btn',
     LEGACY_HEADER_BTN_ID: 'owp-header-btn-legacy',
     MODERN_HEADER_BTN_ID: 'owp-header-btn-modern',

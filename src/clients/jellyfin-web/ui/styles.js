@@ -5,7 +5,6 @@
     PANEL_ID,
     STYLE_ID,
     SYNCPLAY_HIDE_STYLE_ID,
-    HEADER_BTN_CLASS,
     MODERN_HEADER_BTN_ID,
     PANEL_HEADER_CLASS,
     PANEL_BUBBLE_CLASS,
@@ -62,8 +61,6 @@
       width: 10px; height: 10px; transform: rotate(45deg); background: rgb(38, 38, 36);
       border-left: 1px solid rgba(255,255,255,0.14); border-top: 1px solid rgba(255,255,255,0.14);
     }
-    /* The player has its own Watch Party button */
-    .osdHeader .${HEADER_BTN_CLASS} { display: none !important; }
     /* In a room the panel is only the bar and its drop-down, each with its own
        background: a dark grey pill with outline icons and soft tinted states. */
     /* The bar fits the room name between a minimum (room for the chat input)

@@ -131,7 +131,6 @@
       }
       if (video) {
         hadVideoElement = true;
-        ui.injectOsdButton();
         playback.bindVideo();
         if (state.pendingJoinRoomId) {
           console.log('[OpenWatchParty] Video detected, pendingJoinRoomId:', state.pendingJoinRoomId);

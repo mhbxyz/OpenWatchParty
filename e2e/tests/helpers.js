@@ -133,27 +133,31 @@ async function revealOsd(page) {
   const size = page.viewportSize();
   await page.mouse.move(size.width / 2 - 20, size.height / 2 - 20);
   await page.mouse.move(size.width / 2, size.height / 2);
-  await page.locator('#owp-osd-btn').waitFor({ state: 'visible', timeout: 10_000 });
+  await visibleHeaderButton(page);
 }
 
 async function panelHidden(page) {
   return page.locator('#owp-panel').evaluate((panel) => panel.classList.contains('hide'));
 }
 
-async function openPanelFromOsd(page) {
-  await revealOsd(page);
-  await page.locator('#owp-osd-btn').click();
-  await expect(page.locator('#owp-panel')).not.toHaveClass(/hide/);
-}
-
-async function openPanelFromHeader(page) {
+// The header button: in the app bar, or in the player's own header.
+async function visibleHeaderButton(page) {
   const modern = page.locator('#owp-header-btn-modern');
   const legacy = page.locator('#owp-header-btn-legacy');
   await expect
     .poll(async () => (await modern.isVisible().catch(() => false)) || (await legacy.isVisible().catch(() => false)), { timeout: 15_000 })
     .toBe(true);
-  const button = (await modern.isVisible().catch(() => false)) ? modern : legacy;
-  await button.click();
+  return (await modern.isVisible().catch(() => false)) ? modern : legacy;
+}
+
+async function openPanelFromOsd(page) {
+  await revealOsd(page);
+  await (await visibleHeaderButton(page)).click();
+  await expect(page.locator('#owp-panel')).not.toHaveClass(/hide/);
+}
+
+async function openPanelFromHeader(page) {
+  await (await visibleHeaderButton(page)).click();
   await expect(page.locator('#owp-panel')).not.toHaveClass(/hide/);
 }
 
@@ -163,7 +167,7 @@ async function ensureRoomBarVisible(page) {
     // Reveal the player controls before choosing that entry point.
     if (await page.evaluate(() => Boolean(window.OpenWatchParty.utils.getVideo()))) {
       await revealOsd(page);
-      await page.locator('#owp-osd-btn').click();
+      await (await visibleHeaderButton(page)).click();
     } else {
       await openPanelFromHeader(page);
     }

@@ -18,7 +18,6 @@ require('../ui/header.js');
 
 const {
   PANEL_ID,
-  BTN_ID,
   STYLE_ID,
   HEADER_BTN_CLASS,
   LEGACY_HEADER_BTN_ID,
@@ -75,6 +74,23 @@ const modernHeader = ({ syncPlay = true } = {}) => {
   toolbar.appendChild(box);
   header.appendChild(toolbar);
   header.getBoundingClientRect = () => ({ bottom: 48 });
+  document.body.appendChild(header);
+  return { header, box };
+};
+
+// Jellyfin 12 player header (MUI layout): .skinHeader.osdHeader > .MuiToolbar-root > a box with
+// the SyncPlay and Cast icon buttons.
+// The header is taller than its toolbar, the row of buttons.
+const playerHeader = () => {
+  const header = element('div', 'skinHeader osdHeader MuiBox-root');
+  const toolbar = element('div', 'MuiToolbar-root');
+  const box = element('div', 'MuiBox-root css-osd-actions');
+  box.appendChild(element('button', ICON_BUTTON, { 'aria-controls': 'app-sync-play-menu' }));
+  box.appendChild(element('button', ICON_BUTTON, { 'aria-controls': 'app-remote-play-menu' }));
+  toolbar.appendChild(box);
+  header.appendChild(toolbar);
+  header.getBoundingClientRect = () => ({ bottom: 112 });
+  toolbar.getBoundingClientRect = () => ({ bottom: 48 });
   document.body.appendChild(header);
   return { header, box };
 };
@@ -346,20 +362,6 @@ describe('header Watch Party button', () => {
     assert.ok(focused.classList.contains('owp-close-btn'));
   });
 
-  it('keeps the player button expanded state in step with the panel', () => {
-    modernHeader();
-    OWP.ui.injectHeaderButtons();
-    const osdButton = element('button', 'btnWatchParty', { 'aria-expanded': 'false' });
-    osdButton.id = BTN_ID;
-    document.body.appendChild(osdButton);
-
-    document.getElementById(MODERN_HEADER_BTN_ID).click();
-    assert.equal(osdButton.getAttribute('aria-expanded'), 'true');
-
-    document.getElementById(MODERN_HEADER_BTN_ID).click();
-    assert.equal(osdButton.getAttribute('aria-expanded'), 'false');
-  });
-
   it('places the panel below the legacy header too', () => {
     legacyHeader();
     OWP.ui.injectHeaderButtons();
@@ -468,72 +470,39 @@ describe('header Watch Party button', () => {
     assert.equal(viewportListener, null);
   });
 
-  it('returns the panel to its usual place when opened from the player', () => {
-    modernHeader();
-    const osd = element('div', 'videoOsdBottom');
-    osd.appendChild(element('div', 'buttons'));
-    document.body.appendChild(osd);
-    OWP.ui.injectHeaderButtons();
-    OWP.ui.injectOsdButton();
-    const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);
-    headerButton.click();
-    headerButton.click();
-
-    document.getElementById(BTN_ID).click();
-    // The next periodic injection must not take it back below the header.
+  it('puts the button first in the player header, next to Cast, with the panel below it', () => {
+    const { box } = playerHeader();
     OWP.ui.injectHeaderButtons();
 
+    const button = document.getElementById(MODERN_HEADER_BTN_ID);
+    assert.equal(box.children[0], button);
+    assert.equal(box.children[2].getAttribute('aria-controls'), 'app-remote-play-menu');
+    assert.equal(button.classList.contains('Mui-focusVisible'), false);
+
+    button.click();
     assert.equal(panel().classList.contains('hide'), false);
-    assert.equal(panel().classList.contains(PANEL_HEADER_CLASS), false);
-    assert.equal(panel().style.top, '');
-    assert.equal(panel().style.maxHeight, '');
+    assert.equal(panel().classList.contains(PANEL_HEADER_CLASS), true);
+    assert.equal(panel().style.top, '56px');
   });
 
-  it('moves the player button to a new player page, never to a hidden one', () => {
-    const playerPage = () => {
-      const page = element('div', 'page');
-      const osd = element('div', 'videoOsdBottom');
-      const buttons = element('div', 'buttons');
-      osd.appendChild(buttons);
-      page.appendChild(osd);
-      document.body.appendChild(page);
-      return { page, buttons };
-    };
-    const first = playerPage();
-    OWP.ui.injectOsdButton();
-    assert.equal(document.getElementById(BTN_ID).parentNode, first.buttons);
+  it('follows the shown header while the app bar and the player header are both in the page', () => {
+    const app = modernHeader();
+    const player = playerHeader();
+    const hideAnchors = (box, hidden) => box.children
+      .filter(child => child.getAttribute('aria-controls') || child.getAttribute('href'))
+      .forEach(child => { child.hiddenForTest = hidden; });
 
-    // Jellyfin hides the previous player page and opens a new one.
-    first.page.classList.add('hide');
-    const second = playerPage();
-    OWP.ui.injectOsdButton();
-    OWP.ui.injectOsdButton();
+    // The player opened: the app bar is still in the page, hidden.
+    hideAnchors(app.box, true);
+    OWP.ui.injectHeaderButtons();
+    assert.equal(document.getElementById(MODERN_HEADER_BTN_ID).parentNode, player.box);
 
-    const buttons = document.querySelectorAll(`#${BTN_ID}`);
-    assert.equal(buttons.length, 1);
-    assert.equal(buttons[0].parentNode, second.buttons);
-
-    // While Jellyfin swaps pages both can be shown: the button follows the
-    // first shown player, and moves once that one is hidden.
-    const third = playerPage();
-    OWP.ui.injectOsdButton();
-    assert.equal(document.getElementById(BTN_ID).parentNode, second.buttons);
-    second.page.classList.add('hide');
-    OWP.ui.injectOsdButton();
-    assert.equal(document.getElementById(BTN_ID).parentNode, third.buttons);
-    assert.equal(document.querySelectorAll(`#${BTN_ID}`).length, 1);
-
-    // Jellyfin shows the cached second page again, before the third one in
-    // the document: the button follows it even before the third is hidden.
-    second.page.classList.remove('hide');
-    OWP.ui.injectOsdButton();
-    assert.equal(document.getElementById(BTN_ID).parentNode, second.buttons);
-
-    // Only hidden players left: no button is added to them.
-    second.page.remove();
-    third.page.remove();
-    OWP.ui.injectOsdButton();
-    assert.equal(document.getElementById(BTN_ID), null);
+    // Back from the player: the player header is hidden, the app bar shown.
+    hideAnchors(app.box, false);
+    hideAnchors(player.box, true);
+    OWP.ui.injectHeaderButtons();
+    assert.equal(document.getElementById(MODERN_HEADER_BTN_ID).parentNode, app.box);
+    assert.equal(document.querySelectorAll(`#${MODERN_HEADER_BTN_ID}`).length, 1);
   });
 
   it('closes the panel from its X button, in the lobby and in a room', () => {
@@ -572,22 +541,17 @@ describe('header Watch Party button', () => {
     }
   });
 
-  it('returns focus to the player button, and leaves it alone when the opener is hidden', () => {
-    modernHeader();
-    const osd = element('div', 'videoOsdBottom');
-    osd.appendChild(element('div', 'buttons'));
-    document.body.appendChild(osd);
+  it('returns focus to the header button, and leaves it alone when the opener is hidden', () => {
+    playerHeader();
     OWP.ui.injectHeaderButtons();
-    OWP.ui.injectOsdButton();
-    const osdButton = document.getElementById(BTN_ID);
+    const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);
 
-    osdButton.click();
+    headerButton.click();
     const firstClose = panel().querySelector('.owp-close-btn');
     firstClose.focus();
     firstClose.click();
-    assert.equal(focused, osdButton);
+    assert.equal(focused, headerButton);
 
-    const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);
     headerButton.click();
     headerButton.hiddenForTest = true;
     const close = panel().querySelector('.owp-close-btn');
@@ -616,27 +580,13 @@ describe('header Watch Party button', () => {
     assert.deepEqual(hooks.panelObserver().options.attributeFilter, ['class']);
   });
 
-  it('styles the header placement and hides the header button inside the player', () => {
+  it('styles the header placement and shows the header button inside the player', () => {
     OWP.ui.injectStyles();
 
     const css = document.getElementById(STYLE_ID).textContent;
     assert.match(css, new RegExp(`#${PANEL_ID}\\.${PANEL_HEADER_CLASS} \\{ bottom: auto; \\}`));
     assert.match(css, new RegExp(`@media \\(max-width: 600px\\) \\{\\s*#${PANEL_ID}\\.${PANEL_HEADER_CLASS} \\{ left: 8px; right: 8px; width: auto; \\}`));
-    assert.match(css, new RegExp(`\\.osdHeader \\.${HEADER_BTN_CLASS} \\{ display: none !important; \\}`));
+    assert.doesNotMatch(css, /\.osdHeader/);
     assert.match(css, new RegExp(`#${MODERN_HEADER_BTN_ID} \\.material-icons \\{ font-size: 1\\.5rem; width: 1em; height: 1em; line-height: 1; \\}`));
-  });
-
-  it('puts the player button before the favorites button in any Jellyfin language', () => {
-    const osd = element('div', 'videoOsdBottom');
-    const buttons = element('div', 'buttons');
-    const favorite = element('button', 'btnUserRating autoSize paper-icon-button-light', { title: 'Agregar a favoritos' });
-    buttons.append(element('button', 'btnAudio'), favorite, element('button', 'btnFullscreen'));
-    osd.appendChild(buttons);
-    document.body.appendChild(osd);
-
-    OWP.ui.injectOsdButton();
-
-    const order = buttons.children.map(button => button.id || button.className.split(' ')[0]);
-    assert.deepEqual(order, ['btnAudio', BTN_ID, 'btnUserRating', 'btnFullscreen']);
   });
 });

@@ -23,7 +23,6 @@ globalThis.document.visibilityState = 'visible';
 
 OWP.ui = {
   injectStyles: () => {},
-  injectOsdButton: () => {},
   injectHeaderButtons: () => {},
   renderHomeWatchParties: () => {}
 };

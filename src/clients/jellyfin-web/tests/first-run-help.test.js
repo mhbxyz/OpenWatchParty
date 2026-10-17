@@ -17,7 +17,6 @@ require('../ui/styles.js');
 
 const {
   PANEL_ID,
-  BTN_ID,
   MODERN_HEADER_BTN_ID,
   LEGACY_HEADER_BTN_ID,
   PANEL_HEADER_CLASS,
@@ -285,24 +284,6 @@ describe('lobby help and first run', () => {
       assert.equal(panel().style.left, '902px');
     });
 
-    it('drops the bubble, and the help, when the panel opens from the player', () => {
-      openLobbyFromHeader();
-      helpButton().click();
-      byId(MODERN_HEADER_BTN_ID).click();
-      const osd = document.createElement('div');
-      osd.className = 'videoOsdBottom';
-      const buttons = document.createElement('div');
-      buttons.className = 'buttons';
-      osd.appendChild(buttons);
-      document.body.appendChild(osd);
-      OWP.ui.injectOsdButton();
-      byId(BTN_ID).click();
-      assert.equal(panel().classList.contains('hide'), false);
-      assert.equal(panel().classList.contains(PANEL_BUBBLE_CLASS), false);
-      assert.equal(panel().classList.contains(PANEL_HEADER_CLASS), false);
-      assert.equal(panel().style.left, '');
-      assert.equal(help().hidden, true);
-    });
   });
 
   describe('first run', () => {
