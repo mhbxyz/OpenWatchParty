@@ -5,7 +5,7 @@ use anyhow::bail;
 use crate::config::DesiredConfig;
 
 /// Log levels the session server (env_logger) accepts; documented in
-/// `docs/operations/configuration.md`.
+/// `docs/src/content/docs/operations/configuration.md`.
 pub const LOG_LEVELS: [&str; 5] = ["error", "warn", "info", "debug", "trace"];
 const AUTH_MODES: [&str; 3] = ["hs256", "hybrid", "asymmetric"];
 const MAX_IMAGE_LENGTH: usize = 512;

@@ -2,8 +2,8 @@
 """Rebuild the transparent branding assets from the master artwork.
 
 Outputs:
-    docs/readme-logo.png   README hero image (1360x800)
-    docs/app-icon.png      application icon (350x350)
+    docs/public/readme-logo.png   README hero image (1360x800)
+    docs/public/app-icon.png      application icon (350x350)
 
 Sources:
     assets/branding/source-logo-monitor.png   master artwork used here
@@ -60,8 +60,8 @@ except ImportError as exc:  # pragma: no cover - depends on the environment
 ROOT = Path(__file__).resolve().parents[2]
 
 SOURCE = ROOT / "assets" / "branding" / "source-logo-monitor.png"
-README_LOGO = ROOT / "docs" / "readme-logo.png"
-APP_ICON = ROOT / "docs" / "app-icon.png"
+README_LOGO = ROOT / "docs" / "public" / "readme-logo.png"
+APP_ICON = ROOT / "docs" / "public" / "app-icon.png"
 
 # Geometry of the master artwork, in source pixels (left, top, right, bottom).
 ILLUSTRATION_BOX = (95, 180, 1000, 685)

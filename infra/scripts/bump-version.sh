@@ -136,7 +136,7 @@ update_cargo_lock_version() {
 }
 
 update_compatibility_row() {
-    local relative='docs/operations/compatibility.md'
+    local relative='docs/src/content/docs/operations/compatibility.md'
     local source
     source=$(current_source "$relative")
     [[ -f $source ]] || fail "missing file $relative"
@@ -187,35 +187,35 @@ update_compatibility_row
 
 # The backticks below are literal Markdown, not command substitution.
 # shellcheck disable=SC2016
-apply_sed 'docs/operations/installation.md' 'installation product version' \
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation product version' \
     'OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`' \
     's/OpenWatchParty `[0-9]+\.[0-9]+\.[0-9]+`/OpenWatchParty `'"$new_version"'`/'
 
-apply_sed 'docs/operations/installation.md' 'installation version-prefixed image tag' \
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation version-prefixed image tag' \
     'owp-session-server:v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(owp-session-server:)v[0-9]+\.[0-9]+\.[0-9]+/\1v'"$new_version"'/'
 
-apply_sed 'docs/operations/installation.md' 'installation pinned image tag' \
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation pinned image tag' \
     'owp-session-server:[0-9]+\.[0-9]+\.[0-9]+' \
     's/(owp-session-server:)[0-9]+\.[0-9]+\.[0-9]+/\1'"$new_version"'/'
 
-apply_sed 'docs/operations/installation.md' 'installation release download tag' \
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation release download tag' \
     'releases/download/v[0-9]+\.[0-9]+\.[0-9]+' \
     's#(releases/download/)v[0-9]+\.[0-9]+\.[0-9]+#\1v'"$new_version"'#'
 
-apply_sed 'docs/operations/installation.md' 'installation plugin archive name' \
+apply_sed 'docs/src/content/docs/operations/installation.md' 'installation plugin archive name' \
     'OpenWatchParty-v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(OpenWatchParty-v)[0-9]+\.[0-9]+\.[0-9]+/\1'"$new_version"'/'
 
-apply_sed 'docs/operations/deployment.md' 'deployment release download tag' \
+apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment release download tag' \
     'releases/download/v[0-9]+\.[0-9]+\.[0-9]+' \
     's#(releases/download/)v[0-9]+\.[0-9]+\.[0-9]+#\1v'"$new_version"'#'
 
-apply_sed 'docs/operations/deployment.md' 'deployment plugin archive name' \
+apply_sed 'docs/src/content/docs/operations/deployment.md' 'deployment plugin archive name' \
     'OpenWatchParty-v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(OpenWatchParty-v)[0-9]+\.[0-9]+\.[0-9]+/\1'"$new_version"'/'
 
-apply_sed 'docs/development/ci.md' 'ci version-prefixed image tag' \
+apply_sed 'docs/src/content/docs/development/ci.md' 'ci version-prefixed image tag' \
     'owp-session-server:v[0-9]+\.[0-9]+\.[0-9]+' \
     's/(owp-session-server:)v[0-9]+\.[0-9]+\.[0-9]+/\1v'"$new_version"'/'
 

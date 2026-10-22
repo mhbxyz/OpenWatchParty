@@ -1,0 +1,46 @@
+---
+---
+<div class="feature-grid">
+  <article class="feature feature-sync">
+    <div class="feature-copy"><h3>Stay on the same scene</h3><p>One pause pauses everyone. Press play and the whole room follows. No more counting down over a call.</p></div>
+    <div class="product-preview sync-preview" data-playing="false">
+      <div class="preview-room-bar"><span class="preview-latency"><i></i> 1 ms</span><strong>Alex's room</strong><button class="preview-icon-button selected" type="button" data-people-toggle aria-expanded="true" aria-controls="preview-participants" aria-label="Show or hide the two participants"><svg><use href="#demo-users"/></svg><span>2</span><svg class="tiny-icon"><use href="#demo-chevron"/></svg></button><span class="preview-decoration" aria-hidden="true"><svg><use href="#demo-chat"/></svg></span></div>
+      <div class="preview-dropdown participant-dropdown" id="preview-participants">
+        <div class="preview-person"><span class="preview-avatar">A</span><div><div class="preview-person-name">Alex <span class="preview-host-badge">Host</span></div><span class="preview-person-status" data-host-status>Playing</span></div></div>
+        <div class="preview-person"><span class="preview-avatar">S</span><div><div class="preview-person-name">Sam</div><span class="preview-person-status" data-guest-status>In sync</span></div></div>
+      </div>
+      <div class="shared-timeline" aria-hidden="true"><div><span>Alex</span><div class="mini-track"><i></i></div><svg><use href="#demo-check"/></svg></div><div><span>Sam</span><div class="mini-track"><i></i></div><svg><use href="#demo-check"/></svg></div></div>
+      <button class="preview-action" type="button" data-sync-toggle aria-pressed="false"><svg class="preview-pause-icon"><use href="#demo-pause"/></svg><svg class="preview-play-icon"><use href="#demo-play"/></svg><span>Play for everyone</span></button>
+    </div>
+    <p class="preview-hint">Try play, pause, or the participant button.</p>
+  </article>
+  <article class="feature feature-chat">
+    <div class="feature-copy"><h3>Make room for conversation</h3><p>The big reveal. That one line. Keep the conversation right beside the film with room chat.</p></div>
+    <div class="product-preview chat-preview">
+      <div class="preview-room-bar"><span class="preview-latency"><i></i> 1 ms</span><strong>Alex's room</strong><span class="preview-decoration" aria-hidden="true"><svg><use href="#demo-users"/></svg><span>2</span></span><span class="preview-icon-button selected" aria-hidden="true"><svg><use href="#demo-chat"/></svg></span></div>
+      <div class="preview-dropdown chat-dropdown">
+        <div class="preview-messages" aria-label="Example room messages"><p class="preview-message"><span>Alex</span> Popcorn ready?</p><p class="preview-message message-guest"><span>Sam</span> Ready. Let's watch!</p></div>
+        <form class="preview-chat-form"><label class="visually-hidden" for="preview-chat-input">Try a message in this preview</label><input id="preview-chat-input" type="text" placeholder="Type a message…" maxlength="160" autocomplete="off"><button type="submit" aria-label="Send a preview message"><svg><use href="#demo-send"/></svg></button></form>
+      </div>
+    </div>
+    <p class="preview-hint">Try sending a message in this preview.</p>
+  </article>
+  <article class="feature feature-queue">
+    <div class="feature-copy"><h3>Keep the story going</h3><p>One more episode? The room's shared queue gets the next one ready, with time for a last-minute pause.</p></div>
+    <div class="product-preview queue-preview">
+      <div class="preview-room-bar"><span class="preview-latency"><i></i> 1 ms</span><strong>Alex's room</strong><span class="preview-decoration" aria-hidden="true"><svg><use href="#demo-users"/></svg><span>2</span></span><span class="preview-icon-button selected" aria-hidden="true"><svg><use href="#demo-queue"/></svg></span></div>
+      <div class="preview-dropdown queue-dropdown"><div class="preview-queue-heading"><strong>Room queue</strong><button type="button" data-queue-next>Next <svg><use href="#demo-next"/></svg></button></div><div class="preview-queue-item is-current"><svg><use href="#demo-play"/></svg><span>S1:E1 · Wing It!</span><small>Watching</small></div><div class="preview-queue-item is-upcoming"><span class="queue-position">1</span><span>S1:E2 · Sprite Fright</span><svg><use href="#demo-play"/></svg></div><p class="queue-auto-note">The next episodes are added automatically.</p></div>
+      <div class="preview-up-next" hidden><svg><use href="#demo-next"/></svg><span>Up next: Sprite Fright</span><output>10 s</output><span class="countdown-track"><i></i></span></div>
+      <button class="preview-action" type="button" data-queue-start><svg><use href="#demo-next"/></svg><span>Try the up-next countdown</span></button>
+    </div>
+    <p class="preview-hint">Try the countdown, or skip straight to Next.</p>
+  </article>
+</div>
+<script>
+  import { initializeSyncPreview } from '../scripts/sync-preview.js';
+  import { initializeChatPreview } from '../scripts/chat-preview.js';
+  import { initializeQueuePreview } from '../scripts/queue-preview.js';
+  document.querySelectorAll('.sync-preview').forEach(initializeSyncPreview);
+  document.querySelectorAll('.chat-preview').forEach(initializeChatPreview);
+  document.querySelectorAll('.queue-preview').forEach(initializeQueuePreview);
+</script>

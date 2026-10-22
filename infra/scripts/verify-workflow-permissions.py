@@ -57,7 +57,7 @@ EXPECTED = {
         "secret-scan": {"contents": "read"},
         "cargo-audit": {"contents": "read"},
         "nuget-audit": {"contents": "read"},
-        "bundler-audit": {"contents": "read"},
+        "docs-audit": {"contents": "read"},
         "npm-audit": {"contents": "read"},
         "trivy-scan": {"contents": "read", "security-events": "write"},
         "codeql": {

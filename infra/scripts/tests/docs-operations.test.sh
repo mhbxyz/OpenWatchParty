@@ -2,8 +2,8 @@
 set -euo pipefail
 
 repository_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
-installation="$repository_root/docs/operations/installation.md"
-deployment="$repository_root/docs/operations/deployment.md"
+installation="$repository_root/docs/src/content/docs/operations/installation.md"
+deployment="$repository_root/docs/src/content/docs/operations/deployment.md"
 packager="$repository_root/infra/scripts/package-plugin.sh"
 version=$(jq -er '.version' "$repository_root/version.json")
 archive="OpenWatchParty-v${version}.zip"
@@ -74,21 +74,21 @@ awk '
     }
 ' "$installation"
 
-for document in "$repository_root"/docs/operations/*.md \
-    "$repository_root"/docs/product/first-watch-party.md \
-    "$repository_root"/docs/product/user-guide.md; do
+for document in "$repository_root"/docs/src/content/docs/operations/*.md \
+    "$repository_root"/docs/src/content/docs/product/first-watch-party.md \
+    "$repository_root"/docs/src/content/docs/product/user-guide.md; do
     while IFS= read -r markdown_link; do
         target=${markdown_link#*](}
         target=${target%)}
         target=${target%%#*}
         case "$target" in
             '' | http://* | https://* | mailto:*) continue ;;
-            "{{ '/"*)
-                # Jekyll's relative_url links use a site-root path, not the
-                # source document's directory. Check the corresponding page.
-                path=${target#*\'}
-                path=${path%%\'*}
-                candidate="$repository_root/docs${path%/}"
+            /*)
+                # Markdown stores site-root URLs; Astro adds the deployment base.
+                candidate="$repository_root/docs/src/content/docs${target%/}"
+                if [[ -e $repository_root/docs/public$target ]]; then
+                    candidate="$repository_root/docs/public$target"
+                fi
                 ;;
             *) candidate="$(dirname -- "$document")/$target" ;;
         esac

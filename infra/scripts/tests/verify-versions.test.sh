@@ -21,7 +21,9 @@ if VERSION_FILE="$temporary_dir/version.json" "$verify_script"; then
     exit 1
 fi
 
-cp -R "$repository_root/docs" "$temporary_dir/docs"
+mkdir -p "$temporary_dir/docs/src/content"
+cp -R "$repository_root/docs/src/content/docs" "$temporary_dir/docs/src/content/docs"
+cp "$repository_root/docs/package.json" "$temporary_dir/docs/package.json"
 cp "$repository_root/README.md" "$temporary_dir/README.md"
 sed -i "s/Jellyfin-$jellyfin_image-/Jellyfin-9.9.9-/" "$temporary_dir/README.md"
 if DOCUMENTATION_ROOT="$temporary_dir/docs" README_FILE="$temporary_dir/README.md" "$verify_script"; then

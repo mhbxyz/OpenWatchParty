@@ -34,7 +34,11 @@ src/plugins/jellyfin/global.json
 src/server/target/
 **/target/
 
-# Jekyll
+# Website build output
+docs/dist/
+docs/.astro/
+
+# Legacy local Jekyll caches (not used by the site)
 docs/_site/
 docs/.jekyll-cache/
 docs/.jekyll-metadata
