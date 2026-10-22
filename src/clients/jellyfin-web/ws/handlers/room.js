@@ -90,6 +90,7 @@
 
   h.handleHostChanged = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
+    state.hostControlAcks = [];
     const becameHost = msg.payload.host_id === state.clientId;
     state.isHost = becameHost;
     state.roomHostId = msg.payload.host_id;

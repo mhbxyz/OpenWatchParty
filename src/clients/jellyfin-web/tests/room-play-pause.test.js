@@ -120,6 +120,11 @@ const joinAs = (clientId, { playing = true } = {}) => {
     ownCommandUntil: 0,
     ownCommandPlayState: '',
     playbackActionAttempt: 0,
+    hostAppliedPlayState: '',
+    hostPendingPlayState: '',
+    hostControlAcks: [],
+    lastSeekSentAt: 0,
+    lastSentPosition: 0,
     currentVideoElement: video,
     isInitialSync: false,
     initialSyncUntil: 0,
@@ -328,6 +333,148 @@ describe('play and pause shared by the room', () => {
   describe('the host', () => {
     beforeEach(() => {
       joinAs('host');
+    });
+
+    it('does not replay its own confirmation or suppress a quick local pause', async () => {
+      video.paused = true;
+      await video.play();
+      const confirmation = playerEvent('play', 10);
+      confirmation.payload.target_server_ts = serverNow + 1000;
+      h.handlePlayerEvent(confirmation, video);
+      assert.equal(OWP.state.pendingPlayUntil, 0);
+      assert.equal(OWP.state.isSyncing, false);
+      video.pause();
+      assert.deepEqual(playerEvents().map(m => m.payload.action), ['play', 'pause']);
+    });
+
+    it('does not let a delayed play confirmation undo a newer local pause', async () => {
+      video.paused = true;
+      await video.play();
+      video.pause();
+      const confirmation = playerEvent('play', 10);
+      confirmation.payload.target_server_ts = serverNow + 1000;
+      h.handlePlayerEvent(confirmation, video);
+      assert.equal(video.paused, true);
+      assert.equal(OWP.state.pendingPlayUntil, 0);
+    });
+
+    it('still schedules the host play that starts a queued item', () => {
+      video.paused = true;
+      let apply;
+      const original = OWP.utils.scheduleAt;
+      OWP.utils.scheduleAt = (_, callback) => { apply = callback; };
+      try {
+        const command = playerEvent('play', 0);
+        command.server_ts = serverNow + 1000;
+        command.payload.target_server_ts = command.server_ts;
+        h.handlePlayerEvent(command, video);
+        assert.equal(video.paused, true);
+        assert.equal(OWP.state.pendingPlayUntil, command.server_ts);
+        serverNow += 1000;
+        apply();
+        assert.equal(video.paused, false);
+        assert.deepEqual(playerEvents(), []);
+      } finally {
+        OWP.utils.scheduleAt = original;
+      }
+    });
+
+    it('lets a local pause cancel a pending remote play', () => {
+      let apply;
+      const original = OWP.utils.scheduleAt;
+      OWP.utils.scheduleAt = (_, callback) => { apply = callback; };
+      try {
+        const command = playerEvent('play', 10, { client: 'guest' });
+        command.payload.target_server_ts = serverNow + 1000;
+        h.handlePlayerEvent(command, video);
+        video.pause();
+        assert.equal(playerEvents().at(-1).payload.action, 'pause');
+        apply();
+        assert.equal(video.paused, true);
+      } finally {
+        OWP.utils.scheduleAt = original;
+      }
+    });
+
+    it('accepts a new local pause during suppression of an applied guest play', () => {
+      video.paused = true;
+      h.handlePlayerEvent(playerEvent('play', 10, { client: 'guest' }), video);
+      assert.deepEqual(playerEvents(), []);
+      video.pause();
+      assert.deepEqual(playerEvents().map(m => m.payload.action), ['pause']);
+    });
+
+    it('applies a guest play that matches its own unconfirmed play', async () => {
+      video.paused = true;
+      await video.play();
+      h.handlePlayerEvent(playerEvent('pause', 12, { client: 'guest' }), video);
+      assert.equal(video.paused, true);
+      h.handlePlayerEvent(playerEvent('play', 12, { client: 'guest' }), video);
+      await Promise.resolve();
+      assert.equal(video.paused, false);
+    });
+
+    it('forgets unconfirmed controls when the host role or the room state changes', async () => {
+      video.paused = true;
+      await video.play();
+      assert.deepEqual(OWP.state.hostControlAcks, ['play']);
+      h.handleHostChanged({ room: 'room-a', payload: { host_id: 'host', host_name: 'Host' } });
+      assert.deepEqual(OWP.state.hostControlAcks, []);
+      video.pause();
+      assert.deepEqual(OWP.state.hostControlAcks, ['pause']);
+      h.handleRoomState({
+        room: 'room-a',
+        client: 'host',
+        server_ts: serverNow,
+        payload: {
+          name: 'Room',
+          participant_count: 2,
+          host_id: 'host',
+          state: { position: 10, play_state: 'paused' }
+        }
+      }, video);
+      assert.deepEqual(OWP.state.hostControlAcks, []);
+    });
+
+    it('retires a confirmed control, so a later queue start still plays', async () => {
+      video.paused = true;
+      await video.play();
+      h.handlePlayerEvent(playerEvent('play', 10), video);
+      video.pause();
+      h.handlePlayerEvent(playerEvent('pause', 10), video);
+      let apply;
+      const original = OWP.utils.scheduleAt;
+      OWP.utils.scheduleAt = (_, callback) => { apply = callback; };
+      try {
+        const start = playerEvent('play', 0);
+        start.server_ts = serverNow + 1000;
+        start.payload.target_server_ts = start.server_ts;
+        h.handlePlayerEvent(start, video);
+        assert.equal(typeof apply, 'function');
+        serverNow += 1000;
+        apply();
+        assert.equal(video.paused, false);
+      } finally {
+        OWP.utils.scheduleAt = original;
+      }
+    });
+
+    it('sends a seek right after a local control that ended an applied guest play', () => {
+      video.paused = true;
+      h.handlePlayerEvent(playerEvent('play', 10, { client: 'guest' }), video);
+      video.pause();
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents().map(m => m.payload.action), ['pause', 'seek']);
+    });
+
+    it('does not hold back a seek after a guest play that changed nothing', () => {
+      video.paused = false;
+      video.currentTime = 10;
+      h.handlePlayerEvent(playerEvent('play', 10, { client: 'guest' }), video);
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents().map(m => m.payload.action), ['seek']);
     });
 
     it('pauses for a guest, at the guest position, without sending it back', () => {

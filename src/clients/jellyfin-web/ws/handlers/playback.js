@@ -7,15 +7,26 @@
   const t = OWP.i18n.t;
   const { SEEK_THRESHOLD, VIDEO_ACTION_RETRY_MS, VIDEO_ACTION_MAX_WAIT_MS } = OWP.constants;
 
-  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
-    if (typeof position !== 'number' || !Number.isFinite(position)) return;
+  // Where a command puts the video: its position, projected while playing.
+  const commandTarget = (position, projectPlaying, eventServerTs) => {
     const elapsed = projectPlaying && typeof eventServerTs === 'number'
       ? Math.max(0, utils.getServerNow() - eventServerTs) / 1000
       : 0;
-    const target = position + elapsed;
-    if (seekVideo && Math.abs(target - video.currentTime) > SEEK_THRESHOLD) video.currentTime = target;
+    return position + elapsed;
+  };
+  const movesVideo = (video, target) => Math.abs(target - video.currentTime) > SEEK_THRESHOLD;
+
+  // Moves the video to the target when it is far enough, and keeps the target
+  // as the room position.
+  const seekToTarget = (video, target, seekVideo = true) => {
+    if (seekVideo && movesVideo(video, target)) video.currentTime = target;
     state.lastSyncPosition = target;
     state.lastSyncServerTs = utils.getServerNow();
+  };
+
+  const applyPosition = (video, position, projectPlaying = false, eventServerTs = null, seekVideo = true) => {
+    if (typeof position !== 'number' || !Number.isFinite(position)) return;
+    seekToTarget(video, commandTarget(position, projectPlaying, eventServerTs), seekVideo);
   };
 
   const resolveVideo = (fallbackVideo) => {
@@ -35,6 +46,7 @@
     const action = msg.payload.action;
     const position = msg.payload.position;
     const hostPlayState = msg.payload.play_state || (action === 'play' ? 'playing' : 'paused');
+    if (state.isHost) state.hostAppliedPlayState = hostPlayState;
     state.pendingPlayUntil = 0;
     state.isInitialSync = false;
     state.initialSyncUntil = 0;
@@ -99,8 +111,17 @@
       return true;
     }
     const changed = playing === video.paused;
-    utils.startSyncing();
-    applyPosition(video, msg.payload.position, playing, msg.server_ts);
+    const position = msg.payload.position;
+    // One target for both the decision and the seek: a playing projection
+    // moves on between two reads.
+    const target = typeof position === 'number' && Number.isFinite(position)
+      ? commandTarget(position, playing, msg.server_ts)
+      : null;
+    state.hostAppliedPlayState = playing ? 'playing' : 'paused';
+    // Only a command that moves the video holds back the events it causes:
+    // one that changes nothing would just drop the host's next action.
+    if (changed || (target !== null && movesVideo(video, target))) utils.startSyncing();
+    if (target !== null) seekToTarget(video, target);
     state.wantsToPlay = playing;
     if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
     else if (changed) video.pause();
@@ -121,11 +142,27 @@
 
   const handleHostPlayerEvent = (msg, video) => {
     if (msg.payload.action !== 'play' && msg.payload.action !== 'pause') return;
+    // Only controls actually sent as host are acknowledgements. Queue starts
+    // and a former guest's pending play must still run after host promotion.
+    const acknowledgement = msg.client === state.clientId
+      ? state.hostControlAcks.indexOf(msg.payload.action) : -1;
+    if (acknowledgement !== -1) {
+      // A newer opposite control may have cancelled an unacknowledged play
+      // while the server waited for readiness. Retire those older entries too.
+      state.hostControlAcks.splice(0, acknowledgement + 1);
+      state.playbackActionAttempt++;
+      if (state.pendingActionTimer) OWP.timers.clear(state.pendingActionTimer);
+      state.pendingActionTimer = null;
+      state.pendingPlayUntil = 0;
+      state.hostPendingPlayState = '';
+      return;
+    }
     const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();
     const roomId = msg.room || state.roomId;
     const actionAttempt = ++state.playbackActionAttempt;
     const retryDeadline = utils.nowMs() + Math.max(0, targetTs - utils.getServerNow()) + VIDEO_ACTION_MAX_WAIT_MS;
     state.pendingPlayUntil = targetTs;
+    state.hostPendingPlayState = msg.payload.action === 'play' ? 'playing' : 'paused';
     const apply = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId || !state.isHost) {
         if (actionAttempt === state.playbackActionAttempt && state.roomId === roomId) {
@@ -136,6 +173,7 @@
       }
       if (applyGuestCommand(msg, video)) {
         state.pendingPlayUntil = 0;
+        state.hostPendingPlayState = '';
         state.pendingActionTimer = null;
       } else if (utils.nowMs() < retryDeadline) {
         state.pendingPlayUntil = utils.getServerNow() + Math.max(0, retryDeadline - utils.nowMs());
