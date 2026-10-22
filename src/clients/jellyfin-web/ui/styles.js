@@ -7,6 +7,7 @@
     SYNCPLAY_HIDE_STYLE_ID,
     APPEARANCE_STYLE_ID,
     MODERN_HEADER_BTN_ID,
+    PANEL_CONTROLS_HIDDEN_CLASS,
     PANEL_HEADER_CLASS,
     PANEL_BUBBLE_CLASS,
     ROOM_MODE_CLASS,
@@ -63,6 +64,12 @@
       display: flex; flex-direction: column; box-sizing: border-box;
     }
     #${PANEL_ID}.hide { display: none; }
+    /* Over the player it fades out and back with Jellyfin's controls */
+    #${PANEL_ID} { transition: opacity 0.3s ease-out; }
+    #${PANEL_ID}.${PANEL_CONTROLS_HIDDEN_CLASS} { opacity: 0; pointer-events: none; }
+    @media (prefers-reduced-motion: reduce) {
+      #${PANEL_ID} { transition: none; }
+    }
     /* Opened from the header: placed below it (top is set when it opens) */
     #${PANEL_ID}.${PANEL_HEADER_CLASS} { bottom: auto; }
     @media (max-width: 600px) {

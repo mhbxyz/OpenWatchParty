@@ -154,7 +154,7 @@
     return strip;
   };
 
-  const updateStrip = () => {
+  const placeStrip = () => {
     const next = queue().nextItem?.();
     const remaining = state.queueCountdownUntil - OWP.utils.getServerNow();
     if (!hasQueue() || !state.queueCountdownUntil || !next || remaining <= 0) {
@@ -177,6 +177,12 @@
     else if (!bar && strip.parentNode !== document.body) document.body.appendChild(strip);
     if (tickTimer) OWP.timers.clear(tickTimer);
     tickTimer = OWP.timers.setTimeout(updateStrip, remaining % 1000 || 1000, 'room');
+  };
+
+  // Over the player, the panel stays in sight while the strip is in it.
+  const updateStrip = () => {
+    placeStrip();
+    if (ui.applyPlayerControls) ui.applyPlayerControls();
   };
 
   const updateQueue = () => {

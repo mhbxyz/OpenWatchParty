@@ -99,6 +99,7 @@
     MODERN_HEADER_BTN_ID: 'owp-header-btn-modern',
     PANEL_HEADER_CLASS: 'owp-panel-header',
     PANEL_BUBBLE_CLASS: 'owp-panel-bubble',
+    PANEL_CONTROLS_HIDDEN_CLASS: 'owp-controls-hidden',
     ROOM_MODE_CLASS: 'owp-room-mode',
     STYLE_ID: 'owp-style',
     SYNCPLAY_HIDE_STYLE_ID: 'owp-hide-native-syncplay',

@@ -152,6 +152,22 @@ describe('room queue view', () => {
     assert.equal(strip().classList.contains('owp-queue-float'), false);
   });
 
+  it('has the panel checked against the player controls when up next comes and goes', () => {
+    enterRoom({ queueItems: ['a', 'b', 'c'].map(item) });
+    const strips = [];
+    OWP.ui.applyPlayerControls = () => strips.push(Boolean(strip()));
+    try {
+      panel().classList.remove('hide');
+      OWP.state.queueCountdownUntil = Date.now() + 5000;
+      OWP.ui.updateQueue();
+      OWP.state.queueCountdownUntil = 0;
+      OWP.ui.updateQueue();
+      assert.deepEqual(strips, [true, false]);
+    } finally {
+      delete OWP.ui.applyPlayerControls;
+    }
+  });
+
   it('shows guests up next without buttons, and takes it away when the countdown or the room ends', () => {
     enterRoom({ isHost: false, clientId: 'guest', queueItems: ['a', 'b', 'c'].map(item) });
     panel().classList.add('hide');

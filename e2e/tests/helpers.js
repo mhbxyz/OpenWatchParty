@@ -173,6 +173,12 @@ async function ensureRoomBarVisible(page) {
     }
     await expect(page.locator('#owp-panel')).not.toHaveClass(/hide/);
   }
+  // Over the player the open panel fades out with the player's controls,
+  // and a click on it would not get through: bring the controls back first.
+  if (await page.locator('#owp-panel').evaluate(panel => panel.classList.contains('owp-controls-hidden'))) {
+    await revealOsd(page);
+  }
+  await expect(page.locator('#owp-panel')).not.toHaveClass(/owp-controls-hidden/);
 }
 
 async function createRoom(page) {

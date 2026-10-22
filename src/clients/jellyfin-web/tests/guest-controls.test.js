@@ -390,6 +390,18 @@ describe('guest playback controls', () => {
     assert.equal(Boolean(h.dispatch('pointerdown', slider).defaultPrevented), false);
   });
 
+  it('lets the open Watch Party panel close for a press it stops', () => {
+    const presses = [];
+    h.OWP.ui.closePanelOnPress = event => presses.push(event);
+    h.setGuest({ paused: false, playState: 'playing' });
+    const slider = h.sliderRow.children[0].children[0];
+
+    const press = h.dispatch('pointerdown', slider);
+
+    assert.deepEqual(presses, [press]);
+    assert.equal(press.defaultPrevented, true);
+  });
+
   it('lets Space press another focused control while play is locked, without Jellyfin playing', () => {
     h.setGuest({ paused: true, playState: 'paused', waiting: true });
 

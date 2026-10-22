@@ -46,6 +46,9 @@
   };
 
   const blockEvent = (event, message = t('hostOnlySeek')) => {
+    // Stopped here, the press never reaches the Watch Party panel's own
+    // listener: close the open panel as any press outside it does.
+    if (ui.closePanelOnPress) ui.closePanelOnPress(event);
     event.preventDefault();
     event.stopImmediatePropagation();
     event.stopPropagation();

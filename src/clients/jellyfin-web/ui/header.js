@@ -9,6 +9,7 @@
     MODERN_HEADER_BTN_ID,
     PANEL_HEADER_CLASS,
     PANEL_BUBBLE_CLASS,
+    PANEL_CONTROLS_HIDDEN_CLASS,
     ROOM_MODE_CLASS
   } = OWP.constants;
   const state = OWP.state;
@@ -36,9 +37,25 @@
   const LEGACY_BUTTON_CLASSES = 'headerButton headerButtonRight paper-icon-button-light';
   // Both containers above live in one of these.
   const HEADER_SELECTOR = 'header, .skinHeader';
+  // While the player is open Jellyfin marks its header `.osdHeader`, and adds
+  // `osdHeader-hidden` while the player's controls are hidden.
+  const PLAYER_HEADER_SELECTOR = '.osdHeader';
+  const PLAYER_CONTROLS_HIDDEN_SELECTOR = '.osdHeader.osdHeader-hidden';
+  // The player takes a press on its page as play/pause (by touch, as showing
+  // its controls), except on its bottom controls and up-next card. Buttons
+  // and fields there do their own thing.
+  const PLAYER_PAGE_SELECTOR = '#videoOsdPage';
+  const PLAYER_CONTROLS_SELECTOR = '.videoOsdBottom, .upNextContainer, button, a, input, select, textarea, [role="button"]';
+  // OWP's own elements outside the panel: a press on them keeps it open.
+  const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system`;
+  const TEXT_FIELD_SELECTOR = 'input, textarea, [contenteditable]';
+  const UP_NEXT_SELECTOR = '.owp-queue-next';
 
   let observer = null;
   let panelObserver = null;
+  let controlsObserver = null;
+  let watchedPlayerHeader = null;
+  let pageListenersInstalled = false;
   let frame = 0;
   // Whether the open panel belongs below the header. It survives the moments
   // without a header button, so the panel goes back below it when it returns.
@@ -147,6 +164,132 @@
     }
     syncExpandedState();
   };
+
+  const typingInPanel = (panel) => {
+    const active = document.activeElement;
+    return !!active && panel.contains(active) && typeof active.closest === 'function'
+      && !!active.closest(TEXT_FIELD_SELECTOR);
+  };
+
+  // Over the player the panel goes with Jellyfin's controls: out of sight
+  // while they are hidden, even under a resting pointer as they are, and back
+  // as it was when they show. It stays while someone is typing in it or the
+  // queue's "up next" countdown is in it (the host's Cancel and Next).
+  const applyPlayerControls = () => {
+    const panel = document.getElementById(PANEL_ID);
+    if (!panel) return;
+    const fade = !!document.querySelector(PLAYER_CONTROLS_HIDDEN_SELECTOR) && !typingInPanel(panel)
+      && !panel.querySelector(UP_NEXT_SELECTOR);
+    if (panel.classList.contains(PANEL_CONTROLS_HIDDEN_CLASS) !== fade) panel.classList.toggle(PANEL_CONTROLS_HIDDEN_CLASS, fade);
+  };
+
+  // The header keeps its element and swaps classes when the player opens and
+  // closes; a header Jellyfin rebuilds is followed on the next injection.
+  const watchPlayerControls = () => {
+    const header = document.querySelector(PLAYER_HEADER_SELECTOR);
+    if (header && header !== watchedPlayerHeader && typeof window.MutationObserver === 'function') {
+      if (controlsObserver) controlsObserver.disconnect();
+      watchedPlayerHeader = header;
+      controlsObserver = new window.MutationObserver(applyPlayerControls);
+      controlsObserver.observe(header, { attributes: true, attributeFilter: ['class'] });
+    }
+    applyPlayerControls();
+  };
+
+  const isPlayerPicture = target => !!target && typeof target.closest === 'function'
+    && !!target.closest(PLAYER_PAGE_SELECTOR) && !target.closest(PLAYER_CONTROLS_SELECTOR);
+
+  // A primary press outside the open panel closes it, as its X does. Returns
+  // whether it did. Guest controls call it for the presses they stop.
+  const closePanelOnPress = (event) => {
+    if (event.type !== 'pointerdown' || event.button) return false;
+    const panel = document.getElementById(PANEL_ID);
+    const target = event.target;
+    if (!panel || panel.classList.contains('hide') || panel.classList.contains(PANEL_CONTROLS_HIDDEN_CLASS)) return false;
+    if (!target || typeof target.closest !== 'function' || panel.contains(target)
+      || target.closest(KEEP_PANEL_OPEN_SELECTOR)) return false;
+    if (ui.hidePanel) ui.hidePanel();
+    else panel.classList.add('hide');
+    syncExpandedState();
+    return true;
+  };
+
+  // On the player's picture the press only closes the panel: the player would
+  // also take it as play or pause, which for a host pauses the whole room.
+  // A double click is two presses, and only the browser knows the system's
+  // double-click time. So the next mouse press on the picture waits for its
+  // mousedown, which carries the click count: the second click of a double
+  // click stops there too, with its click and the double click (no pause, no
+  // full screen); a new click goes on to the player, as it came.
+  // The gesture is 'closing' until the click of the press that closed the
+  // panel, then 'open' until the double click or a new single click.
+  let pictureGesture = '';
+  let heldPress = null;
+  const HANDED_ON_FIELDS = [
+    'pointerId', 'pointerType', 'isPrimary', 'button', 'buttons', 'clientX', 'clientY',
+    'screenX', 'screenY', 'ctrlKey', 'shiftKey', 'altKey', 'metaKey'
+  ];
+
+  const stopEvent = (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.stopPropagation();
+  };
+
+  const onPressOutside = (event) => {
+    heldPress = null;
+    const closed = closePanelOnPress(event);
+    if (event.button) return;
+    if (!isPlayerPicture(event.target)) {
+      pictureGesture = '';
+      return;
+    }
+    if (closed) {
+      stopEvent(event);
+      pictureGesture = 'closing';
+    } else if (pictureGesture && event.pointerType === 'mouse') {
+      // Held, not prevented: preventing it would drop the mousedown.
+      heldPress = event;
+      event.stopImmediatePropagation();
+      event.stopPropagation();
+    }
+  };
+
+  const onMouseDown = (event) => {
+    const press = heldPress;
+    heldPress = null;
+    if (!press) return;
+    if (event.detail > 1) {
+      stopEvent(event);
+      return;
+    }
+    pictureGesture = '';
+    const init = { bubbles: true, cancelable: true, composed: true };
+    HANDED_ON_FIELDS.forEach((name) => { init[name] = press[name]; });
+    press.target.dispatchEvent(new window.PointerEvent('pointerdown', init));
+  };
+
+  const onPictureClick = (event) => {
+    if (!pictureGesture || !isPlayerPicture(event.target)) return;
+    // A single click after the one that closed the panel is a new click: by
+    // touch or pen, whose presses are not held, the gesture ends here.
+    if (event.detail <= 1 && pictureGesture === 'open') {
+      pictureGesture = '';
+      return;
+    }
+    stopEvent(event);
+    if (event.type === 'dblclick') pictureGesture = '';
+    else pictureGesture = 'open';
+  };
+
+  const PAGE_LISTENERS = [
+    ['pointerdown', onPressOutside],
+    ['mousedown', onMouseDown],
+    ['click', onPictureClick],
+    ['dblclick', onPictureClick],
+    ['focusin', applyPlayerControls],
+    ['focusout', applyPlayerControls]
+  ];
 
   const helpSeen = () => {
     try {
@@ -258,6 +401,12 @@
       if (typeof window.addEventListener === 'function') window.addEventListener('resize', scheduleUpdate);
       if (window.visualViewport) window.visualViewport.addEventListener('resize', scheduleUpdate);
     }
+    // In the capture phase, so a press on the player's picture is caught
+    // before the player sees it.
+    if (!pageListenersInstalled && typeof window.addEventListener === 'function') {
+      PAGE_LISTENERS.forEach(([type, listener]) => window.addEventListener(type, listener, true));
+      pageListenersInstalled = true;
+    }
     const panel = document.getElementById(PANEL_ID);
     if (!panelObserver && panel) {
       panelObserver = new window.MutationObserver(syncExpandedState);
@@ -268,9 +417,18 @@
   const removeHeaderButtons = () => {
     if (observer) observer.disconnect();
     if (panelObserver) panelObserver.disconnect();
+    if (controlsObserver) controlsObserver.disconnect();
     observer = null;
     panelObserver = null;
-    if (typeof window.removeEventListener === 'function') window.removeEventListener('resize', scheduleUpdate);
+    controlsObserver = null;
+    watchedPlayerHeader = null;
+    pictureGesture = '';
+    heldPress = null;
+    if (typeof window.removeEventListener === 'function') {
+      window.removeEventListener('resize', scheduleUpdate);
+      PAGE_LISTENERS.forEach(([type, listener]) => window.removeEventListener(type, listener, true));
+    }
+    pageListenersInstalled = false;
     if (window.visualViewport) window.visualViewport.removeEventListener('resize', scheduleUpdate);
     if (frame && typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(frame);
     frame = 0;
@@ -288,8 +446,9 @@
     syncExpandedState();
     updatePanelPlacement();
     startObservers();
+    watchPlayerControls();
     showFirstRunHelp();
   };
 
-  Object.assign(ui, { injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement });
+  Object.assign(ui, { injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement, closePanelOnPress, applyPlayerControls });
 })();

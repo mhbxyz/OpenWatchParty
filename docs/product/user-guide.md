@@ -168,6 +168,8 @@ In a room the panel becomes a single bar at the top right (below the header when
 
 Participants, chat, the sync adjustment, the queue and the leave confirmation open one at a time below the bar; select the same icon again to close it.
 
+Clicking or tapping outside the panel closes it, like **Close (X)**. On the video itself a click or double click only closes the panel, so it does not pause the room. In the player, the panel hides and comes back with Jellyfin's controls, as it was; it stays while you type in the chat or while the up-next countdown of the queue shows.
+
 The participants list shows how each person is doing, with a colored dot:
 
 | Status | Color | Meaning |
