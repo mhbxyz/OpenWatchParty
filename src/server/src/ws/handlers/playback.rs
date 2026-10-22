@@ -107,12 +107,10 @@ fn room_position_now(room: &Room, current_ts: u64) -> f64 {
     if room.state.play_state != PlayState::Playing {
         return room.state.position;
     }
-    let since = room
-        .target_server_ts
-        .map_or(room.state_server_ts, |target| {
-            target.max(room.state_server_ts)
-        });
-    room.state.position + current_ts.saturating_sub(since) as f64 / 1000.0
+    // The target schedules delivery; the position is anchored to the state
+    // timestamp, just as clients project it from the event's server_ts.
+    // Queue starts already use their future target as state_server_ts.
+    room.state.position + current_ts.saturating_sub(room.state_server_ts) as f64 / 1000.0
 }
 
 fn handle_play_not_ready(
@@ -1067,11 +1065,23 @@ mod tests {
         room.state.play_state = PlayState::Playing;
         room.state_server_ts = 1_000;
         room.target_server_ts = Some(1_500);
-        assert_eq!(room_position_now(&room, 4_500), 13.0);
+        assert_eq!(room_position_now(&room, 4_500), 13.5);
         room.target_server_ts = None;
         assert_eq!(room_position_now(&room, 4_500), 13.5);
         room.state.play_state = PlayState::Paused;
         assert_eq!(room_position_now(&room, 4_500), 10.0);
+    }
+
+    #[test]
+    fn queue_position_waits_for_its_future_state_timestamp() {
+        let mut room = crate::test_helpers::create_room("r1", "host");
+        room.state.play_state = PlayState::Playing;
+        room.state.position = 0.0;
+        room.state_server_ts = 2_000;
+        room.target_server_ts = Some(2_000);
+        assert_eq!(room_position_now(&room, 1_500), 0.0);
+        assert_eq!(room_position_now(&room, 2_000), 0.0);
+        assert_eq!(room_position_now(&room, 2_500), 0.5);
     }
 
     fn player_event(action: &str, position: f64) -> IncomingMessage {
