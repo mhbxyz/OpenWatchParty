@@ -5,6 +5,8 @@
   const t = OWP.i18n.t;
   const utils = OWP.utils;
 
+  const connected = () => state.ws?.readyState === 1 && state.connectionPhase === 'authenticated';
+
   const send = (type, payload = {}, roomOverride = null) => {
     if (!state.ws || state.ws.readyState !== 1) return;
     const message = {
@@ -72,6 +74,10 @@
       if (OWP.ui?.showToast) OWP.ui.showToast(t('createRoomHint'));
       return;
     }
+    if (!connected()) {
+      if (OWP.ui?.showToast) OWP.ui.showToast(t('notConnected'));
+      return;
+    }
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = '';
     const userName = state.userName
@@ -85,13 +91,23 @@
   };
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
+    // An invite join without a connection keeps its ticket: the next
+    // authentication consumes it again.
+    if (inviteTicket && !connected()) {
+      state.pendingInviteTicket = inviteTicket;
+      return;
+    }
     state.guestPaused = false;
     state.sharedPlaybackControl = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
-    state.rejoinPending = isReconnect;
+    // Without a connection (a drop, the reconnect still under way) the join
+    // waits for the next authentication, as a rejoin does, instead of being lost.
+    const deferred = !connected();
+    state.rejoinPending = isReconnect || deferred;
     state.roomId = id;
+    if (deferred) return;
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
       || 'Anonymous';
@@ -100,8 +116,15 @@
     send('join_room', payload, id);
   };
 
-  const leaveRoom = () => {
+  // A room_state already on its way (the queue moving on as someone leaves)
+  // must not take this client back into the room it left.
+  const forgetRoom = () => {
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    if (state.roomId && actions.rejectRoomState) actions.rejectRoomState(state.roomId);
+  };
+
+  const leaveRoom = () => {
+    forgetRoom();
     send('leave_room');
     resetRoomState();
     if (OWP.ui && OWP.ui.hidePanel) {
@@ -113,7 +136,7 @@
   };
 
   const closeRoom = () => {
-    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    forgetRoom();
     const supportsHostTransfer = state.serverFeatures.includes('host_transfer');
     send(supportsHostTransfer ? 'close_room' : 'leave_room');
     resetRoomState();

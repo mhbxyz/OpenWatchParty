@@ -59,6 +59,7 @@ describe('joining and creating rooms without playback', () => {
       desiredRoomId: 'pending-rejoin'
     });
     OWP.state.ws = { readyState: 1, send: data => sent.push(JSON.parse(data)) };
+    OWP.state.connectionPhase = 'authenticated';
     OWP.ui.showToast = message => toasts.push(message);
     OWP.ui.updateStatusIndicator = () => {};
     OWP.ui.updateSyncIndicator = () => {};
@@ -222,6 +223,16 @@ describe('joining and creating rooms without playback', () => {
       assert.deepEqual(toasts, ['Start playing something to create a room.']);
       assert.equal(rejoinCancelled, false);
       assert.equal(OWP.state.desiredRoomId, 'pending-rejoin');
+    });
+
+    it('says so instead of creating a room without a connection', () => {
+      playing({ video: VIDEO, itemId: ITEM });
+      OWP.state.connectionPhase = 'connecting';
+
+      OWP.actions.createRoom();
+
+      assert.deepEqual(sent, []);
+      assert.deepEqual(toasts, ['Not connected to server']);
     });
 
     it('creates the room for what is playing', () => {

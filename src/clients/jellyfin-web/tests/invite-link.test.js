@@ -84,6 +84,8 @@ describe('room invite links', () => {
       hasTimeSync: true
     });
     OWP.state.ws = { readyState: 1, send: (data) => sent.push(JSON.parse(data)) };
+    // Invites are consumed on auth_success, with the connection authenticated.
+    OWP.state.connectionPhase = 'authenticated';
     OWP.state.participants = [];
     OWP.ui.showToast = (message) => toasts.push(message);
     OWP.ui.render = () => {};
