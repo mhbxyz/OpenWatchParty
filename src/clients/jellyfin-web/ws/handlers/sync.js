@@ -38,6 +38,7 @@
     if (!video || !msg.payload?.state) return;
     const basePos = msg.payload.state.position || 0;
     const hostPlaying = msg.payload.state.play_state === 'playing';
+    if (state.isHost) state.hostAppliedPlayState = hostPlaying ? 'playing' : 'paused';
     const stateServerTs = msg.payload.state_server_ts || msg.server_ts || utils.getServerNow();
     const targetPos = hostPlaying ? utils.adjustedPosition(basePos, stateServerTs) : basePos;
     state.lastSyncServerTs = stateServerTs;
@@ -123,6 +124,7 @@
   h.handleRoomState = (msg, video) => {
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
+    state.hostControlAcks = [];
     // The room moved from its item to another queue item: everyone, the host
     // too, loads it as on joining and reports ready again.
     const advanced = msg.room === state.roomId && Boolean(state.roomMediaId)

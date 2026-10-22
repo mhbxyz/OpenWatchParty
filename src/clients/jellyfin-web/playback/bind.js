@@ -16,6 +16,12 @@
   const isReloadingStream = () => Boolean(state.streamReloadUntil && utils.nowMs() < state.streamReloadUntil);
 
   let promotedPlay = null;
+  let seekTimer = null;
+
+  const clearPendingSeek = () => {
+    if (seekTimer) OWP.timers.clear(seekTimer);
+    seekTimer = null;
+  };
 
   // A private guest pause must not become the room's state on promotion.
   // Keep that pause as a send gate until the room position and play state
@@ -25,6 +31,7 @@
     if (hasPendingRoomWork() || state.isBuffering || !utils.isVideoReady() || utils.isSeeking()) return;
     if (promotedPlay?.video === video && promotedPlay.roomId === state.roomId) return;
     if (state.playbackBlocked && video.paused && state.lastSyncPlayState === 'playing') return;
+    state.hostAppliedPlayState = state.lastSyncPlayState;
     utils.startSyncing();
     const playing = state.lastSyncPlayState === 'playing';
     const position = playing
@@ -77,7 +84,12 @@
     const actions = OWP.actions;
     if (!state.isHost || !actions || !actions.send || !utils.shouldSend()) return;
     if (state.guestPaused) return;
-    if (state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
+    const controlState = action === 'play' ? 'playing' : action === 'pause' ? 'paused' : '';
+    const expectedState = state.pendingPlayUntil ? state.hostPendingPlayState : state.hostAppliedPlayState;
+    const supersedesCommand = controlState && expectedState && controlState !== expectedState;
+    if (isReloadingStream()) return;
+    if (state.pendingMediaId && state.pendingMediaUntil && utils.nowMs() < state.pendingMediaUntil) return;
+    if ((state.isSyncing || hasPendingRoomWork()) && !supersedesCommand) return;
     if (action === 'seek' && !utils.isVideoReady()) return;
     if (action === 'pause') {
       if (state.isBuffering) return;
@@ -93,10 +105,35 @@
     }
     if (action === 'seek') {
       const now = utils.nowMs();
-      if (now - state.lastSeekSentAt < 250) return;
+      clearPendingSeek();
+      if (now - state.lastSeekSentAt < 250) {
+        const roomId = state.roomId;
+        const mediaId = state.roomMediaId;
+        const attempt = state.playbackActionAttempt;
+        seekTimer = OWP.timers.setTimeout(() => {
+          seekTimer = null;
+          if (!state.inRoom || !state.isHost || state.roomId !== roomId
+              || state.roomMediaId !== mediaId || state.currentVideoElement !== video
+              || state.playbackActionAttempt !== attempt) return;
+          onHostEvent('seek', video);
+        }, 250 - (now - state.lastSeekSentAt), 'video');
+        return;
+      }
       if (Math.abs(video.currentTime - state.lastSentPosition) < SEEK_THRESHOLD) return;
       state.lastSeekSentAt = now;
       state.lastSentPosition = video.currentTime;
+    }
+    if (action === 'play' || action === 'pause') {
+      clearPendingSeek();
+      state.playbackActionAttempt++;
+      if (state.pendingActionTimer) OWP.timers.clear(state.pendingActionTimer);
+      state.pendingActionTimer = null;
+      state.pendingPlayUntil = 0;
+      state.hostPendingPlayState = '';
+      state.hostAppliedPlayState = controlState;
+      state.isSyncing = false;
+      state.hostControlAcks.push(action);
+      if (state.hostControlAcks.length > 32) state.hostControlAcks.shift();
     }
     utils.log('HOST', { action, pos: video.currentTime, paused: video.paused });
     actions.send('player_event', { action, position: video.currentTime, play_state: video.paused ? 'paused' : 'playing' });
@@ -250,7 +287,10 @@
     }, STATE_UPDATE_MS, 'video');
   };
 
-  const cleanupVideoListeners = () => OWP.stateLifecycle.releaseVideoBinding();
+  const cleanupVideoListeners = () => {
+    clearPendingSeek();
+    OWP.stateLifecycle.releaseVideoBinding();
+  };
 
   Object.assign(playback, { bindVideo, cleanupVideoListeners, syncPromotedGuest });
 })();
