@@ -142,6 +142,38 @@ test('the guest reconnects and rejoins the room', async () => {
   await helpers.expectParticipants(guest, 2);
 });
 
+test('a host that reconnects keeps its role and its play reaches the guest without waiting', async () => {
+  await openRoomWithGuest('header');
+  await helpers.togglePlayback(host);
+  await helpers.waitForPaused(guest);
+
+  await host.evaluate(() => window.OpenWatchParty.state.ws.close());
+  await expect
+    .poll(async () => (await helpers.owpState(host)).wsState, { timeout: 30_000 })
+    .toBe(1);
+  await helpers.waitInRoom(host, true);
+  expect((await helpers.owpState(host)).isHost).toBe(true);
+  await helpers.waitForSettled(host);
+  // The server ignores a playback command within 2 s of the previous one.
+  await host.waitForTimeout(2500);
+
+  await guest.evaluate(() => {
+    window.__owpPlayingAt = 0;
+    window.OpenWatchParty.utils.getVideo().addEventListener('playing', () => {
+      window.__owpPlayingAt = Date.now();
+    }, { once: true });
+  });
+  const playedAt = await host.evaluate(() => Date.now());
+  await helpers.togglePlayback(host);
+  await helpers.waitForPlaying(guest);
+
+  // The room's usual lead is 1 s; a host taken as not ready adds the 2 s
+  // the server waits for everyone to be ready.
+  const delay = (await guest.evaluate(() => window.__owpPlayingAt)) - playedAt;
+  expect(delay).toBeGreaterThan(0);
+  expect(delay).toBeLessThan(2000);
+});
+
 test('the home card disappears when the host closes the room', async () => {
   const room = await openRoomWithGuest('card');
 

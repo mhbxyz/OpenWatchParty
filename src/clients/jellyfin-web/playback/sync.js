@@ -14,6 +14,7 @@
     INITIAL_SYNC_MAX_DRIFT,
     MEDIA_READY_POLL_MS,
     MEDIA_READY_TIMEOUT_MS,
+    MEDIA_READY_MAX_REOPENS,
     PARTICIPANT_STATUS_HOLD_MS,
     NUDGE_STEP_SEC,
     NUDGE_MIN_DRIFT_SEC,
@@ -43,6 +44,7 @@
     const initialSource = initialVideo?.currentSrc || initialVideo?.src || '';
     const requiresVideoTransition = Boolean(mediaId && initialMediaId && initialMediaId !== mediaId);
     let timeoutReported = false;
+    let reopens = 0;
     let watchedVideo = null;
     let timer = null;
 
@@ -57,10 +59,16 @@
       if (state.mediaReadyCleanup === cleanup) state.mediaReadyCleanup = null;
     };
 
-    const scheduleCheck = () => {
+    // The room media is opened again when it does not show up, a few times:
+    // not while its video loads (a slow transcode would start over), and not
+    // without end (media this user cannot play would reopen every timeout).
+    const scheduleCheck = (loading = false) => {
       if (Date.now() >= deadline) {
         deadline = Date.now() + MEDIA_READY_TIMEOUT_MS;
-        if (mediaId && playback.ensurePlayback) playback.ensurePlayback(mediaId, 0, null, true);
+        if (mediaId && playback.ensurePlayback && !loading && reopens < MEDIA_READY_MAX_REOPENS) {
+          reopens++;
+          playback.ensurePlayback(mediaId, 0, null, true);
+        }
         if (!timeoutReported) {
           if (state.pendingMediaId === mediaId) state.pendingMediaId = '';
           if (state.pendingMediaUntil === gateDeadline) state.pendingMediaUntil = 0;
@@ -107,7 +115,8 @@
         watchedVideo.addEventListener('loadeddata', check);
       }
       if (video.readyState < 2) {
-        scheduleCheck();
+        // A video that failed is not loading any more.
+        scheduleCheck(!video.error);
         return;
       }
       state.pendingMediaId = '';

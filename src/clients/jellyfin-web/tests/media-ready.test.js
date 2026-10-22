@@ -288,6 +288,80 @@ describe('media-correlated ready state', () => {
     assert.equal(OWP.state.pendingMediaId, '');
   });
 
+  it('does not reopen the room media while its video is still loading', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'slow-media'), currentVideo);
+    currentMediaId = 'slow-media';
+    currentVideo = new FakeVideo({ readyState: 0, currentTime: 0 });
+
+    await new Promise(resolve => setTimeout(resolve, 130));
+
+    assert.equal(ensureCalls.some(call => call[3] === true), false);
+    assert.deepEqual(ensuredMedia, ['slow-media']);
+    assert.equal(sent.length, 0);
+    currentVideo.readyState = 2;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(sent.map(message => message.type), ['ready']);
+  });
+
+  it('reopens the room media when its video failed to load', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'broken-media'), currentVideo);
+    currentMediaId = 'broken-media';
+    currentVideo = new FakeVideo({ readyState: 0, currentTime: 0 });
+    currentVideo.error = { code: 4 };
+
+    await new Promise(resolve => setTimeout(resolve, 70));
+
+    assert.equal(ensureCalls.some(call => call[0] === 'broken-media' && call[3] === true), true);
+  });
+
+  it('reopens room media that never shows up only a few times', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'missing-media'), currentVideo);
+
+    await new Promise(resolve => setTimeout(resolve, 50 * (OWP.constants.MEDIA_READY_MAX_REOPENS + 3)));
+
+    assert.equal(ensureCalls.filter(call => call[3] === true).length, OWP.constants.MEDIA_READY_MAX_REOPENS);
+    assert.equal(sent.length, 0);
+  });
+
+  it('a host that rejoins with its role declares the loaded room media ready', () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: true, desiredRoomId: 'room-a', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'guest';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+
+    assert.equal(OWP.state.isHost, true);
+    assert.deepEqual(sent.filter(message => message.type === 'ready'),
+      [{ type: 'ready', payload: { room: 'room-a', media_id: 'room-media' }, room: 'room-a' }]);
+    assert.deepEqual(ensuredMedia, []);
+  });
+
+  it('a guest that rejoins declares ready once, through the guest path', async () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: true, desiredRoomId: 'room-a', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'host';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+    await new Promise(resolve => setTimeout(resolve, 30));
+
+    assert.equal(OWP.state.isHost, false);
+    assert.equal(sent.filter(message => message.type === 'ready').length, 1);
+  });
+
+  it('a host does not declare ready on a room state it did not rejoin', () => {
+    currentMediaId = 'room-media';
+    Object.assign(OWP.state, { rejoinPending: false, desiredRoomId: '', rejectedRejoinRoomIds: [] });
+    const msg = roomState('room-a', 'room-media');
+    msg.payload.host_id = 'guest';
+
+    OWP._wsHandlers.handleRoomState(msg, currentVideo);
+
+    assert.equal(OWP.state.isHost, true);
+    assert.equal(sent.some(message => message.type === 'ready'), false);
+  });
+
   it('forces restart after timeout when item id changed without video transition', async () => {
     const previousVideo = currentVideo;
     OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), previousVideo);
