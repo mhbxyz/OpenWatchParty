@@ -78,6 +78,7 @@ Defines global shared state and configuration constants.
 | `DEFAULT_WS_URL` | string | `ws(s)://host:3000/ws` | WebSocket server URL |
 | `SUPPRESS_MS` | number | `2000` | Event suppression duration (ms) |
 | `SEEK_THRESHOLD` | number | `1.0` | Difference threshold for seek (seconds) |
+| `PAUSED_SEEK_THRESHOLD` | number | `0.04` | Difference threshold for aligning a pause (seconds) |
 | `STATE_UPDATE_MS` | number | `1000` | State update send interval (ms) |
 | `SYNC_LEAD_MS` | number | `300` | Sync advance to compensate latency (ms) |
 | `DRIFT_DEADZONE_SEC` | number | `0.04` | Dead zone for no correction (seconds) |
@@ -354,7 +355,7 @@ Manages WebSocket communication with the session server.
 
 Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
 
-`room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
+`room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. The host keeps the play and pause it sent (`hostControlAcks`) until their canonical events return, and retires them without applying them again; a newer opposite control supersedes a pending command, and a guest command that changes neither the play state nor the position does not start the syncing lock. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
 After an unexpected close, the client buffers a `WS_CLOSE` diagnostic containing the
 WebSocket close code, clean flag, and truncated reason. On the next connection it

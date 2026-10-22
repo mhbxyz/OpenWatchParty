@@ -418,6 +418,7 @@ fn schedule_pending_play(room_id, created_at, rooms, clients) {
 |-----------|-------|----------|-------------|
 | `SUPPRESS_MS` | 2000ms | Client | Anti-feedback lock duration |
 | `SEEK_THRESHOLD` | 1.0s | Client | Min difference for seek broadcast |
+| `PAUSED_SEEK_THRESHOLD` | 0.04s | Client | Max difference kept when a pause is applied |
 | `STATE_UPDATE_MS` | 1000ms | Client | State send interval |
 | `SYNC_LEAD_MS` | 300ms | Client | Compensation advance |
 | `DRIFT_DEADZONE_SEC` | 0.04s | Client | No-correction zone |

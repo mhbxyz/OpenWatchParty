@@ -95,6 +95,15 @@ describe('scheduled playback controls', () => {
     assert.equal(OWP.state.syncStatus, 'synced');
   });
 
+  it('aligns a small paused offset that would be tolerated during playback', () => {
+    currentVideo.currentTime = 10.3;
+    OWP._wsHandlers.handlePlayerEvent(event('pause'), currentVideo);
+    serverNow = 1300;
+    scheduled[0].callback();
+    assert.equal(currentVideo.currentTime, 10);
+    assert.equal(currentVideo.paused, true);
+  });
+
   it('schedules buffering and play using the active video element', () => {
     const originalVideo = currentVideo;
     OWP._wsHandlers.handlePlayerEvent(event('buffering'), originalVideo);

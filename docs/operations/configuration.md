@@ -149,6 +149,7 @@ The client has built-in constants that control synchronization behavior. These a
 |----------|---------|-------------|
 | `SUPPRESS_MS` | 2000 | Anti-feedback lock duration (ms) |
 | `SEEK_THRESHOLD` | 1.0 | Position difference to trigger seek (s) |
+| `PAUSED_SEEK_THRESHOLD` | 0.04 | Position difference a pause aligns (s) |
 | `STATE_UPDATE_MS` | 1000 | State update interval (ms) |
 | `SYNC_LEAD_MS` | 300 | Latency compensation (ms) |
 | `DRIFT_DEADZONE_SEC` | 0.04 | No-correction zone (s) |
