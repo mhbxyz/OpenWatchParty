@@ -1,0 +1,40 @@
+---
+import SiteHeader from '../components/SiteHeader.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import DemoIcons from '../components/DemoIcons.astro';
+import { withBase } from '../lib/paths';
+import { fontHead } from '../config/navigation.mjs';
+import '../styles/landing.css';
+
+interface Props { title: string; description: string }
+const { title, description } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080b18" />
+    <meta name="description" content={description} />
+    <title>{title} | OpenWatchParty</title>
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <link rel="icon" href={withBase('/app-icon.png')} />
+    <meta property="og:title" content={`${title} | OpenWatchParty`} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={new URL(withBase('/app-icon.png'), Astro.site)} />
+    {fontHead.map(({ attrs }) => <link {...attrs} />)}
+  </head>
+  <body class="landing-page">
+    <DemoIcons />
+    <div class="site-shell">
+      <a class="skip-link" href="#main-content">Skip to content</a>
+      <SiteHeader />
+      <main id="main-content"><slot /></main>
+      <SiteFooter />
+    </div>
+    <script>
+      import { introducePage } from '../scripts/entrances.js';
+      introducePage();
+    </script>
+  </body>
+</html>

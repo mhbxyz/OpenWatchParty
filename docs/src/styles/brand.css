@@ -1,0 +1,6 @@
+.brand { display: inline-flex; align-items: center; gap: 11px; white-space: nowrap; font-family: Manrope, Arial, sans-serif; font-weight: 800; letter-spacing: -.045em; font-size: 20px; color: #f8f9ff; text-decoration: none; }
+.brand img { display: block; flex: none; border-radius: 9px; }
+.brand-watch { color: #27c8f7; }
+.brand-party { color: #ad7aff; }
+.brand:focus-visible { outline: 3px solid #27c8f7; outline-offset: 5px; }
+@media (max-width: 760px) { .brand { font-size: 18px; }.brand img { width: 36px; height: 36px; } }

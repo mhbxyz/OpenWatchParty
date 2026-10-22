@@ -1,0 +1,53 @@
+@import './brand.css';
+
+:root {
+  --sl-font: 'DM Sans', Arial, sans-serif;
+  --sl-font-system: 'DM Sans', Arial, sans-serif;
+  --sl-color-accent-low: #142f50;
+  --sl-color-accent: #2199ca;
+  --sl-color-accent-high: #8ae0ff;
+  --sl-color-white: #f8f9ff;
+  --sl-color-gray-1: #d6dfef;
+  --sl-color-gray-2: #b6c4de;
+  --sl-color-gray-3: #8c9dbd;
+  --sl-color-gray-4: #465570;
+  --sl-color-gray-5: #263656;
+  --sl-color-gray-6: #101a30;
+  --sl-color-black: #0b1020;
+  --sl-color-bg-nav: #0e162c;
+  --sl-color-bg-sidebar: #0e162c;
+  --sl-content-width: 52rem;
+  --sl-nav-height: 5rem;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dbf2ff;
+  --sl-color-accent: #086784;
+  --sl-color-accent-high: #14375f;
+  --sl-color-white: #101a30;
+  --sl-color-gray-1: #263656;
+  --sl-color-gray-2: #465570;
+  --sl-color-gray-3: #64718c;
+  --sl-color-gray-4: #97a4bd;
+  --sl-color-gray-5: #d1daeb;
+  --sl-color-gray-6: #eff3fa;
+  --sl-color-black: #fff;
+  --sl-color-bg-nav: #0e162c;
+  --sl-color-bg-sidebar: #f4f7fc;
+}
+.docs-header { display: flex; align-items: center; justify-content: space-between; gap: 28px; height: 100%; }
+.docs-primary-nav { display: flex; align-items: center; gap: 25px; margin-left: auto; }
+.docs-primary-nav a { color: #c7d5ed; font-size: 14px; text-decoration: none; font-weight: 600; }
+.docs-primary-nav a:hover { color: #64d6f9; }
+.docs-header-tools { display: flex; align-items: center; gap: 16px; }
+.docs-header [data-open-modal] { color: #d6dfef; background: #15213b; border-color: #465570; }
+.docs-header [data-open-modal]:hover { color: #fff; }
+.docs-header [data-open-modal] kbd { background: #0b1020; }
+.docs-theme-select { --sl-color-gray-1: #d6dfef; --sl-color-gray-2: #d6dfef; --sl-color-white: #fff; color: #d6dfef; }
+.docs-theme-select select { color: #d6dfef; }
+h1, h2, h3, h4 { font-family: Manrope, Arial, sans-serif; letter-spacing: -.035em; }
+.sl-markdown-content img { height: auto; border-radius: 8px; border: 1px solid var(--sl-color-gray-5); }
+.sl-markdown-content table { font-size: .9rem; }
+.legacy-anchor { display: block; scroll-margin-top: 7rem; }
+@media (max-width: 1100px) { .docs-primary-nav { gap: 17px; }.docs-header { gap: 20px; }.docs-primary-nav a:last-child { display: none; } }
+@media (max-width: 900px) { .docs-primary-nav { display: none; } }
+@media (max-width: 799px) { .docs-header { padding-right: 3rem; gap: 15px; }.docs-theme-select { display: none; }.docs-header .brand { font-size: 16px; gap: 8px; }.docs-header .brand img { width: 32px; height: 32px; }.docs-header-tools { margin-left: auto; } }

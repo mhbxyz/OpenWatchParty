@@ -466,7 +466,7 @@ jobs:
           archives=(artifacts/*.zip)
           [[ ${#archives[@]} -eq 1 ]]
           infra/scripts/update-plugin-manifest.sh \
-            docs/jellyfin-plugin-repo/manifest.json \
+            docs/public/jellyfin-plugin-repo/manifest.json \
             "${archives[0]}" \
             "$RELEASE_TAG" \
             "$RELEASE_CHANGELOG"
@@ -477,6 +477,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/jellyfin-plugin-repo/manifest.json
+          git add docs/public/jellyfin-plugin-repo/manifest.json
           git commit -m "Update plugin manifest for ${RELEASE_TAG}"
           git push

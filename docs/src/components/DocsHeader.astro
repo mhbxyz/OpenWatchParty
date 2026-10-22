@@ -1,0 +1,16 @@
+---
+import Search from '@astrojs/starlight/components/Search.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import Brand from './Brand.astro';
+import { withBase } from '../lib/paths';
+---
+<div class="docs-header">
+  <Brand />
+  <nav class="docs-primary-nav" aria-label="Project navigation">
+    <a href={withBase('/product/')}>Guides</a>
+    <a href={withBase('/operations/')}>Install</a>
+    <a href={withBase('/developers/')}>Developers</a>
+    <a href="https://github.com/mhbxyz/OpenWatchParty">GitHub</a>
+  </nav>
+  <div class="docs-header-tools"><Search /><div class="docs-theme-select"><ThemeSelect /></div></div>
+</div>

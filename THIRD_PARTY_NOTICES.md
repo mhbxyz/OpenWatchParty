@@ -4,7 +4,8 @@ OpenWatchParty redistributes the following third-party material.
 
 ## Tabler Icons
 
-The outline icons in the room bar (`src/clients/jellyfin-web/ui/panel-elements.js`) are
+The outline icons in the room bar (`src/clients/jellyfin-web/ui/panel-elements.js`)
+and the website previews (`docs/src/components/DemoIcons.astro`) are
 derived from [Tabler Icons](https://tabler.io/icons).
 
 MIT License

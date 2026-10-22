@@ -37,9 +37,9 @@ rust_toolchain=$(awk -F '"' '/^channel = / { print $2; exit }' "$repository_root
 [[ -n $rust_toolchain ]] || fail 'Rust toolchain is missing from rust-toolchain.toml'
 
 node_ci=$(awk -F "'" '/node-version:/ { print $2; exit }' "$repository_root/.github/workflows/ci.yml")
-ruby_docs=$(awk -F "'" '/ruby-version:/ { print $2; exit }' "$repository_root/.github/workflows/docs.yml")
+node_docs=$(awk -F "'" '/node-version:/ { print $2; exit }' "$repository_root/.github/workflows/docs.yml")
 [[ -n $node_ci ]] || fail 'Node.js version is missing from the CI workflow'
-[[ -n $ruby_docs ]] || fail 'Ruby version is missing from the documentation workflow'
+[[ -n $node_docs ]] || fail 'Node.js version is missing from the documentation workflow'
 
 cargo_version=$(cargo metadata \
     --manifest-path "$repository_root/src/server/Cargo.toml" \
@@ -84,11 +84,11 @@ expected_image='image: jellyfin/jellyfin:$'
 expected_image+="{JELLYFIN_VERSION:-$jellyfin_image}"
 [[ $compose_contents == *"$expected_image"* ]] || fail "dev Jellyfin image does not default to $jellyfin_image"
 
-compatibility_document="$documentation_root/operations/compatibility.md"
-setup_document="$documentation_root/development/setup.md"
-ci_document="$documentation_root/development/ci.md"
-installation_document="$documentation_root/operations/installation.md"
-transformation_document="$documentation_root/development/file-transformation-integration.md"
+compatibility_document="$documentation_root/src/content/docs/operations/compatibility.md"
+setup_document="$documentation_root/src/content/docs/development/setup.md"
+ci_document="$documentation_root/src/content/docs/development/ci.md"
+installation_document="$documentation_root/src/content/docs/operations/installation.md"
+transformation_document="$documentation_root/src/content/docs/development/file-transformation-integration.md"
 
 assert_contains 'README Jellyfin badge' "$readme_file" "Jellyfin-$jellyfin_image-"
 assert_contains 'README Jellyfin badge alt text' "$readme_file" "alt=\"Jellyfin $jellyfin_image\""
@@ -109,7 +109,9 @@ assert_contains 'Setup .NET SDK version' "$setup_document" ".NET SDK $dotnet_sdk
 assert_contains 'Setup Rust version' "$setup_document" "Rust $rust_toolchain"
 assert_contains 'Setup Node.js CI version' "$setup_document" "Node.js $node_ci"
 assert_contains 'Setup Node.js engine range' "$setup_document" "\`$node_engines\`"
-assert_contains 'Setup Ruby version' "$setup_document" "Ruby $ruby_docs"
+assert_contains 'Setup site Node.js version' "$setup_document" "Node.js $node_docs"
+site_engines=$(jq -er '.engines.node' "$documentation_root/package.json")
+assert_contains 'Setup site Node.js engine range' "$setup_document" "\`$site_engines\`"
 
 assert_contains 'CI product image version' "$ci_document" "owp-session-server:v$version"
 assert_contains 'CI Rust toolchain version' "$ci_document" "Rust \`$rust_toolchain\`"

@@ -23,7 +23,7 @@ public class OpenWatchPartyController : ControllerBase
 
     /// <summary>
     /// WebSocket protocol version the issued token authorizes. Kept in sync with
-    /// the session server and the JavaScript client; see docs/technical/protocol.md.
+    /// the session server and the JavaScript client; see docs/src/content/docs/technical/protocol.md.
     /// </summary>
     internal const int ProtocolVersion = 1;
 

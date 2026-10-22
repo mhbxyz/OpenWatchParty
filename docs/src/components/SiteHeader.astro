@@ -1,0 +1,24 @@
+---
+import Brand from './Brand.astro';
+import { withBase } from '../lib/paths';
+---
+<header class="site-header">
+    <Brand />
+    <nav class="desktop-nav" aria-label="Main navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="#features">Features</a>
+      <a href={withBase('/product/')}>Guides</a>
+      <a href={withBase('/developers/')}>Developers</a>
+    </nav>
+    <a class="header-action" href={withBase('/product/first-watch-party/')}>Get started <span aria-hidden="true">↗</span></a>
+    <details class="mobile-nav">
+      <summary aria-label="Open menu">Menu</summary>
+      <nav aria-label="Mobile navigation">
+        <a href="#how-it-works">How it works</a>
+        <a href="#features">Features</a>
+        <a href={withBase('/product/')}>Guides</a>
+        <a href={withBase('/developers/')}>Developers</a>
+        <a href={withBase('/product/first-watch-party/')}>Get started</a>
+      </nav>
+    </details>
+  </header>

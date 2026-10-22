@@ -1,0 +1,24 @@
+---
+import TwinScreens from './TwinScreens.astro';
+import { withBase } from '../lib/paths';
+---
+<section class="hero" aria-labelledby="hero-title">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-inner">
+        <div class="hero-intro">
+        <div class="hero-copy">
+          <p class="hero-kicker"><span class="live-dot"></span> The shared screen for Jellyfin</p>
+          <h1 id="hero-title">Your movie night.<br><span>Everyone in sync.</span></h1>
+        </div>
+        <div class="hero-support">
+          <p class="hero-description">Different places. The same scene. Bring your friends into Jellyfin, press play, and share every pause, plot twist and conversation.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#how-it-works">See how it works <span aria-hidden="true">↗</span></a>
+            <a class="button button-text" href={withBase('/product/first-watch-party/')}>Follow the full tutorial <span aria-hidden="true">→</span></a>
+          </div>
+          <p class="hero-note">Free and open source · Made for Jellyfin Web</p>
+        </div>
+        </div>
+        <TwinScreens />
+      </div>
+    </section>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme-logo.png" alt="OpenWatchParty — Real-time sync for Jellyfin" width="640">
+  <img src="docs/public/readme-logo.png" alt="OpenWatchParty — Real-time sync for Jellyfin" width="640">
 </p>
 
 <p align="center">
@@ -18,7 +18,7 @@
 OpenWatchParty enables synchronized media playback for [Jellyfin](https://jellyfin.org/). It consists of a **Jellyfin Plugin** (C#) that integrates the UI and a **Session Server** (Rust) that manages rooms and synchronization via WebSocket.
 
 <p align="center">
-  <img src="docs/assets/images/watch-party-panel.png" alt="A synchronized watch party in the Jellyfin player" width="720">
+  <img src="docs/public/assets/images/watch-party-panel.png" alt="A synchronized watch party in the Jellyfin player" width="720">
 </p>
 
 OpenWatchParty 0.7 adds shared playback controls for room members, room queues

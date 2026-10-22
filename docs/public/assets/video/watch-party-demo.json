@@ -1,0 +1,33 @@
+{
+  "duration": 32.72,
+  "events": [
+    {
+      "at": 0,
+      "label": "Two browsers. One movie night."
+    },
+    {
+      "at": 1.5,
+      "label": "The host creates a room"
+    },
+    {
+      "at": 3.69,
+      "label": "A friend joins from Jellyfin"
+    },
+    {
+      "at": 8.27,
+      "label": "Press play. Both screens follow."
+    },
+    {
+      "at": 14.13,
+      "label": "Chat without leaving the film"
+    },
+    {
+      "at": 21.45,
+      "label": "A guest pauses for everyone"
+    },
+    {
+      "at": 24.82,
+      "label": "The host resumes the room"
+    }
+  ]
+}

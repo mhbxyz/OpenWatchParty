@@ -1,0 +1,9 @@
+---
+import ProductPreviews from './ProductPreviews.astro';
+import { withBase } from '../lib/paths';
+---
+<section class="feature-section section" id="features" aria-labelledby="features-title">
+      <div class="section-heading feature-heading"><div><p class="section-kicker">The good parts of watching together</p><h2 id="features-title">A room that feels shared.</h2></div><a class="section-link" href={withBase('/product/features/')}>Explore every feature <span aria-hidden="true">↗</span></a></div>
+      <p class="preview-intro">A few familiar controls. A lot of shared moments. Try the interactive previews below.</p>
+      <ProductPreviews />
+    </section>
