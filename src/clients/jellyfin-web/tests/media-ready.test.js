@@ -288,6 +288,41 @@ describe('media-correlated ready state', () => {
     assert.equal(OWP.state.pendingMediaId, '');
   });
 
+  it('does not reopen the room media while its video is still loading', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'slow-media'), currentVideo);
+    currentMediaId = 'slow-media';
+    currentVideo = new FakeVideo({ readyState: 0, currentTime: 0 });
+
+    await new Promise(resolve => setTimeout(resolve, 130));
+
+    assert.equal(ensureCalls.some(call => call[3] === true), false);
+    assert.deepEqual(ensuredMedia, ['slow-media']);
+    assert.equal(sent.length, 0);
+    currentVideo.readyState = 2;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(sent.map(message => message.type), ['ready']);
+  });
+
+  it('reopens the room media when its video failed to load', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'broken-media'), currentVideo);
+    currentMediaId = 'broken-media';
+    currentVideo = new FakeVideo({ readyState: 0, currentTime: 0 });
+    currentVideo.error = { code: 4 };
+
+    await new Promise(resolve => setTimeout(resolve, 70));
+
+    assert.equal(ensureCalls.some(call => call[0] === 'broken-media' && call[3] === true), true);
+  });
+
+  it('reopens room media that never shows up only a few times', async () => {
+    OWP._wsHandlers.handleRoomState(roomState('room-a', 'missing-media'), currentVideo);
+
+    await new Promise(resolve => setTimeout(resolve, 50 * (OWP.constants.MEDIA_READY_MAX_REOPENS + 3)));
+
+    assert.equal(ensureCalls.filter(call => call[3] === true).length, OWP.constants.MEDIA_READY_MAX_REOPENS);
+    assert.equal(sent.length, 0);
+  });
+
   it('forces restart after timeout when item id changed without video transition', async () => {
     const previousVideo = currentVideo;
     OWP._wsHandlers.handleRoomState(roomState('room-a', 'new-media'), previousVideo);

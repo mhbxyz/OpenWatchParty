@@ -149,6 +149,7 @@
     ROOM_REJOIN_TIMEOUT_MS: 5000,
     MEDIA_READY_POLL_MS: 100,
     MEDIA_READY_TIMEOUT_MS: 15000,
+    MEDIA_READY_MAX_REOPENS: 3,   // Times the room media is opened again when it does not show up
     MEDIA_SWITCH_GRACE_MS: 20000, // Player closed by OWP to open the room media (> MEDIA_READY_TIMEOUT_MS)
     STREAM_RELOAD_MAX_MS: 30000,  // Longest the room waits for the host's stream to reload (track change)
     VIDEO_ACTION_RETRY_MS: 50,
