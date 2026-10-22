@@ -6,6 +6,12 @@
   const t = OWP.i18n.t;
   const { PROTOCOL_VERSION, CLIENT_FEATURES } = OWP.constants;
   const TOKEN_REQUEST_TIMEOUT_MS = 10000;
+  const TOKEN_REFRESH_RETRY_MS = 30000;
+  // Jellyfin out of reach for a moment, not a refusal: a renewal that fails
+  // like this is retried, and the session goes on with the token it has.
+  const TRANSIENT_REFRESH_ERRORS = new Set([
+    'network_error', 'timeout', 'aborted', 'server_error', 'server_unavailable', 'rate_limited', 'http_error', 'invalid_json'
+  ]);
 
   const getJellyfinUsername = () => {
     try {
@@ -74,6 +80,19 @@
     });
   };
 
+  const scheduleRefresh = (delayMs) => {
+    if (state.tokenRefreshTimer) {
+      OWP.timers.clear(state.tokenRefreshTimer);
+      state.tokenRefreshTimer = null;
+    }
+    const authRequestAttempt = state.authRequestAttempt;
+    state.tokenRefreshTimer = OWP.timers.setTimeout(async () => {
+      state.tokenRefreshTimer = null;
+      if (authRequestAttempt !== state.authRequestAttempt) return;
+      await refreshToken();
+    }, delayMs, 'auth');
+  };
+
   const scheduleTokenRefresh = (expiresInSec) => {
     if (state.tokenRefreshTimer) {
       OWP.timers.clear(state.tokenRefreshTimer);
@@ -83,37 +102,64 @@
     const refreshInMs = Math.max(0, (expiresInSec * 1000) - refreshBeforeMs);
     if (refreshInMs > 0) {
       console.log('[OpenWatchParty] Token refresh scheduled in', Math.round(refreshInMs / 1000), 's');
-      const authRequestAttempt = state.authRequestAttempt;
-      state.tokenRefreshTimer = OWP.timers.setTimeout(async () => {
-        state.tokenRefreshTimer = null;
-        if (authRequestAttempt !== state.authRequestAttempt) return;
-        console.log('[OpenWatchParty] Refreshing auth token...');
-        const refreshSocket = state.ws;
-        state.authToken = null;
-        const result = await fetchAuthToken();
-        if (refreshSocket !== state.ws) return;
-        if (result.mode === 'authenticated' && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
-          refreshSocket.send(JSON.stringify({
-            type: 'auth',
-            payload: {
-              token: result.token,
-              user_name: state.userName,
-              user_id: state.userId,
-              protocol_version: PROTOCOL_VERSION,
-              features: CLIENT_FEATURES
-            },
-            ts: utils.nowMs()
-          }));
-          console.log('[OpenWatchParty] Token refreshed and re-authenticated');
-        } else if (result.mode === 'error' && state.ws) {
-          if (actions.disconnect) actions.disconnect();
-          else {
-            state.autoReconnect = false;
-            state.ws.close(4003, 'OpenWatchParty authentication failed');
-            state.ws = null;
-          }
-        }
-      }, refreshInMs, 'auth');
+      scheduleRefresh(refreshInMs);
+    }
+  };
+
+  // A renewal that failed for a moment leaves the session and the room as
+  // they were: the token in use still works, and the renewal is retried while
+  // there is time. If it expires first, the session server closes the socket
+  // and the client reconnects into the room as after any other drop.
+  const keepSessionAfterRefreshError = (kept) => {
+    state.authBlocked = false;
+    state.authError = '';
+    state.authEnabled = kept.enabled;
+    setNativeSyncPlayHidden(kept.hideNativeSyncPlay);
+    if (!kept.token || kept.expiresAt <= Date.now()) return;
+    state.authToken = kept.token;
+    state.tokenExpiresAt = kept.expiresAt;
+    if (kept.expiresAt - Date.now() > TOKEN_REFRESH_RETRY_MS + TOKEN_REQUEST_TIMEOUT_MS) {
+      scheduleRefresh(TOKEN_REFRESH_RETRY_MS);
+    }
+  };
+
+  const refreshToken = async () => {
+    console.log('[OpenWatchParty] Refreshing auth token...');
+    const refreshSocket = state.ws;
+    const kept = {
+      token: state.authToken,
+      expiresAt: state.tokenExpiresAt,
+      enabled: state.authEnabled,
+      hideNativeSyncPlay: state.hideNativeSyncPlayButton
+    };
+    state.authToken = null;
+    const result = await fetchAuthToken();
+    if (refreshSocket !== state.ws) return;
+    if (result.mode === 'authenticated' && refreshSocket && refreshSocket.readyState === WebSocket.OPEN) {
+      refreshSocket.send(JSON.stringify({
+        type: 'auth',
+        payload: {
+          token: result.token,
+          user_name: state.userName,
+          user_id: state.userId,
+          protocol_version: PROTOCOL_VERSION,
+          features: CLIENT_FEATURES
+        },
+        ts: utils.nowMs()
+      }));
+      console.log('[OpenWatchParty] Token refreshed and re-authenticated');
+    } else if (result.mode === 'error' && state.ws) {
+      if (TRANSIENT_REFRESH_ERRORS.has(result.code)) {
+        console.warn('[OpenWatchParty] Token refresh failed, keeping the session:', result.code);
+        keepSessionAfterRefreshError(kept);
+        return;
+      }
+      if (actions.disconnect) actions.disconnect();
+      else {
+        state.autoReconnect = false;
+        state.ws.close(4003, 'OpenWatchParty authentication failed');
+        state.ws = null;
+      }
     }
   };
 
