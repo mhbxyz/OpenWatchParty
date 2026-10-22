@@ -347,6 +347,7 @@
     completeRoomRejoin,
     failRoomRejoin,
     cancelRoomRejoin,
+    rejectRoomState,
     disconnect
   });
 })();

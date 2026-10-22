@@ -408,6 +408,41 @@ describe('room reconnection lifecycle', () => {
     assert.equal(OWP.state.roomId, 'room-b');
   });
 
+  it('ignores a room state already on its way after leaving the room', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+    OWP.actions.joinRoom('room-a');
+    socket.receive(roomState('room-a'));
+    assert.equal(OWP.state.inRoom, true);
+
+    OWP.actions.leaveRoom();
+    assert.equal(socket.sent.at(-1).type, 'leave_room');
+    assert.equal(socket.sent.at(-1).room, 'room-a');
+    // The queue moved on as the guest left: its room_state still arrives.
+    socket.receive(roomState('room-a'));
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.roomId, '');
+
+    OWP.actions.joinRoom('room-a');
+    socket.receive(roomState('room-a'));
+    assert.equal(OWP.state.inRoom, true);
+  });
+
+  it('ignores a room state already on its way after closing the room', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Host' } });
+    Object.assign(OWP.state, { inRoom: true, roomId: 'room-a', isHost: true });
+
+    OWP.actions.closeRoom();
+    socket.receive(roomState('room-a'));
+    assert.equal(OWP.state.inRoom, false);
+    assert.equal(OWP.state.roomId, '');
+  });
+
   it('cancels a scheduled reconnect during intentional disconnect', async () => {
     await OWP.actions.connect();
     const socket = sockets[0];

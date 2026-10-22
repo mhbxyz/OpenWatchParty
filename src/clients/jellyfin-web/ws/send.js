@@ -100,8 +100,15 @@
     send('join_room', payload, id);
   };
 
-  const leaveRoom = () => {
+  // A room_state already on its way (the queue moving on as someone leaves)
+  // must not take this client back into the room it left.
+  const forgetRoom = () => {
     if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    if (state.roomId && actions.rejectRoomState) actions.rejectRoomState(state.roomId);
+  };
+
+  const leaveRoom = () => {
+    forgetRoom();
     send('leave_room');
     resetRoomState();
     if (OWP.ui && OWP.ui.hidePanel) {
@@ -113,7 +120,7 @@
   };
 
   const closeRoom = () => {
-    if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+    forgetRoom();
     const supportsHostTransfer = state.serverFeatures.includes('host_transfer');
     send(supportsHostTransfer ? 'close_room' : 'leave_room');
     resetRoomState();
