@@ -46,6 +46,7 @@ fn register_client(
         supports_host_transfer: false,
         supports_shared_playback_control: false,
         supports_media_queue: false,
+        supports_chat_history: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,

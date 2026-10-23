@@ -75,6 +75,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         status_broadcast: Default::default(),
         guest_command_until: None,
         queue: Default::default(),
+        chat_history: Default::default(),
     }
 }
 

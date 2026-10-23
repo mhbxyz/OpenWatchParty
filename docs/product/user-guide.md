@@ -210,6 +210,7 @@ The chat feature allows you to communicate with other watch party participants i
 - **Username display** - Messages show the sender's Jellyfin username
 - **Timestamps** - Hover a message to see when it was sent
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
+- **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 
 ### Notes

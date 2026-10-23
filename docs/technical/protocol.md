@@ -26,7 +26,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control` and `media_queue`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `chat_history`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -68,7 +68,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "chat_history"]
   },
   "ts": 1678900000000
 }
@@ -78,10 +78,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control` and `media_queue` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `chat_history` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, gets `queue_state` only when it declared `media_queue`, and gets `chat_history` only when it declared `chat_history`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
 
 ### `list_rooms`
 
@@ -147,6 +147,7 @@ Join an existing room.
 - Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
 - Send the new client `queue_state` if it negotiated `media_queue`
+- Send the new client `chat_history` if it negotiated `chat_history` and the room has messages
 - Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
 ### `leave_room`
@@ -321,6 +322,7 @@ Send a text message to the room.
 
 **Effects:**
 - Message broadcast to all clients in the room (including sender)
+- The room keeps its last 50 messages for members who join later (`chat_history`); they go with the room when it closes
 - Rate limited by existing 30 msg/sec limit
 
 **Error responses:**
@@ -413,7 +415,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "chat_history"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -735,6 +737,32 @@ Chat message broadcast from server.
 1. Add message to local chat history (max 100 messages)
 2. If chat panel not visible, increment unread badge
 3. Render message in chat UI
+
+### `chat_history`
+
+The room's last chat messages (up to 50, oldest first), sent once to a member that declared `chat_history`, right after it joins (after `room_state`, the participant list and statuses, `room_capabilities` and `queue_state`). Not sent when the room has none.
+
+```json
+{
+  "type": "chat_history",
+  "room": "uuid-room-id",
+  "payload": {
+    "messages": [
+      { "client": "uuid-client-id", "username": "Franco", "text": "Starting in a minute", "server_ts": 1678899990000, "own": false }
+    ]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Entry Field | Type | Description |
+|-------------|------|-------------|
+| `client` | string | The sender's client id when it sent the message (a reconnection gives it a new one) |
+| `username` | string | The sender's name, as in `chat_message` |
+| `text` | string | The message |
+| `server_ts` | number | When the server relayed it |
+| `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids without sending them) |
 
 ### `error`
 

@@ -436,6 +436,9 @@ Stores each participant's status, when the list has the same length as the parti
 #### `queue_state` and media queue
 The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.
 
+#### `chat_history`
+With a server that acknowledges `chat_history`, joining a room brings its last 50 chat messages. `chat.loadHistory()` replaces the chat with them, none unread; a rejoin after a lost connection gets them again. Messages from this member count as its own by the server's `own` flag (same Jellyfin user, from an earlier connection too) or its current client id. Loading it clears the unread count.
+
 #### `host_changed`
 Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The existing room bar is updated in place so Invite and the current leave choices change without replacing chat or keyboard focus. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
 
