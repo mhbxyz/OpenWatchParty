@@ -10,7 +10,7 @@
 
 use super::super::constants::QUEUE_COUNTDOWN_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
-use super::super::pending_play::schedule_pending_play;
+use super::super::pending_play::{schedule_pending_play, send_waiting, shows_start, wait_ms};
 use super::super::validation::{is_valid_media_id, sanitize_name};
 use super::join::room_state_message;
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders};
@@ -42,6 +42,9 @@ struct AddPayload {
 struct ItemPayload {
     id: String,
     title: String,
+    /// The Jellyfin series of an episode, from clients with `start_when_ready`.
+    #[serde(default)]
+    series: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -85,7 +88,7 @@ enum Outcome {
 
 /// What to start once the state lock is released.
 enum FollowUp {
-    PendingPlay(String, u64),
+    PendingPlay(String, u64, u64),
     Countdown(String, u64),
 }
 
@@ -108,6 +111,10 @@ impl QueueCommand {
                         Some(QueueItem {
                             id: valid_id(item.id)?,
                             title: sanitize_name(&item.title)?,
+                            series: match item.series {
+                                Some(series) => Some(valid_id(series)?),
+                                None => None,
+                            },
                         })
                     })
                     .collect::<Option<_>>()?;
@@ -146,6 +153,15 @@ fn advance(
     now: Instant,
 ) -> u64 {
     let generation = crate::types::next_pending_play_generation();
+    // The next episode of the same series goes on without counting down; any
+    // other item counts down like the room's first.
+    let series = |id: Option<&str>| {
+        id.and_then(|id| room.queue.items.iter().find(|item| item.id == id))
+            .and_then(|item| item.series.clone())
+    };
+    let same_series = series(room.media_id.as_deref())
+        .is_some_and(|previous| series(Some(&id)) == Some(previous));
+    room.countdown_pending = !same_series;
     room.media_id = Some(id);
     room.state = PlaybackState {
         position: 0.0,
@@ -169,11 +185,15 @@ fn advance(
         })
         .cloned()
         .collect();
+    // What the members said was about the previous item.
+    room.not_ready.clear();
     room.pending_play = Some(PendingPlay {
         initiator_id: room.host_id.clone(),
         position: 0.0,
         generation,
         position_ts: current_ts,
+        deadline_server_ts: current_ts + wait_ms(clients, &room.host_id),
+        shows_start: shows_start(clients, &room.host_id),
     });
     room.queue.countdown = None;
     room.queue.advance_generation = Some(generation);
@@ -262,19 +282,22 @@ fn announce_advance(room: &Room, clients: &HashMap<String, Client>) {
         }
     }
     send_queue_state(room, clients, None);
+    send_waiting(room, clients);
 }
 
 /// After an advance, once the state lock is released: waits for the members'
 /// `ready`, and shows the new item in the room list.
-async fn start_pending_play(
+async fn arm_pending_play(
     room_id: String,
     generation: u64,
+    wait: u64,
     state: &SharedState,
     tasks: &AppTasks,
 ) {
     std::mem::drop(schedule_pending_play(
         room_id,
         generation,
+        wait,
         state.clone(),
         tasks,
     ));
@@ -318,9 +341,16 @@ fn schedule_countdown(
             let next = next.id.clone();
             let pending_play = advance(room, clients, next, now_ms(), Instant::now());
             announce_advance(room, clients);
-            pending_play
+            (pending_play, wait_ms(clients, &room.host_id))
         };
-        start_pending_play(room_id, pending_play, &state, &advance_tasks).await;
+        arm_pending_play(
+            room_id,
+            pending_play.0,
+            pending_play.1,
+            &state,
+            &advance_tasks,
+        )
+        .await;
     })
 }
 
@@ -378,6 +408,7 @@ pub(in crate::ws) async fn handle_queue(
                     Ok(Some(FollowUp::PendingPlay(
                         room.room_id.clone(),
                         generation,
+                        wait_ms(clients, &room.host_id),
                     )))
                 }
                 Outcome::CountdownStarted(generation) => {
@@ -390,8 +421,8 @@ pub(in crate::ws) async fn handle_queue(
     match result {
         Err((code, message)) => send_error(client_id, state, code, message).await,
         Ok(None) => {}
-        Ok(Some(FollowUp::PendingPlay(room_id, generation))) => {
-            start_pending_play(room_id, generation, state, tasks).await;
+        Ok(Some(FollowUp::PendingPlay(room_id, generation, wait))) => {
+            arm_pending_play(room_id, generation, wait, state, tasks).await;
         }
         Ok(Some(FollowUp::Countdown(room_id, generation))) => {
             std::mem::drop(schedule_countdown(
@@ -482,6 +513,7 @@ mod tests {
             Some(QueueCommand::Add(vec![QueueItem {
                 id: A.to_string(),
                 title: "Pilot".to_string(),
+                series: None,
             }]))
         );
         assert_eq!(
@@ -713,6 +745,169 @@ mod tests {
             assert_eq!(payload["state"]["position"], 0.0);
             assert_eq!(payload["state"]["play_state"], "paused");
         }
+    }
+
+    const SERIES: &str = "dddddddddddddddddddddddddddddddd";
+    const OTHER_SERIES: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    fn add_with_series(items: &[(&str, Option<&str>)]) -> IncomingMessage {
+        let items: Vec<_> = items
+            .iter()
+            .map(|(id, series)| {
+                let mut item =
+                    serde_json::json!({ "id": id, "title": format!("Episode {}", &id[..1]) });
+                if let Some(series) = series {
+                    item["series"] = serde_json::json!(series);
+                }
+                item
+            })
+            .collect();
+        message(
+            ClientMessageType::QueueAdd,
+            serde_json::json!({ "items": items }),
+        )
+    }
+
+    #[test]
+    fn parse_reads_the_series_and_the_queue_never_sends_it() {
+        let Some(QueueCommand::Add(items)) =
+            QueueCommand::parse(&add_with_series(&[(A, Some(SERIES)), (B, None)]))
+        else {
+            panic!("a valid add");
+        };
+        assert_eq!(items[0].series.as_deref(), Some(SERIES));
+        assert_eq!(items[1].series, None);
+        assert_eq!(
+            QueueCommand::parse(&add_with_series(&[(A, Some("not-hex"))])),
+            None
+        );
+
+        let mut queue = crate::room::MediaQueue::default();
+        queue.add(items, Some(A));
+        let payload = queue.payload(Some(A));
+        assert!(payload["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item.get("series").is_none()));
+    }
+
+    #[tokio::test]
+    async fn the_next_episode_of_the_same_series_goes_on_without_a_countdown() {
+        let (state, mut receivers) = room_with_members().await;
+        {
+            let mut locked = state.write().await;
+            for id in ["host", "guest"] {
+                locked
+                    .clients
+                    .get_mut(id)
+                    .unwrap()
+                    .supports_start_when_ready = true;
+            }
+        }
+        let tasks = AppTasks::new();
+        handle_queue(
+            "host",
+            &add_with_series(&[
+                (A, Some(SERIES)),
+                (B, Some(SERIES)),
+                (C, Some(OTHER_SERIES)),
+            ]),
+            &state,
+            &tasks,
+        )
+        .await;
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .not_ready
+            .insert("guest".into(), crate::types::NotReadyReason::Buffering);
+        receivers.iter_mut().for_each(|rx| {
+            drain(rx);
+        });
+
+        let before = now_ms();
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueAdvance,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+        {
+            let locked = state.read().await;
+            let room = &locked.rooms["room"];
+            assert!(!room.countdown_pending);
+            // What the guest said was about the previous episode.
+            assert!(room.not_ready.is_empty());
+            let deadline = room.pending_play.as_ref().unwrap().deadline_server_ts;
+            assert!((before + super::super::super::constants::START_WAIT_MS
+                ..=now_ms() + super::super::super::constants::START_WAIT_MS)
+                .contains(&deadline));
+        }
+        for (rx, expected) in receivers.iter_mut().zip([true, true, false]) {
+            let messages = drain(rx);
+            let waiting: Vec<_> = messages
+                .iter()
+                .filter(|msg| msg.msg_type == ServerMessageType::StartState)
+                .collect();
+            assert_eq!(waiting.len(), usize::from(expected));
+            if expected {
+                assert_eq!(waiting[0].payload.as_ref().unwrap()["state"], "waiting");
+                assert_eq!(waiting[0].payload.as_ref().unwrap()["position"], 0.0);
+            }
+        }
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueAdvance,
+                serde_json::json!({ "id": C }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+        assert!(state.read().await.rooms["room"].countdown_pending);
+    }
+
+    #[tokio::test]
+    async fn an_item_without_a_series_counts_down_and_an_older_host_waits_briefly() {
+        let (state, _receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue(
+            "host",
+            &add_with_series(&[(A, None), (B, None)]),
+            &state,
+            &tasks,
+        )
+        .await;
+        let before = now_ms();
+
+        handle_queue(
+            "host",
+            &message(
+                ClientMessageType::QueueAdvance,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+
+        let locked = state.read().await;
+        let room = &locked.rooms["room"];
+        assert!(room.countdown_pending);
+        let deadline = room.pending_play.as_ref().unwrap().deadline_server_ts;
+        assert!((before + super::super::super::constants::MAX_READY_WAIT_MS
+            ..=now_ms() + super::super::super::constants::MAX_READY_WAIT_MS)
+            .contains(&deadline));
     }
 
     #[tokio::test]

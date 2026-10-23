@@ -2,7 +2,7 @@ mod connection;
 pub(crate) mod constants;
 mod dispatch;
 mod handlers;
-mod pending_play;
+pub(crate) mod pending_play;
 mod validation;
 
 pub use connection::client_connection;
@@ -10,6 +10,7 @@ pub(crate) use connection::SessionClock;
 
 #[cfg(test)]
 mod concurrency_tests {
+    use super::constants::MAX_READY_WAIT_MS;
     use super::handlers::{
         handle_create_room, handle_join_room, handle_leave_room, handle_playback, handle_ready,
     };
@@ -68,6 +69,8 @@ mod concurrency_tests {
                 position: 12.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,
+                deadline_server_ts: 0,
+                shows_start: false,
             });
             locked
                 .rooms
@@ -86,6 +89,7 @@ mod concurrency_tests {
         let pending = schedule_pending_play(
             "pending-room".to_string(),
             generation,
+            MAX_READY_WAIT_MS,
             state.clone(),
             &tasks,
         );
@@ -180,6 +184,8 @@ mod concurrency_tests {
                     position: 12.0,
                     generation: crate::types::next_pending_play_generation(),
                     position_ts: now_ms(),
+                    deadline_server_ts: 0,
+                    shows_start: false,
                 });
                 locked.rooms.insert("room".to_string(), room);
             }
@@ -296,6 +302,8 @@ mod concurrency_tests {
                 position: 12.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: created_at,
+                deadline_server_ts: 0,
+                shows_start: false,
             });
             let generation = room.pending_play.as_ref().unwrap().generation;
             locked.rooms.insert("room".to_string(), room);
@@ -303,7 +311,13 @@ mod concurrency_tests {
         };
 
         let tasks = crate::tasks::AppTasks::new();
-        let timer = schedule_pending_play("room".to_string(), generation, state.clone(), &tasks);
+        let timer = schedule_pending_play(
+            "room".to_string(),
+            generation,
+            MAX_READY_WAIT_MS,
+            state.clone(),
+            &tasks,
+        );
         let pause = IncomingMessage {
             msg_type: ClientMessageType::PlayerEvent,
             room: Some("room".to_string()),

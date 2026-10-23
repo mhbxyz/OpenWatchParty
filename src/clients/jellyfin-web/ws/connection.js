@@ -142,7 +142,7 @@
       state.isHost = false;
       state.readyRoomId = '';
       state.participants = [];
-      Object.assign(state, OWP.stateFactories.createQueueState());
+      Object.assign(state, OWP.stateFactories.createQueueState(), OWP.stateFactories.createStartState());
       state.roomBarSection = '';
     }
     ui.render();
@@ -184,6 +184,7 @@
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
+      case 'start_state': h.handleStartState(msg); break;
       case 'error': h.handleError(msg); break;
     }
   };

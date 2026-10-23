@@ -11,6 +11,7 @@
   const PLAY_STATES = new Set(['playing', 'paused']);
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
   const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
+  const NOT_READY_REASONS = new Set(['loading', 'transcoding', 'buffering', 'autoplay_blocked']);
 
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const string = (value, max, allowEmpty = false) =>
@@ -168,6 +169,31 @@
     return nullable(countdownUntil, timestamp) ? null : 'countdown_until is invalid';
   };
 
+  // A play the room holds until its members are ready: who it waits for and
+  // why, its start (and who it went without), or the end of the wait.
+  const startMembers = value => Array.isArray(value) && value.length <= MAX_PARTICIPANTS && value.every(member =>
+    object(member) && onlyKeys(member, ['client', 'name', 'reason'])
+    && string(member.client, MAX_ID_LENGTH) && string(member.name, MAX_NAME_LENGTH, true)
+    && NOT_READY_REASONS.has(member.reason));
+  const validateStartState = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    const payload = message.payload;
+    if (payload.state === 'waiting') {
+      if (!onlyKeys(payload, ['state', 'position', 'waiting_for', 'deadline_server_ts'])) return 'start_state has unknown fields';
+      if (!position(payload.position)) return 'position is invalid';
+      if (!startMembers(payload.waiting_for)) return 'waiting_for is invalid';
+      return timestamp(payload.deadline_server_ts) ? null : 'deadline_server_ts is invalid';
+    }
+    if (payload.state === 'starting') {
+      if (!onlyKeys(payload, ['state', 'target_server_ts', 'countdown', 'without'])) return 'start_state has unknown fields';
+      if (!timestamp(payload.target_server_ts)) return 'target_server_ts is invalid';
+      if (typeof payload.countdown !== 'boolean') return 'countdown is invalid';
+      return startMembers(payload.without) ? null : 'without is invalid';
+    }
+    if (payload.state === 'idle') return onlyKeys(payload, ['state']) ? null : 'start_state has unknown fields';
+    return 'start state is invalid';
+  };
+
   const validateError = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['code', 'message'])) return 'error has unknown fields';
@@ -193,6 +219,7 @@
     pong: validatePong,
     chat_message: validateChat,
     queue_state: validateQueueState,
+    start_state: validateStartState,
     error: validateError
   };
   const roomRequired = new Set([
@@ -207,7 +234,8 @@
     'player_event',
     'state_update',
     'chat_message',
-    'queue_state'
+    'queue_state',
+    'start_state'
   ]);
   const envelopeKeys = ['type', 'room', 'client', 'payload', 'ts', 'server_ts'];
 

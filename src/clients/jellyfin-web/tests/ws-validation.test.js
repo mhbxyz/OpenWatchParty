@@ -48,6 +48,34 @@ describe('WebSocket message schema validation', () => {
     }
     invalid(envelope('queue_state', { items: [], current: null, last_added: null, countdown_until: null }));
   });
+  it('validates the start state strictly', () => {
+    const start = payload => envelope('start_state', payload, { room: 'room-1' });
+    const ana = { client: 'client-2', name: 'Ana', reason: 'transcoding' };
+    valid(start({ state: 'waiting', position: 30, waiting_for: [ana], deadline_server_ts: 1_700_000_020_000 }));
+    valid(start({ state: 'waiting', position: 0, waiting_for: [{ ...ana, name: '' }], deadline_server_ts: 1 }));
+    valid(start({ state: 'starting', target_server_ts: 1_700_000_003_000, countdown: true, without: [] }));
+    valid(start({ state: 'starting', target_server_ts: 1, countdown: false, without: [{ ...ana, reason: 'autoplay_blocked' }] }));
+    valid(start({ state: 'idle' }));
+    for (const payload of [
+      null,
+      { state: 'later' },
+      { state: 'idle', extra: true },
+      { state: 'waiting', position: 30, waiting_for: [ana] },
+      { state: 'waiting', position: -1, waiting_for: [ana], deadline_server_ts: 1 },
+      { state: 'waiting', position: 30, waiting_for: [{ ...ana, reason: 'sleepy' }], deadline_server_ts: 1 },
+      { state: 'waiting', position: 30, waiting_for: [{ ...ana, extra: 1 }], deadline_server_ts: 1 },
+      { state: 'waiting', position: 30, waiting_for: [{ name: 'Ana', reason: 'loading' }], deadline_server_ts: 1 },
+      { state: 'waiting', position: 30, waiting_for: Array(21).fill(ana), deadline_server_ts: 1 },
+      { state: 'waiting', position: 30, waiting_for: [ana], deadline_server_ts: 1, extra: 1 },
+      { state: 'starting', target_server_ts: 1, countdown: 'yes', without: [] },
+      { state: 'starting', target_server_ts: -1, countdown: true, without: [] },
+      { state: 'starting', target_server_ts: 1, countdown: true },
+      { state: 'starting', target_server_ts: 1, countdown: true, without: [{ ...ana, reason: 7 }] }
+    ]) {
+      invalid(start(payload));
+    }
+    invalid(envelope('start_state', { state: 'idle' }));
+  });
   const nominal = [
     envelope('room_list', [{ id: 'room-1', name: 'Movie night', count: 2, media_id: null }]),
     envelope('client_hello', { client_id: 'client-1' }, { client: 'client-1' }),

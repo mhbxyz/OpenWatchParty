@@ -124,14 +124,14 @@ describe('appearance styles', () => {
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next \{\s*--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
-    assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next \{ --owp-surface-alpha: 1 !important; \}/);
+    assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{ --owp-surface-alpha: 1 !important; \}/);
   });
 
   it('draws every surface with the opacity setting', () => {
     assert.equal(css.match(/rgba\(38, 38, 36, 0\.97\)/g), null);
-    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 5);
+    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 6);
     assert.match(css, /rgba\(20, 20, 20, var\(--owp-surface-alpha\)\)/);
   });
 });

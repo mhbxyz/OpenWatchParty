@@ -26,7 +26,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control` and `media_queue`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `start_when_ready`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -68,7 +68,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready"]
   },
   "ts": 1678900000000
 }
@@ -78,10 +78,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control` and `media_queue` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `start_when_ready` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
 
 ### `list_rooms`
 
@@ -236,7 +236,7 @@ The server sends `room_capabilities` with `{ "features": ["shared_playback_contr
 
 | Action | Server Behavior |
 |--------|-----------------|
-| `play` | If `all_ready()`: broadcast with `target_server_ts = now + 1000ms`. Otherwise: create `pending_play` |
+| `play` | If `all_ready()`: broadcast with `target_server_ts = now + 1000ms` (`+ 3000ms` when it counts down, see [Start when ready](#start-when-ready)). Otherwise: create `pending_play` |
 | `pause` | Broadcast with `target_server_ts = now + 300ms` |
 | `seek` | Broadcast with `target_server_ts = now + 300ms` |
 | `buffering` | Broadcast with `target_server_ts = now + 300ms` (treat as paused) |
@@ -368,7 +368,7 @@ Report how this client is doing, for the room's participants list. Informational
 
 | Message | Payload | Effect |
 |---------|---------|--------|
-| `queue_add` | `items`: 1 to 20 `{ id, title }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out |
+| `queue_add` | `items`: 1 to 20 `{ id, title, series? }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters; `series`, optional, is the Jellyfin id of an episode's series. The server keeps it to tell whether the next item goes on the same series and never sends it back in `queue_state` | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out |
 | `queue_remove` | `id` | Removes an item other than the room's own |
 | `queue_move` | `id`, `to` (the item's new index) | Moves an upcoming item to another upcoming place; the room's item and the watched ones keep theirs |
 | `queue_advance` | `id` | Moves the room to that queued item |
@@ -376,11 +376,38 @@ Report how this client is doing, for the room's participants list. Informational
 
 **Moving to another item** (`queue_advance`, or a countdown that ends):
 - The room's `media_id` becomes the item's; the position goes back to 0, paused, and the ready set is cleared
-- A pending play at 0, started by the host, plays the room once every member sent `ready` for the new item, or when the usual wait for them ends
+- A pending play at 0, started by the host, plays the room once every member sent `ready` for the new item, or when the usual wait for them ends (see [Start when ready](#start-when-ready)); it counts down unless the previous and the new item have the same `series`
 - Every member gets `room_state` with the new `media_id`, so clients without `media_queue` follow it as on joining; members with `media_queue` then get `queue_state`, and every client gets `room_list`
 - Until that pending play starts, the host's position updates and play events don't move it, because they may still describe the previous item; a pause still cancels it
 
 **Countdown:** the deadline and its timer live on the server, so a host tab that the browser slows down in the background doesn't delay the move. A generation identifies each scheduled countdown; canceling, replacing or ending it invalidates its task, so an older timer cannot move the room later. It starts only toward a next item and ends when the host cancels it, on any move to another item, when the next item is removed, or when the server accepts a `pause` from the host or a guest (members with `media_queue` then get `queue_state` right after that `player_event`). The host's web client starts it when its video reaches the credits (Jellyfin's `Outro` media segment) or, at the latest, 15 seconds before the end: Jellyfin closes the player when a video ends, which takes the member out of the room, so the room moves on while the video still plays. It cancels it when its video pauses or the host seeks back before the credits, and doesn't start it while a room play or pause is on its way to its player.
+
+### Start when ready
+
+With `start_when_ready`, a play waits until every member can play, and the clients show who the room waits for and why.
+
+- **A member is ready** once it sent `ready` for the room's media and its last `readiness` didn't say otherwise. A member without the feature counts as before: `ready` only.
+- **How long a play waits:** 20 seconds when the member who asked for it negotiated the feature, 2 seconds otherwise (an older client would show nothing while it waits). Then it starts without the members still not ready. A member that leaves stops being awaited, and a pending play starts as soon as the others are ready. A pause cancels the wait; the host leaving does too.
+- **Countdown:** the play that starts the room's item is scheduled 3 seconds ahead instead of 1, when the member who asked for it negotiated the feature: the room's first play when it was created paused (a host state update that reports playing starts the item too), and after a move to another queued item, unless that item goes on the same `series` as the previous one. Members without the feature start at the same `target_server_ts`, without a countdown.
+
+#### `readiness`
+
+Why this client can't play yet, or that it can. Sent when it changes.
+
+```json
+{ "type": "readiness", "room": "uuid-room-id", "payload": { "ready": false, "reason": "transcoding" }, "ts": 1678900000000 }
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `ready` | boolean | Whether the client can play now |
+| `reason` | string | Only when `ready` is `false`: `loading` (the room's media isn't shown yet), `transcoding` (it comes through the server's HLS), `buffering` (the video stalls or seeks) or `autoplay_blocked` (the browser stopped the last play) |
+
+A `ready` for the room's media ends `loading` and `transcoding`. A malformed payload gets `INVALID_READY`, and a client outside a room `NOT_IN_ROOM`.
+
+#### `start_now`
+
+Starts a waiting play at once, without the members not ready yet. Payload `{}`. Members who may play send it: the host, or a guest when the host and the guest negotiated `shared_playback_control`; others get `HOST_PERMISSION_REQUIRED`, a non-member `NOT_ROOM_MEMBER`, and any other payload `INVALID_PLAYBACK_PAYLOAD`. With nothing waiting it does nothing.
 
 ## Server → Client Messages
 
@@ -413,7 +440,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -601,6 +628,31 @@ The room's authoritative [queue](#room-queue), sent only to members that declare
 | `current` | number or null | Index of the room's `media_id` in `items`, or `null` when it isn't queued |
 | `last_added` | string or null | The last item `queue_add` appended, or `null` before the first. It stays after that item is removed: the host's web client fills the queue on from it, so an episode the host removed doesn't come back after a reload or a host change |
 | `countdown_until` | number or null | Server time (ms) at which the room moves to the next item, or `null` |
+
+### `start_state`
+
+A play the room holds for its members ([Start when ready](#start-when-ready)), sent only to members that declared `start_when_ready`.
+
+```json
+{
+  "type": "start_state",
+  "room": "uuid-room-id",
+  "payload": {
+    "state": "waiting",
+    "position": 1300.5,
+    "waiting_for": [{ "client": "uuid-client-id", "name": "Ana", "reason": "transcoding" }],
+    "deadline_server_ts": 1678900020000
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| `state` | Other fields | Sent |
+|---------|--------------|------|
+| `waiting` | `position` (where the play starts), `waiting_for` (the members not ready, in the room's order, with their `reason`), `deadline_server_ts` (when it starts anyway) | When a play starts waiting, and again when the list or a reason changes, a member joins or a member leaves |
+| `starting` | `target_server_ts`, `countdown` (boolean), `without` (the members still not ready, as in `waiting_for`) | When a waiting play is scheduled, before its `player_event`; and after the `player_event` of a play that counts down without waiting |
+| `idle` | none | When a pause or the host leaving ends the wait |
 
 ### `player_event`
 

@@ -75,6 +75,9 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         status_broadcast: Default::default(),
         guest_command_until: None,
         queue: Default::default(),
+        not_ready: HashMap::new(),
+        // Created paused: its first play counts down.
+        countdown_pending: true,
     }
 }
 
@@ -229,6 +232,9 @@ mod tests {
         assert!((room.state.position - 42.5).abs() < f64::EPSILON);
         assert_eq!(room.state.play_state, PlayState::Paused);
         assert!(room.clients.contains(&"host-1".to_string()));
+        // Created paused: its first play counts down.
+        assert!(room.countdown_pending);
+        assert!(room.not_ready.is_empty());
     }
 
     #[test]

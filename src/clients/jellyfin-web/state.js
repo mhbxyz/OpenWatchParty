@@ -112,7 +112,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -174,6 +174,17 @@
     queueReceived: false,   // Whether queue_state came since entering the room or reconnecting
   });
 
+  // A play the room holds until its members are ready, from start_state when
+  // the server has start_when_ready (see app/start.js).
+  const createStartState = () => ({
+    startPhase: 'idle',     // 'waiting' for members, 'starting' while it counts down, or 'idle'
+    startWaiting: {},       // Who the room waits for, by client id: { name, reason, since }
+    startPosition: 0,       // Where the waiting play starts
+    startDeadline: 0,       // Server time the room starts without the members still not ready
+    startTarget: 0,         // Server time a counting-down play starts
+    readinessSentKey: '',   // room|client|reason last sent as readiness
+  });
+
   const createRoomState = () => ({
     roomId: '',
     isHost: false,
@@ -195,6 +206,7 @@
     sharedPlaybackControl: false,
     readyRoomId: '',
     ...createQueueState(),
+    ...createStartState(),
   });
 
   const createRoomPlaybackState = () => ({
@@ -335,7 +347,7 @@
   });
 
   OWP.stateFactories = {
-    createState, createRoomState, createQueueState, createRoomPlaybackState, createConnectionSessionState,
+    createState, createRoomState, createQueueState, createStartState, createRoomPlaybackState, createConnectionSessionState,
     createRoomUIState, createInviteWorkState
   };
   // A loader retry can encounter state from an already loaded module. Install

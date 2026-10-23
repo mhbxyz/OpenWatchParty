@@ -10,6 +10,10 @@ pub(super) const WRITER_SHUTDOWN_TIMEOUT_MS: u64 = 1000;
 pub(super) const PLAY_SCHEDULE_MS: u64 = 1000; // Lead time for clients to schedule playback against the same server timestamp
 pub(super) const CONTROL_SCHEDULE_MS: u64 = 300;
 pub(super) const MAX_READY_WAIT_MS: u64 = 2000;
+// How long a play asked by a client with `start_when_ready` waits for every member
+pub(super) const START_WAIT_MS: u64 = 20_000;
+// Lead time of a play that counts down ("3, 2, 1") before the room's item starts
+pub(super) const COUNTDOWN_MS: u64 = 3000;
 // How long the up-next countdown runs before the room moves to the next queue item
 pub(super) const QUEUE_COUNTDOWN_MS: u64 = 10_000;
 pub(super) const MIN_STATE_UPDATE_INTERVAL_MS: u64 = 500;

@@ -179,6 +179,7 @@
     await load('ws/connection.js');
     await load('app/invite.js');
     await load('app/queue.js');
+    await load('app/start.js');
     await load('app/lifecycle.js');
     await load('app/cleanup.js');
   };

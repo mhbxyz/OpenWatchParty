@@ -57,6 +57,7 @@
     }
     // Leaving the room also takes its "up next" strip off the page.
     if (!state.inRoom && ui.updateQueue) ui.updateQueue();
+    if (!state.inRoom && ui.updateStartLabel) ui.updateStartLabel();
     // The lobby and the room bar sit differently below the header.
     if (ui.updatePanelPlacement) ui.updatePanelPlacement();
     ui.updateStatusIndicator();

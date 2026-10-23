@@ -46,12 +46,12 @@
     }
     #owp-guest-lock-label .owp-guest-lock-icon { font-size: 1.15em; }
     /* Appearance settings: text scale and surface opacity (applyAppearance) */
-    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next {
+    #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float {
       --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
     }
     @media (prefers-reduced-transparency: reduce) {
-      #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next { --owp-surface-alpha: 1 !important; }
+      #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float { --owp-surface-alpha: 1 !important; }
     }
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
@@ -187,6 +187,22 @@
     .owp-queue-next-time { font-weight: 700; font-variant-numeric: tabular-nums; color: #85b7eb; flex-shrink: 0; }
     .owp-queue-next-actions { width: 100%; display: flex; justify-content: flex-end; gap: ${px(6)}; }
     .owp-queue-next-bar { position: absolute; left: 0; bottom: 0; height: ${px(2)}; background: #85b7eb; }
+    /* A play waiting for the members, or counting down: in place of the room's name */
+    .owp-start-label {
+      flex: 1; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: ${px(4)};
+      padding: 0; border: none; background: none; color: #ecebe6; font: inherit; font-weight: 500;
+      white-space: nowrap; overflow: hidden; cursor: default;
+    }
+    .owp-start-label.owp-start-action { cursor: pointer; }
+    .owp-start-label .owp-icon { width: ${px(14)}; height: ${px(14)}; }
+    .owp-start-num { font-weight: 700; font-variant-numeric: tabular-nums; color: #85b7eb; }
+    /* On its own where the room bar would be, while the panel is closed */
+    .owp-start-label.owp-start-float {
+      flex: none; position: fixed; top: 72px; right: 20px; z-index: 20000;
+      padding: ${px(8)} ${px(12)}; border-radius: ${px(20)}; font-family: inherit; font-size: ${px(12)};
+      background: rgba(38, 38, 36, var(--owp-surface-alpha)); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.14); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
+    }
     /* The sync adjustment drop-down: where the guest is, and the nudge */
     .owp-nudge-row { display: flex; align-items: center; gap: ${px(8)}; }
     .owp-nudge-state { flex: 1; min-width: 0; display: flex; align-items: center; gap: ${px(6)}; font-weight: 500; }
@@ -312,6 +328,13 @@
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
     .owp-chat-text { color: #ecebe6; word-wrap: break-word; }
+    /* OWP's own lines (SERVER): a small tag and italic text; errors in red */
+    .owp-chat-message.owp-chat-system .owp-chat-username {
+      font-size: ${px(9)}; font-weight: 700; letter-spacing: 0.06em; color: #c2c0b6;
+      background: rgba(255,255,255,0.1); border-radius: ${px(4)}; padding: 0 ${px(4)}; vertical-align: 0.1em;
+    }
+    .owp-chat-message.owp-chat-system .owp-chat-text { color: #c2c0b6; font-style: italic; }
+    .owp-chat-message.owp-chat-error .owp-chat-text { color: #f09595; }
     #owp-chat-input-container { display: flex; gap: ${px(6)}; }
     #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: ${px(6)}; padding-top: ${px(6)}; border-top: 1px solid rgba(255,255,255,0.1); }
     #owp-chat-input {
@@ -417,7 +440,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
   };
 

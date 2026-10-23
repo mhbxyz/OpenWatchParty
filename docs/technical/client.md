@@ -37,7 +37,7 @@ plugin.js                    # Loader - loads modules in parallel waves
         ├── cleanup.js, invite.js, lifecycle.js, queue.js
 ```
 
-The 39 modules are loaded in dependency waves, parallelizing where possible:
+The 40 modules are loaded in dependency waves, parallelizing where possible:
 `state.js` → utility waves → UI waves → playback and chat → `ws/send` →
 `ws/auth` → `ws/validation` → WebSocket handlers → `ws/connection` → `app/*`.
 
@@ -48,7 +48,9 @@ focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
 `leave-confirm.js`; room sections and chat input setup in `room.js`; the room
 queue's section and up-next strip in `queue.js`, whose host logic (filling the
-queue, starting the countdown at the credits) is `app/queue.js`.
+queue, starting the countdown at the credits) is `app/queue.js`. `app/start.js`
+reports this client's readiness and follows `start_state`; `room.js` shows it in
+the room bar.
 
 The loader initializes shared elements first, then lobby, participants and leave
 confirmation in parallel, then room controls, and finally the renderer. The
@@ -436,6 +438,9 @@ Stores each participant's status, when the list has the same length as the parti
 #### `queue_state` and media queue
 The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.
 
+#### `start_state` and readiness
+With a server that acknowledges `start_when_ready`, `app/start.js` sends `readiness` when this client's reason changes, from `start.ownReason()`: `loading` until the room's media shows (`transcoding` when it comes through the server's HLS, a `blob:` or `.m3u8` source), `autoplay_blocked` after the browser stopped a play, and `buffering` while the video stalls (`waiting`) or seeks. A paused video that has its frame (`readyState` 2) is ready: browsers stop loading a paused video. It runs on every sync tick and on the video's own events. While the room waits (`start_state` `waiting`) or counts down (`starting` with `countdown`), the client pauses its video at the play's position as OWP's own action (nothing is sent) and holds its room work (`pendingPlayUntil`). A play pressed meanwhile sends `start_now` while the room waits and only keeps waiting during the countdown; OWP's own play at the start time goes through. `ui.updateStartLabel()` puts "Waiting for Ana" (two names, or a count) or "Starting in 3" in place of the room's name, centred in the name's place with as much space after it as the fixed-width latency leaves before it, and as wide as the name at least so the bar keeps its size; with the panel closed it shows on its own where the bar would be (`#owp-start-float`). Selecting it sends `start_now` for the host, or a guest sharing the controls; its tooltip names each member's reason. SERVER lines in the chat (`chat.system()`) say who the room waits for and why, who got ready (a moment later, and not for a member whose `client_left` came meanwhile), who it started without, and a cancelled start. Only the last kind, an error, counts as unread and shows a toast.
+
 #### `host_changed`
 Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The existing room bar is updated in place so Invite and the current leave choices change without replacing chat or keyboard focus. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
 
@@ -490,7 +495,7 @@ Displays watch parties on Jellyfin homepage.
 #### `render() -> void`
 Main panel render:
 - **Lobby**: Room list + creation form
-- **In-room**: Compact bar with the sync dot, latency, room name, participants, chat and leave buttons, plus their drop-downs
+- **In-room**: Compact bar with the sync dot, latency, room name (or who the room waits for, or its countdown), participants, chat and leave buttons, plus their drop-downs
 
 #### `injectHeaderButtons() -> void`
 Puts a "Watch Party" button first in each Jellyfin 12 header: the legacy `.skinHeader .headerRight` and the MUI box holding SyncPlay and Cast, in the app bar (with Search) or in the player's own header. A `MutationObserver` coalesced per animation frame puts it back when Jellyfin rebuilds a header and keeps a panel opened from the header placed below it (falling back to the default placement while no header button is shown, as in the player). Unless such a panel is open, only changes inside a header or a newly added header trigger the lookup, so busy pages (the player, chat, library grids) don't; the periodic UI check catches anything else.

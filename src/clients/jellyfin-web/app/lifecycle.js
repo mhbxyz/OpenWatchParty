@@ -158,6 +158,7 @@
         playback.syncLoop();
       }
       if (state.inRoom && playback.reportStatus) playback.reportStatus();
+      if (state.inRoom && OWP.start?.report) OWP.start.report();
       // Also outside a room and for the host, so that leaving, hosting or
       // rejoining ends the guest's out-of-sync count right away.
       if (state.showSyncNudge) {

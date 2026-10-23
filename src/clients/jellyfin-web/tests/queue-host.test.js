@@ -142,6 +142,36 @@ describe('host queue', () => {
     assert.deepEqual(adds[0].payload.items, ['e1', 'e2', 'e3', 'e5', 'e6', 'e7'].map(item));
   });
 
+  it('names each episode series to a server with start_when_ready', async () => {
+    const HEX = 'abcdefabcdefabcdefabcdefabcdef12';
+    const getJSON = globalThis.ApiClient.getJSON;
+    series.forEach(episode => { episode.SeriesId = HEX; });
+    globalThis.ApiClient.getJSON = ({ path, params }) => getJSON({ path: path.replace(HEX, 'show'), params });
+    const added = () => sent.filter(message => message.type === 'queue_add').at(-1).payload.items;
+    try {
+      enterRoom({ serverFeatures: ['media_queue', 'start_when_ready'] });
+      OWP.queue.refresh();
+      await settle();
+      assert.ok(added().length > 0);
+      assert.ok(added().every(entry => entry.series === HEX));
+      // An older server would reject the field.
+      enterRoom();
+      OWP.queue.refresh();
+      await settle();
+      assert.ok(added().every(entry => !('series' in entry)));
+      // Only a Jellyfin id goes.
+      series.forEach(episode => { episode.SeriesId = 'show'; });
+      globalThis.ApiClient.getJSON = getJSON;
+      enterRoom({ serverFeatures: ['media_queue', 'start_when_ready'] });
+      OWP.queue.refresh();
+      await settle();
+      assert.ok(added().every(entry => !('series' in entry)));
+    } finally {
+      series.forEach(episode => { episode.SeriesId = 'show'; });
+      globalThis.ApiClient.getJSON = getJSON;
+    }
+  });
+
   it('tops up only when the room moves on, from the episode the room added last', async () => {
     enterRoom();
     OWP.queue.refresh();

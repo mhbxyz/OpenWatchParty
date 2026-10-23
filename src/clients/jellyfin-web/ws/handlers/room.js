@@ -43,6 +43,7 @@
   };
 
   h.handleClientLeft = (msg) => {
+    if (OWP.start?.onClientLeft && msg.client) OWP.start.onClientLeft(msg.client);
     if (msg.payload?.participant_count !== undefined) {
       state.participantCount = msg.payload.participant_count;
       if (state.inRoom) {
@@ -62,6 +63,11 @@
     state.queueReceived = true;
     if (ui.updateQueue) ui.updateQueue();
     if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
+  };
+
+  h.handleStartState = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    if (OWP.start?.onStartState) OWP.start.onStartState(msg.payload);
   };
 
   h.handleParticipantList = (msg) => {

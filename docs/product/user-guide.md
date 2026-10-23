@@ -120,6 +120,16 @@ participant list.
 
 ![Participant list after transfer, with testclient1 marked Host]({{ '/assets/images/watch-party-host-role.png' | relative_url }})
 
+## Starting together
+
+A play waits until everyone can play: until each one's video has loaded (the server may still be converting it) and isn't stalled. Meanwhile the room bar says **Waiting for Ana** in place of the room's name; hover it to see why each one isn't ready. The room starts on its own when everyone is ready, or after 20 seconds without the ones still loading. The host, or a guest sharing the controls, can select **Waiting for…**, or press Play again, to start right away.
+
+The first play of a room created paused, and of an episode or video the room moves to that doesn't go on the same series, counts down: **Starting in 3, 2, 1** shows in the same place, then everyone starts together. The next episodes of a series go on without it. With the panel closed, the same shows on its own where the bar would be.
+
+The chat says, as **SERVER**, who the room waits for and why, who got ready and after how long, and who the room started without. Only that last one counts as unread.
+
+This needs a session server and clients with the feature. With an older client or server, a play waits for the others for 2 seconds at most, without a countdown.
+
 ## Participant Experience
 
 As a participant:
@@ -210,6 +220,7 @@ The chat feature allows you to communicate with other watch party participants i
 - **Username display** - Messages show the sender's Jellyfin username
 - **Timestamps** - Hover a message to see when it was sent
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
+- **SERVER lines** - OpenWatchParty's own notes about [starting together](#starting-together), with a tag and in italics; only "Started without…" counts as unread
 - **Message limit** - Messages are limited to 500 characters
 
 ### Notes

@@ -525,7 +525,7 @@ describe('authentication configuration', () => {
 
       const auth = sent.find(message => message.type === 'auth');
       assert.equal(auth.payload.protocol_version, OWP.constants.PROTOCOL_VERSION);
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready']);
       assert.equal(auth.payload.token, 'refreshed-token');
     } finally {
       OWP.state.ws = null;

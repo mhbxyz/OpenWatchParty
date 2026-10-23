@@ -57,7 +57,7 @@ The admin page reads and saves these fields through Jellyfin's standard plugin c
 - `GET /OpenWatchParty/ClientScript` returns the small loader script. Its ETag supports conditional requests. `v` determines caching: the current content hash receives one-year immutable caching, any other supplied value receives `no-store`, and a request without `v` receives one-hour public caching.
 - `GET /OpenWatchParty/Client/{path}` serves only paths in `AllowedClientModules`. It uses the same versioned cache policy and per-asset ETag behavior. Unknown modules return 404 and invalid paths return 400.
 
-The allow-list contains the 39 modules loaded by `plugin.js`; test files and arbitrary embedded resources are not routable through this endpoint.
+The allow-list contains the 40 modules loaded by `plugin.js`; test files and arbitrary embedded resources are not routable through this endpoint.
 
 ### Session token
 

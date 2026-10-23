@@ -89,7 +89,15 @@
       .slice(0, UPCOMING - upcoming);
     const items = (state.queueItems.length ? [] : [start]).concat(episodes);
     if (!items.length) return;
-    send('queue_add', { items: items.map(episode => ({ id: episode.Id, title: episodeTitle(episode) })) });
+    // The series lets the server go on to the next episode without a countdown.
+    const withSeries = state.serverFeatures.includes('start_when_ready');
+    send('queue_add', {
+      items: items.map(episode => ({
+        id: episode.Id,
+        title: episodeTitle(episode),
+        ...(withSeries && /^[0-9a-f]{32}$/i.test(episode.SeriesId || '') ? { series: episode.SeriesId } : {})
+      }))
+    });
   };
 
   // Where the room's item's credits start (Jellyfin's Outro media segment, as

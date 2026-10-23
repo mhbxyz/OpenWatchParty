@@ -28,6 +28,7 @@ pub fn create_client_with_rx(
         supports_host_transfer: false,
         supports_shared_playback_control: false,
         supports_media_queue: false,
+        supports_start_when_ready: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -58,6 +59,8 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         status_broadcast: Default::default(),
         guest_command_until: None,
         queue: Default::default(),
+        not_ready: HashMap::new(),
+        countdown_pending: false,
     }
 }
 

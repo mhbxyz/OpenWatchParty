@@ -54,6 +54,7 @@ fn add_client_to_room(
         room.clients.push(client_id.to_string());
     }
     room.ready_clients.remove(client_id);
+    room.not_ready.remove(client_id);
     if let Some(client) = locked_clients.get_mut(client_id) {
         client.room_id = Some(room.room_id.clone());
         if let Some(ref name) = payload_name {
@@ -308,6 +309,8 @@ pub(in crate::ws) async fn handle_join_room(
         if let Some(room) = state.rooms.get(room_id) {
             crate::room::send_room_capabilities(room, &state.clients);
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
+            // A play that waits now waits for the new member too.
+            super::super::pending_play::send_waiting(room, &state.clients);
         }
         joined
     };
@@ -756,6 +759,7 @@ mod tests {
                         .map(|id| crate::room::QueueItem {
                             id: id.repeat(32),
                             title: "Pilot".to_string(),
+                            series: None,
                         })
                         .to_vec(),
                     None,
