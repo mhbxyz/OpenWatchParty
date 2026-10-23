@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 19] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 21] = [
     "auth",
     "list_rooms",
     "create_room",
@@ -30,11 +30,13 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 19] = [
     "queue_move",
     "queue_advance",
     "queue_countdown",
+    "readiness",
+    "start_now",
     "unknown",
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 17] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 18] = [
     "client_hello",
     "auth_success",
     "error",
@@ -51,6 +53,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 17] = [
     "room_closed",
     "chat_message",
     "queue_state",
+    "start_state",
     "other",
 ];
 

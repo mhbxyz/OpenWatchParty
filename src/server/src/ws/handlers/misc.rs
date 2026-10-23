@@ -1,6 +1,5 @@
-use super::super::constants::PLAY_SCHEDULE_MS;
 use super::super::dispatch::{is_authenticated, send_error, ErrorCode};
-use super::super::pending_play::{all_ready, prepare_scheduled_play};
+use super::super::pending_play::recheck_pending_play;
 use crate::messaging::{broadcast_room_list, send_to_client, send_to_senders};
 use crate::room::{close_room_parts, handle_leave, send_leave_notification};
 use crate::types::{IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
@@ -157,26 +156,15 @@ pub(in crate::ws) async fn handle_ready(
             let current = ready_matches_room_media(parsed, room);
             if current {
                 room.ready_clients.insert(client_id.to_string());
-            }
-            if current && room.pending_play.is_some() && all_ready(room) {
-                let target_server_ts = now_ms() + PLAY_SCHEDULE_MS;
-                let pending = room.pending_play.clone();
-                let position = pending
-                    .as_ref()
-                    .map(|pending| pending.position)
-                    .unwrap_or(room.state.position);
-                let event_server_ts = pending
-                    .as_ref()
-                    .map(|pending| pending.position_ts)
-                    .unwrap_or_else(now_ms);
-                let (senders, msg) = prepare_scheduled_play(
-                    room,
-                    clients,
-                    position,
-                    event_server_ts,
-                    target_server_ts,
-                );
-                send_to_senders(&senders, &msg, "scheduled play");
+                // It has loaded: what its client said about loading is over.
+                if room
+                    .not_ready
+                    .get(client_id)
+                    .is_some_and(|reason| reason.ends_with_ready())
+                {
+                    room.not_ready.remove(client_id);
+                }
+                recheck_pending_play(room, clients);
             }
             true
         } else {
@@ -353,6 +341,8 @@ mod tests {
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),
+                deadline_server_ts: 0,
+                shows_start: false,
             });
             state.rooms.insert("room-1".to_string(), room);
         }
@@ -495,6 +485,8 @@ mod tests {
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: crate::utils::now_ms(),
+                deadline_server_ts: 0,
+                shows_start: false,
             });
         }
 

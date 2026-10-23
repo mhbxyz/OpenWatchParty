@@ -12,6 +12,10 @@ pub(crate) const MAX_QUEUE_ITEMS: usize = 20;
 pub(crate) struct QueueItem {
     pub id: String,
     pub title: String,
+    /// Kept for the countdown (see `advance`), never sent: older clients
+    /// reject unknown fields in `queue_state`.
+    #[serde(skip)]
+    pub series: Option<String>,
 }
 
 /// When the room moves to the next item, and the timer generation allowed to
@@ -122,6 +126,7 @@ mod tests {
         QueueItem {
             id: id.to_string(),
             title: format!("Episode {id}"),
+            series: None,
         }
     }
 

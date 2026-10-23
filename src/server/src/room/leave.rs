@@ -3,6 +3,7 @@ use crate::room::{close_room_parts, participant_list_message, participant_status
 use crate::tasks::AppTasks;
 use crate::types::{Client, PendingHostReconnect, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
+use crate::ws::pending_play::{recheck_pending_play, send_idle};
 use log::info;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -79,13 +80,19 @@ fn detach_client_from_room(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
-    if room.host_id == client_id {
-        room.pending_play = None;
-    }
+    room.not_ready.remove(client_id);
+    // The host's play waits no more; another member's goes on without the
+    // one that left.
+    let wait_ended = room.host_id == client_id && room.pending_play.take().is_some();
 
     if room.clients.is_empty() && room.pending_host_reconnect.is_none() {
         Some(LeaveOutcome::Close(room_id))
     } else {
+        if wait_ended {
+            send_idle(room, clients);
+        } else {
+            recheck_pending_play(room, clients);
+        }
         let client_left = client_left_message(&room_id, client_id, room.clients.len());
         let mut messages = vec![client_left];
         if room.host_id == client_id {
@@ -129,7 +136,10 @@ fn begin_host_reconnect_grace(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
-    room.pending_play = None;
+    room.not_ready.remove(client_id);
+    if room.pending_play.take().is_some() {
+        send_idle(room, clients);
+    }
     room.pending_host_reconnect = Some(PendingHostReconnect {
         user_id,
         generation,
@@ -350,6 +360,8 @@ mod tests {
             position: 10.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: 0,
+            deadline_server_ts: 0,
+            shows_start: false,
         });
 
         detach_client_from_room("host-1", &mut clients, &mut rooms, true);
@@ -474,6 +486,8 @@ mod tests {
             position: 10.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: 0,
+            deadline_server_ts: 0,
+            shows_start: false,
         });
         rooms.insert("room".to_string(), room);
 
@@ -533,6 +547,8 @@ mod tests {
                 position: 10.0,
                 generation: crate::types::next_pending_play_generation(),
                 position_ts: 0,
+                deadline_server_ts: 0,
+                shows_start: false,
             });
             locked.rooms.insert("room".to_string(), room);
         }

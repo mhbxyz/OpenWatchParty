@@ -1,9 +1,12 @@
 use super::super::constants::{
-    COMMAND_COOLDOWN_MS, CONTROL_SCHEDULE_MS, MAX_READY_WAIT_MS, MIN_STATE_UPDATE_INTERVAL_MS,
-    PLAY_SCHEDULE_MS, POSITION_JITTER_THRESHOLD,
+    COMMAND_COOLDOWN_MS, CONTROL_SCHEDULE_MS, MIN_STATE_UPDATE_INTERVAL_MS, PLAY_SCHEDULE_MS,
+    POSITION_JITTER_THRESHOLD,
 };
 use super::super::dispatch::{send_error, ErrorCode};
-use super::super::pending_play::{all_ready, schedule_pending_play, starting_queue_item};
+use super::super::pending_play::{
+    all_ready, play_lead, schedule_pending_play, send_countdown, send_idle, send_waiting,
+    shows_start, starting_queue_item, wait_ms,
+};
 use super::super::validation::is_valid_position;
 use crate::messaging::{collect_room_senders, send_to_senders};
 use crate::types::{
@@ -40,7 +43,8 @@ enum PlaybackMessage {
 
 enum PlaybackOutcome {
     Accepted,
-    Schedule(String, u64),
+    /// A play waits for the members: its room, generation and wait.
+    Schedule(String, u64, u64),
     Error(ErrorCode, &'static str),
 }
 
@@ -121,6 +125,8 @@ fn handle_play_not_ready(
     position: f64,
     current_ts: u64,
     now: Instant,
+    wait_ms: u64,
+    shows_start: bool,
 ) -> Option<(String, u64)> {
     if starting_queue_item(room) {
         return None;
@@ -128,6 +134,7 @@ fn handle_play_not_ready(
     room.state.position = position;
     if let Some(pending) = room.pending_play.as_mut() {
         pending.initiator_id = client_id.to_string();
+        pending.shows_start = shows_start;
         pending.position = position;
         pending.position_ts = current_ts;
         None
@@ -137,6 +144,8 @@ fn handle_play_not_ready(
             position,
             generation: crate::types::next_pending_play_generation(),
             position_ts: current_ts,
+            deadline_server_ts: current_ts + wait_ms,
+            shows_start,
         });
         room.state_server_ts = current_ts;
         room.last_state_at = Some(now);
@@ -206,6 +215,7 @@ fn apply_state_changes(
     client_id: &str,
     current_ts: u64,
     now: Instant,
+    play_lead_ms: u64,
 ) -> WsMessage {
     if let Some(position) = message.position() {
         room.state.position = position;
@@ -220,7 +230,7 @@ fn apply_state_changes(
             };
             room.state.play_state = canonical_play_state;
             let schedule_delay = if payload.action == PlaybackAction::Play {
-                PLAY_SCHEDULE_MS
+                play_lead_ms
             } else {
                 CONTROL_SCHEDULE_MS
             };
@@ -241,6 +251,10 @@ fn apply_state_changes(
         }
         PlaybackMessage::StateUpdate(payload) => {
             room.state.play_state = payload.play_state;
+            // The host's own play started the room's item.
+            if payload.play_state == PlayState::Playing {
+                room.countdown_pending = false;
+            }
             (
                 ServerMessageType::StateUpdate,
                 serde_json::to_value(payload).expect("typed payload serializes"),
@@ -319,9 +333,8 @@ pub(in crate::ws) async fn handle_playback(
                     message.set_room_position(room_position_now(room, current_ts));
                 }
 
-                if action == Some(PlaybackAction::Pause) {
-                    room.pending_play = None;
-                }
+                let wait_ended =
+                    action == Some(PlaybackAction::Pause) && room.pending_play.take().is_some();
                 // A pause also ends the up-next countdown here, under the same
                 // lock, so its timer can't move the room on.
                 let countdown_ended =
@@ -333,17 +346,22 @@ pub(in crate::ws) async fn handle_playback(
                 }
 
                 let outcome = if action == Some(PlaybackAction::Play) && !all_ready(room) {
+                    let wait = wait_ms(clients, client_id);
                     if from_guest {
                         // Until the pending play starts; then until the host
                         // has applied it (see prepare_scheduled_play).
                         room.guest_command_until = now.checked_add(Duration::from_millis(
-                            MAX_READY_WAIT_MS + PLAY_SCHEDULE_MS + COMMAND_COOLDOWN_MS,
+                            wait + PLAY_SCHEDULE_MS + COMMAND_COOLDOWN_MS,
                         ));
                     }
                     let position = message.position().unwrap_or(room.state.position);
-                    match handle_play_not_ready(room, client_id, position, current_ts, now) {
+                    let shows = shows_start(clients, client_id);
+                    match handle_play_not_ready(
+                        room, client_id, position, current_ts, now, wait, shows,
+                    ) {
                         Some((room_id, generation)) => {
-                            PlaybackOutcome::Schedule(room_id, generation)
+                            send_waiting(room, clients);
+                            PlaybackOutcome::Schedule(room_id, generation, wait)
                         }
                         None => PlaybackOutcome::Accepted,
                     }
@@ -359,8 +377,19 @@ pub(in crate::ws) async fn handle_playback(
                     if filtered {
                         PlaybackOutcome::Accepted
                     } else {
-                        let outgoing =
-                            apply_state_changes(room, &message, client_id, current_ts, now);
+                        let (play_lead_ms, countdown) = if action == Some(PlaybackAction::Play) {
+                            play_lead(room, shows_start(clients, client_id))
+                        } else {
+                            (PLAY_SCHEDULE_MS, false)
+                        };
+                        let outgoing = apply_state_changes(
+                            room,
+                            &message,
+                            client_id,
+                            current_ts,
+                            now,
+                            play_lead_ms,
+                        );
                         if from_guest {
                             room.guest_command_until = room.command_cooldown_until;
                         }
@@ -375,9 +404,15 @@ pub(in crate::ws) async fn handle_playback(
                             if acknowledge { None } else { Some(client_id) },
                         );
                         send_to_senders(&senders, &outgoing, "playback");
+                        if countdown {
+                            send_countdown(room, clients, current_ts + play_lead_ms);
+                        }
                         PlaybackOutcome::Accepted
                     }
                 };
+                if wait_ended {
+                    send_idle(room, clients);
+                }
                 // After the pause, so that the host's client gets the pause
                 // first and doesn't start the countdown again.
                 if countdown_ended {
@@ -391,10 +426,11 @@ pub(in crate::ws) async fn handle_playback(
     };
     match outcome {
         PlaybackOutcome::Accepted => {}
-        PlaybackOutcome::Schedule(room_id, generation) => {
+        PlaybackOutcome::Schedule(room_id, generation, wait) => {
             std::mem::drop(schedule_pending_play(
                 room_id,
                 generation,
+                wait,
                 state.clone(),
                 tasks,
             ));
@@ -407,6 +443,7 @@ pub(in crate::ws) async fn handle_playback(
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::constants::MAX_READY_WAIT_MS;
     use super::*;
     use crate::test_helpers;
     use tokio::sync::mpsc;
@@ -538,6 +575,7 @@ mod tests {
             "host",
             wall_after,
             after_cooldown,
+            PLAY_SCHEDULE_MS,
         );
         assert_eq!(outgoing.server_ts, Some(wall_after));
         assert_eq!(room.state_server_ts, wall_after);
@@ -581,6 +619,8 @@ mod tests {
             position: 5.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
+            deadline_server_ts: 0,
+            shows_start: false,
         });
         let message = state_update(6.0, PlayState::Paused);
         let update_ts = created_at + 10;
@@ -601,6 +641,8 @@ mod tests {
             position: 5.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: now_ms(),
+            deadline_server_ts: 0,
+            shows_start: false,
         });
         let message = PlaybackMessage::PlayerEvent(PlayerEventPayload {
             action: PlaybackAction::Pause,
@@ -631,7 +673,15 @@ mod tests {
     fn handle_play_not_ready_creates_pending() {
         let mut room = test_helpers::create_room("r1", "host");
         assert!(room.pending_play.is_none());
-        let result = handle_play_not_ready(&mut room, "host", 10.0, now_ms(), Instant::now());
+        let result = handle_play_not_ready(
+            &mut room,
+            "host",
+            10.0,
+            now_ms(),
+            Instant::now(),
+            MAX_READY_WAIT_MS,
+            false,
+        );
         assert!(result.is_some());
         assert!(room.pending_play.is_some());
         assert!((room.pending_play.as_ref().unwrap().position - 10.0).abs() < f64::EPSILON);
@@ -646,9 +696,19 @@ mod tests {
             position: 5.0,
             generation: crate::types::next_pending_play_generation(),
             position_ts: created_at,
+            deadline_server_ts: 0,
+            shows_start: false,
         });
         let update_ts = created_at + 10;
-        let result = handle_play_not_ready(&mut room, "guest", 15.0, update_ts, Instant::now());
+        let result = handle_play_not_ready(
+            &mut room,
+            "guest",
+            15.0,
+            update_ts,
+            Instant::now(),
+            MAX_READY_WAIT_MS,
+            false,
+        );
         assert!(result.is_none()); // Returns None when pending already exists
         assert!((room.pending_play.as_ref().unwrap().position - 15.0).abs() < f64::EPSILON);
         assert_eq!(room.pending_play.as_ref().unwrap().position_ts, update_ts);
@@ -663,6 +723,8 @@ mod tests {
             position: 0.0,
             generation,
             position_ts: now_ms(),
+            deadline_server_ts: 0,
+            shows_start: false,
         });
         room.queue.advance_generation = Some(generation);
 
@@ -675,7 +737,15 @@ mod tests {
             Instant::now()
         ));
         assert_eq!(
-            handle_play_not_ready(&mut room, "host", 1300.0, now_ms(), Instant::now()),
+            handle_play_not_ready(
+                &mut room,
+                "host",
+                1300.0,
+                now_ms(),
+                Instant::now(),
+                MAX_READY_WAIT_MS,
+                false
+            ),
             None
         );
         assert_eq!(room.state.position, 0.0);
@@ -710,7 +780,14 @@ mod tests {
         let mut room = test_helpers::create_room("r1", "host");
         let message = state_update(42.0, PlayState::Playing);
         let now = now_ms();
-        let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
+        let outgoing = apply_state_changes(
+            &mut room,
+            &message,
+            "host",
+            now,
+            Instant::now(),
+            PLAY_SCHEDULE_MS,
+        );
         assert!((room.state.position - 42.0).abs() < f64::EPSILON);
         assert_eq!(room.state.play_state, PlayState::Playing);
         assert_eq!(room.state_server_ts, now);
@@ -734,7 +811,14 @@ mod tests {
             play_state: Some(PlayState::Paused),
         });
         let now = now_ms();
-        let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
+        let outgoing = apply_state_changes(
+            &mut room,
+            &message,
+            "host",
+            now,
+            Instant::now(),
+            PLAY_SCHEDULE_MS,
+        );
         assert_eq!(room.state.play_state, PlayState::Playing);
         assert_eq!(room.target_server_ts, Some(now + PLAY_SCHEDULE_MS));
         assert_eq!(
@@ -767,7 +851,14 @@ mod tests {
             });
             let now = now_ms();
 
-            let outgoing = apply_state_changes(&mut room, &message, "host", now, Instant::now());
+            let outgoing = apply_state_changes(
+                &mut room,
+                &message,
+                "host",
+                now,
+                Instant::now(),
+                PLAY_SCHEDULE_MS,
+            );
 
             assert_eq!(
                 outgoing.payload.as_ref().unwrap()["target_server_ts"],
@@ -786,7 +877,14 @@ mod tests {
             play_state: None,
         });
 
-        let outgoing = apply_state_changes(&mut room, &message, "host", now_ms(), Instant::now());
+        let outgoing = apply_state_changes(
+            &mut room,
+            &message,
+            "host",
+            now_ms(),
+            Instant::now(),
+            PLAY_SCHEDULE_MS,
+        );
 
         assert_eq!(outgoing.payload.unwrap()["play_state"], "playing");
         assert_eq!(room.state.play_state, PlayState::Playing);
@@ -1254,7 +1352,12 @@ mod tests {
         assert!(hold >= before + Duration::from_millis(MAX_READY_WAIT_MS + PLAY_SCHEDULE_MS));
 
         let (_, message) = super::super::super::pending_play::prepare_scheduled_play(
-            room, clients, 42.0, 4000, 5000,
+            room,
+            clients,
+            42.0,
+            4000,
+            5000,
+            PLAY_SCHEDULE_MS,
         );
         assert_eq!(message.client.as_deref(), Some("guest"));
         assert_eq!(message.payload.unwrap()["action"], "play");
@@ -1269,7 +1372,12 @@ mod tests {
         room.guest_command_until = Instant::now().checked_sub(Duration::from_millis(1));
 
         super::super::super::pending_play::prepare_scheduled_play(
-            &mut room, &clients, 42.0, 4000, 5000,
+            &mut room,
+            &clients,
+            42.0,
+            4000,
+            5000,
+            PLAY_SCHEDULE_MS,
         );
 
         assert!(room.guest_command_until < room.command_cooldown_until);

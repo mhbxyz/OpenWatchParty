@@ -230,6 +230,8 @@ mod tests {
                 status_broadcast: Default::default(),
                 guest_command_until: None,
                 queue: Default::default(),
+                not_ready: HashMap::new(),
+                countdown_pending: false,
             },
         );
         rooms.insert(
@@ -256,6 +258,8 @@ mod tests {
                 status_broadcast: Default::default(),
                 guest_command_until: None,
                 queue: Default::default(),
+                not_ready: HashMap::new(),
+                countdown_pending: false,
             },
         );
         let msg = build_room_list_msg(&rooms);
