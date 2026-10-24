@@ -8,9 +8,11 @@
   const send = (text) => {
     if (!text || !text.trim()) return false;
     const trimmed = text.trim();
+    // Expand :shortcodes: to emoji characters before validation and sending.
+    const message = OWP.emoji?.expand ? OWP.emoji.expand(trimmed) : trimmed;
     // Count code points, like the message validator and the server, so a
     // 500-character emoji or CJK message is not refused here.
-    if (Array.from(trimmed).length > MAX_MESSAGE_LENGTH) {
+    if (Array.from(message).length > MAX_MESSAGE_LENGTH) {
       OWP.ui.showToast(t('messageTooLong', { count: MAX_MESSAGE_LENGTH }));
       return false;
     }
@@ -22,7 +24,7 @@
       OWP.ui.showToast(t('notInRoom'));
       return false;
     }
-    OWP.actions.send('chat_message', { text: trimmed });
+    OWP.actions.send('chat_message', { text: message });
     return true;
   };
 

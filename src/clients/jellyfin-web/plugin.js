@@ -163,8 +163,10 @@
       load('playback/bind.js'),
       load('playback/sync.js'),
     ]);
+    await load('chat/emoji-data.js');
     await Promise.all([
       load('chat/messages.js'),
+      load('chat/emoji-picker.js'),
       load('chat/input.js'),
     ]);
     await load('ws/send.js');

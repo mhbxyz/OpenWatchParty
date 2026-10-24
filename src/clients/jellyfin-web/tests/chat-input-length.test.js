@@ -8,6 +8,8 @@ OWP.ui = { showToast: message => toasts.push(message) };
 OWP.actions = { send: () => {} };
 OWP.state.ws = null;
 
+require('../chat/emoji-data.js');
+require('../chat/emoji-picker.js');
 require('../chat/input.js');
 
 describe('chat input length', () => {
@@ -35,5 +37,29 @@ describe('chat input length', () => {
 
     assert.equal(toasts.length, 1);
     assert.match(toasts[0], /too long/);
+  });
+});
+
+describe('chat emoji shortcodes and autocomplete', () => {
+  it('expands case-insensitive shortcodes on message send', () => {
+    assert.equal(OWP.emoji.expand(':SOB:'), '😭');
+    assert.equal(OWP.emoji.expand(':sob:'), '😭');
+    assert.equal(OWP.emoji.expand(':Sob:'), '😭');
+    assert.equal(OWP.emoji.expand(':SoB:'), '😭');
+    assert.equal(OWP.emoji.expand(':soB:'), '😭');
+    assert.equal(OWP.emoji.expand('hello :SoB: world'), 'hello 😭 world');
+  });
+
+  it('replaces full shortcodes case-insensitively during input', () => {
+    ['SOB:', 'Sob:', 'SoB:', 'soB:', 'sob:'].forEach((shortcode) => {
+      const input = {
+        value: `Testing :${shortcode}`,
+        selectionStart: 9 + shortcode.length + 1,
+        setSelectionRange(start) { this.selectionStart = start; },
+        focus() {}
+      };
+      OWP.emoji.insertEmoji('😭', shortcode, input);
+      assert.equal(input.value, 'Testing 😭', `Failed for shortcode :${shortcode}`);
+    });
   });
 });

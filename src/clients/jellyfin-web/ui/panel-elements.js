@@ -90,6 +90,8 @@
   const hidePanel = () => {
     const panel = document.getElementById(PANEL_ID);
     if (!panel) return;
+    OWP.emoji?.closePicker?.();
+    OWP.emoji?.hideSuggestions?.();
     const active = document.activeElement;
     const hadFocus = !!active && active !== panel && typeof panel.contains === 'function' && panel.contains(active);
     panel.classList.add('hide');
