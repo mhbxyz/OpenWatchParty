@@ -19,8 +19,9 @@ plugins:
 # GitHub repository
 repository: mhbxyz/OpenWatchParty
 
-# For local development only (overridden by GitHub Actions)
-baseurl: "/OpenWatchParty"
+# The custom GitHub Pages domain serves this project at the domain root.
+url: "https://openwatchparty.com"
+baseurl: ""
 
 # Aux links (top right)
 aux_links:
