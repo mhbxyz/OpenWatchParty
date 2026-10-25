@@ -317,9 +317,15 @@ describe('media-correlated ready state', () => {
   it('reopens room media that never shows up only a few times', async () => {
     OWP._wsHandlers.handleRoomState(roomState('room-a', 'missing-media'), currentVideo);
 
-    await new Promise(resolve => setTimeout(resolve, 50 * (OWP.constants.MEDIA_READY_MAX_REOPENS + 3)));
+    const reopenCount = () => ensureCalls.filter(call => call[3] === true).length;
+    const deadline = Date.now() + 2000;
+    while (reopenCount() < OWP.constants.MEDIA_READY_MAX_REOPENS && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
 
-    assert.equal(ensureCalls.filter(call => call[3] === true).length, OWP.constants.MEDIA_READY_MAX_REOPENS);
+    assert.equal(reopenCount(), OWP.constants.MEDIA_READY_MAX_REOPENS);
+    await new Promise(resolve => setTimeout(resolve, 500));
+    assert.equal(reopenCount(), OWP.constants.MEDIA_READY_MAX_REOPENS);
     assert.equal(sent.length, 0);
   });
 
