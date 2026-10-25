@@ -20,6 +20,6 @@
     "@astrojs/check": "^0.9.12",
     "@types/node": "^26.6.5",
     "cheerio": "^1.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   }
 }
