@@ -172,10 +172,6 @@
       }
       showSuggestions(OWP.emoji.search(stem, 3), stem, input);
     });
-
-    document.addEventListener('click', (e) => {
-      if (suggestionBox && !suggestionBox.contains(e.target)) hideSuggestions();
-    });
   };
 
   const CATEGORIES = [
@@ -379,6 +375,11 @@
   };
 
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+    // Registered once here, not in setupAutocomplete: that runs on every
+    // room redraw and would pile up document listeners over a session.
+    document.addEventListener('click', (e) => {
+      if (suggestionBox && !suggestionBox.contains(e.target)) hideSuggestions();
+    });
     document.addEventListener('click', (e) => {
       if (!isPickerOpen()) return;
       const emojiBtn = document.getElementById('owp-emoji-btn');
