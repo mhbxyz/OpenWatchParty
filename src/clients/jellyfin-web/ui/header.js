@@ -47,7 +47,7 @@
   const PLAYER_PAGE_SELECTOR = '#videoOsdPage';
   const PLAYER_CONTROLS_SELECTOR = '.videoOsdBottom, .upNextContainer, button, a, input, select, textarea, [role="button"]';
   // OWP's own elements outside the panel: a press on them keeps it open.
-  const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system`;
+  const KEEP_PANEL_OPEN_SELECTOR = `.${HEADER_BTN_CLASS}, .owp-toast-container, .owp-toast-system, #owp-emoji-panel, #owp-emoji-autocomplete`;
   const TEXT_FIELD_SELECTOR = 'input, textarea, [contenteditable]';
   const UP_NEXT_SELECTOR = '.owp-queue-next';
 
