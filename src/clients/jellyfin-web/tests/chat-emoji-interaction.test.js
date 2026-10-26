@@ -346,7 +346,7 @@ describe('emoji picker keyboard navigation and focus trapping', () => {
     assert.equal(document.activeElement, input, 'focus must return to input');
   });
 
-  it('stops pointerdown and mousedown propagation on emoji panel', () => {
+  it('stops pointerdown, mousedown, and wheel propagation on emoji panel', () => {
     OWP.emoji.togglePicker(input);
     const panel = document.getElementById('owp-emoji-panel');
     assert.ok(panel);
@@ -358,6 +358,10 @@ describe('emoji picker keyboard navigation and focus trapping', () => {
     const mouseEvent = { type: 'mousedown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
     panel.dispatchEvent(mouseEvent);
     assert.ok(mouseEvent.propagationStopped, 'mousedown on emoji panel should stop propagation');
+
+    const wheelEvent = { type: 'wheel', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    panel.dispatchEvent(wheelEvent);
+    assert.ok(wheelEvent.propagationStopped, 'wheel on emoji panel should stop propagation');
   });
 });
 
@@ -508,7 +512,7 @@ describe('emoji autocomplete combobox semantics and interactions', () => {
     assert.equal(input.getAttribute('aria-activedescendant'), null);
   });
 
-  it('stops pointerdown and mousedown propagation on autocomplete', () => {
+  it('stops pointerdown, mousedown, and wheel propagation on autocomplete', () => {
     input.value = ':sm';
     input.selectionStart = 3;
     input.selectionEnd = 3;
@@ -524,5 +528,9 @@ describe('emoji autocomplete combobox semantics and interactions', () => {
     const autoMouse = { type: 'mousedown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
     suggestions.dispatchEvent(autoMouse);
     assert.ok(autoMouse.propagationStopped, 'mousedown on autocomplete should stop propagation');
+
+    const autoWheel = { type: 'wheel', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    suggestions.dispatchEvent(autoWheel);
+    assert.ok(autoWheel.propagationStopped, 'wheel on autocomplete should stop propagation');
   });
 });

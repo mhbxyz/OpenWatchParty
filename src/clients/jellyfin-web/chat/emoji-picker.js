@@ -89,6 +89,7 @@
 
     suggestionBox.addEventListener('pointerdown', (e) => e.stopPropagation());
     suggestionBox.addEventListener('mousedown', (e) => e.stopPropagation());
+    suggestionBox.addEventListener('wheel', (e) => e.stopPropagation());
 
     items.forEach((el, index) => {
       el.addEventListener('mouseenter', () => {
@@ -264,6 +265,7 @@
     const stopPropagation = (e) => e.stopPropagation();
     panel.addEventListener('pointerdown', stopPropagation);
     panel.addEventListener('mousedown', stopPropagation);
+    panel.addEventListener('wheel', stopPropagation);
     panel.addEventListener('keyup', stopPropagation);
     panel.addEventListener('keypress', stopPropagation);
 
