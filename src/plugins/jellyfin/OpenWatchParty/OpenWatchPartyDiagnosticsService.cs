@@ -25,6 +25,9 @@ public sealed record DiagnosticsResponse(
 /// <summary>Builds redacted diagnostics without serializing plugin configuration.</summary>
 public sealed class OpenWatchPartyDiagnosticsService
 {
+    // A session server's /health is a few hundred bytes.
+    private const int HealthResponseMaxBytes = 64 * 1024;
+
     public DiagnosticsResponse CreateStatus(
         PluginConfiguration configuration,
         string jellyfinVersion,
@@ -78,7 +81,11 @@ public sealed class OpenWatchPartyDiagnosticsService
             var websocket = ResolveWebSocketUrl(configuration, requestOrigin);
             var health = ToHealthUrl(websocket);
             using var handler = new HttpClientHandler { AllowAutoRedirect = false };
-            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
+            using var client = new HttpClient(handler)
+            {
+                Timeout = TimeSpan.FromSeconds(5),
+                MaxResponseContentBufferSize = HealthResponseMaxBytes,
+            };
             var stopwatch = Stopwatch.StartNew();
             using var response = await client.GetAsync(health, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
@@ -88,12 +95,7 @@ public sealed class OpenWatchPartyDiagnosticsService
             }
             else
             {
-                using var document = JsonDocument.Parse(body);
-                var root = document.RootElement;
-                var sessionVersion = root.TryGetProperty("version", out var version) ? version.GetString() : null;
-                var protocol = root.TryGetProperty("protocol_version", out var protocolValue)
-                    ? protocolValue.GetInt32()
-                    : 0;
+                var (sessionVersion, protocol) = ReadHealth(body);
                 checks.Add(protocol == 1
                     ? new DiagnosticCheck("session_http", "pass", $"Session {sessionVersion ?? "unknown"}, protocol {protocol}", null, stopwatch.ElapsedMilliseconds)
                     : new DiagnosticCheck("session_http", "fail", "Session protocol is incompatible", "PROTOCOL_VERSION", stopwatch.ElapsedMilliseconds));
@@ -104,6 +106,24 @@ public sealed class OpenWatchPartyDiagnosticsService
             checks.Add(Fail("session_http", Redact(error.Message), "SESSION_UNREACHABLE"));
         }
         return Build(configuration, jellyfinVersion, injection, checks);
+    }
+
+    // Whatever answers on the session destination may not be a session server:
+    // a body of another shape reads as an unknown version and protocol 0.
+    private static (string? Version, int Protocol) ReadHealth(string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        if (root.ValueKind != JsonValueKind.Object) return (null, 0);
+        var version = root.TryGetProperty("version", out var versionValue) && versionValue.ValueKind == JsonValueKind.String
+            ? versionValue.GetString()
+            : null;
+        var protocol = root.TryGetProperty("protocol_version", out var protocolValue)
+            && protocolValue.ValueKind == JsonValueKind.Number
+            && protocolValue.TryGetInt32(out var number)
+            ? number
+            : 0;
+        return (version, protocol);
     }
 
     private static DiagnosticsResponse Build(
