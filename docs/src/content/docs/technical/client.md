@@ -480,7 +480,7 @@ Manages the plugin user interface.
 ### Functions
 
 #### `injectStyles() -> void`
-Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs, the up-next strip and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables are set on `#owp-panel`, `.owp-queue-next` (the up-next strip, which floats outside the panel while the panel is closed), `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
+Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs, the up-next strip and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables, and the colors as `--owp-*` variables (surface, text, accent, status and field colors, with Glass's values), are set on `#owp-panel`, `.owp-queue-next` (the up-next strip, which floats outside the panel while the panel is closed), `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
 
 #### `updateStatusIndicator() -> void`
 Updates connection status indicator (Online/Offline).
@@ -520,7 +520,7 @@ In a room, `render()` draws a single bar (sync dot, latency, room name, then the
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).
 
 #### `applyAppearance() -> void`
-Sets `--owp-scale` (text size / 12) and `--owp-surface-alpha` from `state.appearanceTextSize` and `state.appearanceOpacity` (from `appearance_text_size` and `appearance_opacity` in the token response), in its own stylesheet. A missing or out-of-range value falls back to the default.
+Sets `--owp-scale` (text size / 12) and `--owp-surface-alpha` from `state.appearanceTextSize` and `state.appearanceOpacity` (from `appearance_text_size` and `appearance_opacity` in the token response), and the color variables of `state.appearancePreset` (`appearance_preset`) over Glass's, in its own stylesheet. A missing or out-of-range value falls back to the default.
 
 #### `showToast(message: string) -> void`
 Shows a toast notification.

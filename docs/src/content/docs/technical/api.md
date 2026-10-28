@@ -64,6 +64,7 @@ Generates a JWT token for the authenticated user.
   "show_sync_nudge_button": false,
   "appearance_opacity": 55,
   "appearance_text_size": 14,
+  "appearance_preset": "glass",
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -82,6 +83,7 @@ Generates a JWT token for the authenticated user.
   "show_sync_nudge_button": false,
   "appearance_opacity": 55,
   "appearance_text_size": 14,
+  "appearance_preset": "glass",
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -91,7 +93,7 @@ Generates a JWT token for the authenticated user.
 
 `show_sync_nudge_button` is `true` when the administrator enabled **Show the sync adjustment button in rooms**; guests then get the sync adjustment in the room bar. Only an explicit `true` turns it on.
 
-`appearance_opacity` (40-100, in steps of 5) and `appearance_text_size` (12-18) are the **Room bar opacity** in percent and the **Text size** in pixels. The web client applies them to the room bar, its drop-downs, the lobby panel, the up-next strip and the toasts, and uses the defaults (55 and 14) for a missing or out-of-range value.
+`appearance_opacity` (40-100, in steps of 5) and `appearance_text_size` (12-18) are the **Room bar opacity** in percent and the **Text size** in pixels. The web client applies them to the room bar, its drop-downs, the lobby panel, the up-next strip and the toasts, and uses the defaults (55 and 14) for a missing or out-of-range value. `appearance_preset` is the **Theme**: `glass`, `solid`, `light` or `contrast`; the client uses `glass` for a missing or unknown one.
 
 `invite_ttl_seconds` is the configured **Invite TTL** (60-86400 seconds). The client sends it when asking the session server for a new invite link; the session server clamps it again.
 
@@ -128,6 +130,7 @@ curl -H "Authorization: MediaBrowser Token=\"YOUR_API_KEY\"" \
   "show_sync_nudge_button": false,
   "appearance_opacity": 55,
   "appearance_text_size": 14,
+  "appearance_preset": "glass",
   "invite_ttl_seconds": 3600,
   "protocol_version": 1
 }
@@ -285,7 +288,8 @@ curl -X POST \
     "HideNativeSyncPlayButton": false,
     "ShowSyncNudgeButton": false,
     "AppearanceOpacity": 55,
-    "AppearanceTextSize": 14
+    "AppearanceTextSize": 14,
+    "AppearancePreset": "glass"
   }' \
   "http://localhost:8096/System/Configuration/Plugin/0f2fd0fd-09ff-4f49-9f1c-4a8f421a4b7d"
 ```
@@ -308,6 +312,7 @@ curl -X POST \
 | `ShowSyncNudgeButton` | bool | `false` | Gives guests a local sync-adjustment control; it does not issue a room seek. |
 | `AppearanceOpacity` | int | `55` | Opacity from 40 to 100, rounded to steps of 5. Applies to the room bar, drop-downs, lobby panel, up-next strip and toasts. |
 | `AppearanceTextSize` | int | `14` | Base text size from 12 to 18 px for those surfaces; icons and spacing scale with it. |
+| `AppearancePreset` | string | `"glass"` | Colors of those surfaces: `glass`, `solid`, `light` or `contrast`. Any other value is stored as `glass`. |
 
 ### SessionServerUrl Behavior
 

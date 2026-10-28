@@ -115,7 +115,8 @@ participant's browser.
 Check that the displayed plugin release and session connection match your
 installation. On another device, the configured WebSocket URL must be
 reachable **from that device's browser**. The plugin's **Web Client** settings
-also let an administrator adjust the room interface's opacity and text size.
+also let an administrator choose the room interface's theme and adjust its
+opacity and text size.
 
 ![OpenWatchParty Web Client settings for SyncPlay visibility, optional guest sync adjustment and room opacity and text size](/assets/images/plugin-configuration.png)
 
@@ -260,7 +261,7 @@ that is watching a movie does not show a queue.
 
 ![Live up-next countdown with Cancel and Next controls above the episode queue](/assets/images/watch-party-up-next.png)
 
-The administrator can change the room interface opacity and text size under
+The administrator can change the room interface theme, opacity and text size under
 **Dashboard → Plugins → OpenWatchParty → Web Client**. If enabled, the guest's
 sync adjustment control nudges only that guest's video toward the host. See
 the [User Guide](/product/user-guide/) for these controls,

@@ -162,6 +162,22 @@ public class PluginConfigurationTests
         var config = new PluginConfiguration();
         Assert.Equal(55, config.AppearanceOpacity);
         Assert.Equal(14, config.AppearanceTextSize);
+        Assert.Equal("glass", config.AppearancePreset);
+    }
+
+    [Theory]
+    [InlineData("glass", "glass")]
+    [InlineData("solid", "solid")]
+    [InlineData("light", "light")]
+    [InlineData("contrast", "contrast")]
+    [InlineData("Light", "glass")]
+    [InlineData("neon", "glass")]
+    [InlineData("", "glass")]
+    [InlineData(null, "glass")]
+    public void AppearancePreset_KeepsOnlyKnownPresets(string? value, string expected)
+    {
+        var config = new PluginConfiguration { AppearancePreset = value! };
+        Assert.Equal(expected, config.AppearancePreset);
     }
 
     [Theory]
@@ -204,6 +220,10 @@ public class PluginConfigurationTests
         Assert.Contains("id=\"AppearanceOpacity\" min=\"40\" max=\"100\" step=\"5\"", page, StringComparison.Ordinal);
         Assert.Contains("id=\"AppearanceTextSize\" min=\"12\" max=\"18\" step=\"1\"", page, StringComparison.Ordinal);
         Assert.Contains("id=\"ResetAppearanceButton\"", page, StringComparison.Ordinal);
+        foreach (var preset in new[] { "glass", "solid", "light", "contrast" })
+        {
+            Assert.Contains($"<option value=\"{preset}\"", page, StringComparison.Ordinal);
+        }
     }
 
 }

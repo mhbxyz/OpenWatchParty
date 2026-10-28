@@ -27,11 +27,17 @@ const variables = () => {
     alpha: Number(text.match(/--owp-surface-alpha: ([\d.]+)/)[1])
   };
 };
-const set = (opacity, textSize) => {
+const set = (opacity, textSize, preset) => {
   OWP.state.appearanceOpacity = opacity;
   OWP.state.appearanceTextSize = textSize;
+  OWP.state.appearancePreset = preset;
   OWP.ui.applyAppearance();
 };
+// The variables a preset sets on top of the scale and the opacity.
+const presetVariables = () => Object.fromEntries([...appearanceStyles()[0].textContent
+  .matchAll(/(--owp-[a-z0-9-]+): ([^;]+);/g)]
+  .filter(([, name]) => name !== '--owp-scale' && name !== '--owp-surface-alpha')
+  .map(([, name, value]) => [name, value]));
 
 const respondWith = (body) => {
   globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => body });
@@ -91,16 +97,33 @@ describe('appearance settings', () => {
     }
   });
 
+  it('sets the colors of the preset, and none for Glass, a missing or an unknown one', () => {
+    set(55, 14, 'light');
+    assert.equal(presetVariables()['--owp-surface'], '248, 247, 243');
+    assert.equal(presetVariables()['--owp-ink'], '0, 0, 0');
+    set(100, 14, 'contrast');
+    assert.equal(presetVariables()['--owp-surface'], '0, 0, 0');
+    assert.deepEqual(variables(), { scale: 14 / 12, alpha: 1 });
+    set(100, 14, 'solid');
+    assert.deepEqual(presetVariables(), { '--owp-blur': '0px' });
+    for (const preset of ['glass', undefined, 'neon', 'constructor']) {
+      set(55, 14, preset);
+      assert.deepEqual(presetVariables(), {}, String(preset));
+    }
+  });
+
   for (const [mode, response] of Object.entries(responses)) {
     it(`applies the appearance of the ${mode} token response, and the defaults without one`, async () => {
-      respondWith(response({ appearance_opacity: 85, appearance_text_size: 16 }));
+      respondWith(response({ appearance_opacity: 85, appearance_text_size: 16, appearance_preset: 'light' }));
       assert.equal((await OWP.actions.fetchAuthToken()).mode, mode);
       assert.deepEqual(variables(), { scale: 16 / 12, alpha: 0.85 });
+      assert.equal(presetVariables()['--owp-surface'], '248, 247, 243');
 
       // An older plugin sends no appearance.
       respondWith(response());
       await OWP.actions.fetchAuthToken();
       assert.deepEqual(variables(), { scale: 14 / 12, alpha: 0.55 });
+      assert.deepEqual(presetVariables(), {});
     });
   }
 });
@@ -115,7 +138,7 @@ describe('appearance styles', () => {
     // What stays fixed: hairline borders, the visually hidden text, the window
     // widths of the media queries, the places on screen, the margins to the
     // window edges, the animations and the blur.
-    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(1[02]px\)/g;
+    const fixed = /1px solid|width: 1px; height: 1px|@media \(max-width: \d+px\)|top: 72px; right: 20px|bottom: 100px; right: 20px|left: 8px; right: 8px|calc\(100v[wh] - \d+px\)|translateX\(20px\)|blur\(10px\)|--owp-blur: 12px/g;
     assert.deepEqual(unscaled.replace(fixed, '').match(/\d+(\.\d+)?px/g), null);
   });
 
@@ -124,14 +147,32 @@ describe('appearance styles', () => {
   });
 
   it('starts at 14 px and 55 %, and turns opaque when less transparency is asked for', () => {
-    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{\s*--owp-scale: 1\.1666/);
+    assert.match(css, /#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float, #owp-emoji-panel, #owp-emoji-autocomplete \{\s*--owp-scale: 1\.1666/);
     assert.match(css, /--owp-surface-alpha: 0\.55/);
     assert.match(css, /@media \(prefers-reduced-transparency: reduce\) \{\s*#owp-panel, \.owp-toast-container, \.owp-toast-system, \.owp-queue-next, \.owp-start-float \{ --owp-surface-alpha: 1 !important; \}/);
   });
 
   it('draws every surface with the opacity setting', () => {
-    assert.equal(css.match(/rgba\(38, 38, 36, 0\.97\)/g), null);
-    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 6);
-    assert.match(css, /rgba\(20, 20, 20, var\(--owp-surface-alpha\)\)/);
+    assert.equal(css.match(/rgba\(var\(--owp-surface\), var\(--owp-surface-alpha\)\)/g).length, 6);
+    assert.match(css, /rgba\(var\(--owp-surface-deep\), var\(--owp-surface-alpha\)\)/);
+  });
+
+  it('takes the colors of the panel, the toasts and the emoji pop-ups from the preset variables', () => {
+    const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
+    const defaults = panel.slice(0, panel.indexOf('}'));
+    // What keeps a fixed color: the shadows, white text on the blue and red
+    // buttons, the home card count over the poster, and old rules no view uses.
+    const fixed = /rgba\(0, ?0, ?0, ?0\.\d+\)|color: #fff;|\.owp-card-count \{[^}]*\}|#1565c0|#aaa|#388e3c|#69f0ae/g;
+    const rules = panel.slice(defaults.length).replace(fixed, '');
+    assert.deepEqual(rules.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\d[^)]*\)/g), null);
+  });
+
+  it('lets each preset set only variables the stylesheet defines', () => {
+    const defined = new Set(css.match(/--owp-[a-z0-9-]+(?=:)/g));
+    for (const preset of OWP.constants.APPEARANCE.presets) {
+      set(55, 14, preset);
+      for (const name of Object.keys(presetVariables())) assert.ok(defined.has(name), `${preset} ${name}`);
+    }
+    appearanceStyles().forEach(style => style.remove());
   });
 });

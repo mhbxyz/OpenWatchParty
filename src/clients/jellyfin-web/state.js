@@ -108,6 +108,7 @@
     // the same ranges as the plugin settings.
     APPEARANCE: {
       baseTextSize: 12,
+      presets: ['glass', 'solid', 'light', 'contrast'], // Color presets; the first is the default
       opacity: { min: 40, max: 100, step: 5, default: 55 },
       textSize: { min: 12, max: 18, step: 1, default: 14 }
     },
@@ -339,6 +340,7 @@
     showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
     appearanceOpacity: OWP.constants.APPEARANCE.opacity.default,   // Surface opacity in percent
     appearanceTextSize: OWP.constants.APPEARANCE.textSize.default, // Base text size in px
+    appearancePreset: OWP.constants.APPEARANCE.presets[0],         // Color preset
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
   });
 
