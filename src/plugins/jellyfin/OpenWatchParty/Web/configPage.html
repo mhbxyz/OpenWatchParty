@@ -258,11 +258,21 @@
                         });
                 },
 
-                updateAuthStatus: function(page, config) {
+                // Only the diagnostics know about the plugin's RSA signing key: an
+                // active one issues the tokens whatever the shared secret, and one
+                // that cannot be read blocks them even with a valid secret.
+                updateAuthStatus: function(page, config, diagnostics) {
                     var status = $('#AuthStatus', page);
                     var validationError = this.validateJwtSecret(config.JwtSecret || '');
-                    if ((config.JwtSecret || '').trim() && validationError) {
+                    var authCheck = diagnostics && diagnostics.AuthenticationMode === 'jwt'
+                        ? (diagnostics.Checks || []).find(function(check) { return check.Id === 'authentication_configuration'; })
+                        : null;
+                    if (authCheck && authCheck.Status === 'pass') {
+                        status.text(configT('authEnabled')).css({ background: '#173d2a', color: '#8ee6b5' });
+                    } else if ((config.JwtSecret || '').trim() && validationError) {
                         status.text(configT('blocked', { message: validationError })).css({ background: '#5b1d1d', color: '#ffaaaa' });
+                    } else if (authCheck) {
+                        status.text(configT('blocked', { message: configCheckSummary(authCheck.Summary) })).css({ background: '#5b1d1d', color: '#ffaaaa' });
                     } else if ((config.JwtSecret || '').trim()) {
                         status.text(configT('authEnabled')).css({ background: '#173d2a', color: '#8ee6b5' });
                     } else if (config.AllowInsecureNoAuth) {
@@ -569,7 +579,9 @@
                     $('#ShowSyncNudgeButton', page).prop('checked', config.ShowSyncNudgeButton === true);
                     setAppearance(page, config);
                     OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
-                    OpenWatchPartyConfigurationPage.runDiagnostics(false);
+                    OpenWatchPartyConfigurationPage.runDiagnostics(false).then(function(diagnostics) {
+                        if (diagnostics) OpenWatchPartyConfigurationPage.updateAuthStatus(page, config, diagnostics);
+                    });
 
                     Dashboard.hideLoadingMsg();
                 }).catch(function (err) {

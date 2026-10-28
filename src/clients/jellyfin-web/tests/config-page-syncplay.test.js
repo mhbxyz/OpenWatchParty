@@ -17,7 +17,7 @@ const VALID_SECRET = 'B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=';
 // Minimal jQuery stand-in: form fields keep their value/checked/text state and
 // their handlers, and the page and form selectors record the handlers the
 // configuration page registers.
-const loadConfigPage = (storedConfig) => {
+const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const fields = new Map();
   const handlers = {};
   const saved = [];
@@ -41,6 +41,9 @@ const loadConfigPage = (storedConfig) => {
       text(value) {
         if (value === undefined) return state.text;
         state.text = value;
+        return this;
+      },
+      css() {
         return this;
       },
       on: (events, handler) => {
@@ -90,14 +93,21 @@ const loadConfigPage = (storedConfig) => {
   });
   vm.runInContext(script, context, { filename: 'configPage.html' });
   const page = context.OpenWatchPartyConfigurationPage;
+  const updateAuthStatus = page.updateAuthStatus;
+  const authStatusCalls = [];
   page.init = async () => {};
-  page.runDiagnostics = () => {};
-  page.updateAuthStatus = () => {};
+  page.runDiagnostics = async () => diagnostics;
+  page.updateAuthStatus = (target, config, result) => { authStatusCalls.push([config, result]); };
 
   const settle = () => new Promise(resolve => setImmediate(resolve));
   return {
     fields,
     saved,
+    authStatusCalls,
+    authStatus(config, result) {
+      updateAuthStatus.call(page, pageElement, config, result);
+      return fields.get('AuthStatus').text;
+    },
     async show() {
       handlers.pageshow.call(pageElement);
       await settle();
@@ -239,5 +249,51 @@ describe('configuration page appearance settings', () => {
 
     assert.equal(form.saved[0].AppearanceOpacity, 55);
     assert.equal(form.saved[0].AppearanceTextSize, 14);
+  });
+});
+
+describe('configuration page authentication status', () => {
+  const keyDiagnostics = (status, summary) => ({
+    AuthenticationMode: 'jwt',
+    Checks: [{ Id: 'authentication_configuration', Status: status, Summary: summary }]
+  });
+
+  it('shows an active RSA signing key as enabled, whatever the shared secret', () => {
+    const form = loadConfigPage({});
+    const active = keyDiagnostics('pass', 'Authentication configuration is valid');
+    assert.equal(form.authStatus({ JwtSecret: '' }), 'BLOCKED: configure a JWT secret');
+    assert.equal(form.authStatus({ JwtSecret: '' }, active), 'Authentication enabled');
+    assert.equal(form.authStatus({ JwtSecret: 'short' }), 'BLOCKED: JWT secret must contain at least 32 Unicode characters');
+    assert.equal(form.authStatus({ JwtSecret: 'short' }, active), 'Authentication enabled');
+  });
+
+  it('shows the key error the diagnostics report, even with a valid shared secret', () => {
+    const form = loadConfigPage({});
+    const summary = 'The RSA signing key file (keys/signing-key.json) cannot be read; restore it or remove it';
+    assert.equal(form.authStatus({ JwtSecret: '' }, keyDiagnostics('fail', summary)), `BLOCKED: ${summary}`);
+    assert.equal(form.authStatus({ JwtSecret: VALID_SECRET }, keyDiagnostics('fail', summary)), `BLOCKED: ${summary}`);
+  });
+
+  it('keeps the shared secret and development mode statuses', () => {
+    const form = loadConfigPage({});
+    const insecure = { AuthenticationMode: 'insecure', Checks: [{ Id: 'authentication_configuration', Status: 'pass' }] };
+    assert.equal(form.authStatus({ JwtSecret: VALID_SECRET }, keyDiagnostics('pass')), 'Authentication enabled');
+    assert.equal(form.authStatus({ JwtSecret: '', AllowInsecureNoAuth: true }, insecure), 'INSECURE DEVELOPMENT MODE');
+    // Without a key or a secret the diagnostics fail too, but the page's own message is translated.
+    const unconfigured = { AuthenticationMode: 'insecure',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT authentication is not configured' }] };
+    assert.equal(form.authStatus({ JwtSecret: '' }, unconfigured), 'BLOCKED: configure a JWT secret');
+    const invalidSecret = { AuthenticationMode: 'jwt',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT secret must contain at least 32 Unicode characters' }] };
+    assert.equal(form.authStatus({ JwtSecret: 'short' }, invalidSecret), 'BLOCKED: JWT secret must contain at least 32 Unicode characters');
+  });
+
+  it('updates the status with the diagnostics once the page loads', async () => {
+    const diagnostics = keyDiagnostics('pass', 'Authentication configuration is valid');
+    const form = loadConfigPage({ JwtSecret: '' }, { diagnostics });
+    await form.show();
+    assert.equal(form.authStatusCalls.length, 2);
+    assert.equal(form.authStatusCalls[0][1], undefined);
+    assert.equal(form.authStatusCalls[1][1], diagnostics);
   });
 });

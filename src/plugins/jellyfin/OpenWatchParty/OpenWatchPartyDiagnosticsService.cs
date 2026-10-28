@@ -121,7 +121,7 @@ public sealed class OpenWatchPartyDiagnosticsService
             jellyfinVersion,
             Plugin.TargetAbi,
             1,
-            string.IsNullOrWhiteSpace(configuration.JwtSecret) ? "insecure" : "jwt",
+            OpenWatchParty.Plugin.Controllers.OpenWatchPartyController.GetAuthenticationMode(configuration),
             string.IsNullOrWhiteSpace(configuration.SessionServerUrl) ? "automatic" : "explicit",
             injection,
             checks);

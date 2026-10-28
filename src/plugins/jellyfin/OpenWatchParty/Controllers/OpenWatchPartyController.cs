@@ -427,9 +427,31 @@ public class OpenWatchPartyController : ControllerBase
         return GetAuthenticationConfigurationError(config) != null;
     }
 
+    /// <summary>
+    /// Whether tokens are signed with the plugin's RSA key: null when its file cannot be read.
+    /// </summary>
+    internal static bool? IsRsaSigningKeyActive()
+    {
+        try
+        {
+            return RsaSigningKeyStore.ForPlugin()?.IsActive == true;
+        }
+        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     internal static string? GetAuthenticationConfigurationError(PluginConfiguration config)
     {
-        if (RsaSigningKeyStore.ForPlugin()?.IsActive == true)
+        var rsaKeyActive = IsRsaSigningKeyActive();
+        if (rsaKeyActive == null)
+        {
+            // Signing with the shared secret instead could fail on a server
+            // that only trusts the key, so issuance stops until it is fixed.
+            return "The RSA signing key file (keys/signing-key.json) cannot be read; restore it or remove it";
+        }
+        if (rsaKeyActive == true)
         {
             return null;
         }
@@ -439,6 +461,16 @@ public class OpenWatchPartyController : ControllerBase
         }
 
         return JwtSecretValidator.TryValidate(config.JwtSecret, out var error) ? null : error;
+    }
+
+    /// <summary>
+    /// How tokens are issued: "jwt" with the RSA signing key or a shared secret,
+    /// "insecure" without either. An unusable key or secret is still "jwt"; the
+    /// configuration check reports it.
+    /// </summary>
+    internal static string GetAuthenticationMode(PluginConfiguration config)
+    {
+        return IsRsaSigningKeyActive() != false || !string.IsNullOrWhiteSpace(config.JwtSecret) ? "jwt" : "insecure";
     }
 
     /// <summary>
