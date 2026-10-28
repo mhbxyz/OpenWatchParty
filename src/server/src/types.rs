@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
@@ -27,6 +27,7 @@ pub struct Client {
     pub supports_shared_playback_control: bool,
     pub supports_media_queue: bool,
     pub supports_start_when_ready: bool,
+    pub supports_chat_history: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
@@ -67,6 +68,9 @@ pub struct Room {
     pub guest_command_until: Option<Instant>,
     #[serde(skip)]
     pub queue: crate::room::MediaQueue,
+    /// The room's last chat messages, oldest first, for members who join later.
+    #[serde(skip)]
+    pub chat_history: VecDeque<ChatEntry>,
     /// Why members with `start_when_ready` say they can't play yet, by client
     /// id (see `readiness`). A member is ready once it is in `ready_clients`
     /// and not here.
@@ -94,6 +98,18 @@ impl NotReadyReason {
     pub fn ends_with_ready(self) -> bool {
         matches!(self, Self::Loading | Self::Transcoding)
     }
+}
+
+/// A chat message kept in the room's history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatEntry {
+    pub client: String,
+    /// The sender's user (JWT subject), never sent: it tells a joiner which
+    /// messages are its own from an earlier connection.
+    pub user_id: String,
+    pub username: String,
+    pub text: String,
+    pub server_ts: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -250,6 +266,7 @@ pub enum ServerMessageType {
     ChatMessage,
     QueueState,
     StartState,
+    ChatHistory,
 }
 
 impl ServerMessageType {
@@ -273,6 +290,7 @@ impl ServerMessageType {
             Self::ParticipantStatuses => "participant_statuses",
             Self::QueueState => "queue_state",
             Self::StartState => "start_state",
+            Self::ChatHistory => "chat_history",
         }
     }
 }
