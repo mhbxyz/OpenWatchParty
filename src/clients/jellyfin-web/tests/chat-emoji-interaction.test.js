@@ -345,6 +345,20 @@ describe('emoji picker keyboard navigation and focus trapping', () => {
     assert.equal(document.getElementById('owp-emoji-panel'), null, 'picker should close on select');
     assert.equal(document.activeElement, input, 'focus must return to input');
   });
+
+  it('stops pointerdown and mousedown propagation on emoji panel', () => {
+    OWP.emoji.togglePicker(input);
+    const panel = document.getElementById('owp-emoji-panel');
+    assert.ok(panel);
+
+    const pointerEvent = { type: 'pointerdown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    panel.dispatchEvent(pointerEvent);
+    assert.ok(pointerEvent.propagationStopped, 'pointerdown on emoji panel should stop propagation');
+
+    const mouseEvent = { type: 'mousedown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    panel.dispatchEvent(mouseEvent);
+    assert.ok(mouseEvent.propagationStopped, 'mousedown on emoji panel should stop propagation');
+  });
 });
 
 describe('emoji autocomplete combobox semantics and interactions', () => {
@@ -492,5 +506,23 @@ describe('emoji autocomplete combobox semantics and interactions', () => {
     assert.equal(document.getElementById('owp-emoji-autocomplete'), null, 'suggestions must be dismissed');
     assert.equal(input.getAttribute('aria-expanded'), 'false');
     assert.equal(input.getAttribute('aria-activedescendant'), null);
+  });
+
+  it('stops pointerdown and mousedown propagation on autocomplete', () => {
+    input.value = ':sm';
+    input.selectionStart = 3;
+    input.selectionEnd = 3;
+    input.dispatchEvent({ type: 'input' });
+
+    const suggestions = document.getElementById('owp-emoji-autocomplete');
+    assert.ok(suggestions);
+
+    const autoPointer = { type: 'pointerdown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    suggestions.dispatchEvent(autoPointer);
+    assert.ok(autoPointer.propagationStopped, 'pointerdown on autocomplete should stop propagation');
+
+    const autoMouse = { type: 'mousedown', bubbles: true, stopPropagation() { this.propagationStopped = true; } };
+    suggestions.dispatchEvent(autoMouse);
+    assert.ok(autoMouse.propagationStopped, 'mousedown on autocomplete should stop propagation');
   });
 });

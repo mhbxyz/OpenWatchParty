@@ -87,6 +87,9 @@
       return row;
     });
 
+    suggestionBox.addEventListener('pointerdown', (e) => e.stopPropagation());
+    suggestionBox.addEventListener('mousedown', (e) => e.stopPropagation());
+
     items.forEach((el, index) => {
       el.addEventListener('mouseenter', () => {
         activeIndex = index;
@@ -259,6 +262,8 @@
     panel.append(tabs, grid);
 
     const stopPropagation = (e) => e.stopPropagation();
+    panel.addEventListener('pointerdown', stopPropagation);
+    panel.addEventListener('mousedown', stopPropagation);
     panel.addEventListener('keyup', stopPropagation);
     panel.addEventListener('keypress', stopPropagation);
 
