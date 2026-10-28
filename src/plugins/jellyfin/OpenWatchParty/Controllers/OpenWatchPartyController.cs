@@ -429,7 +429,18 @@ public class OpenWatchPartyController : ControllerBase
 
     internal static string? GetAuthenticationConfigurationError(PluginConfiguration config)
     {
-        if (RsaSigningKeyStore.ForPlugin()?.IsActive == true)
+        bool rsaKeyActive;
+        try
+        {
+            rsaKeyActive = RsaSigningKeyStore.ForPlugin()?.IsActive == true;
+        }
+        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        {
+            // Signing with the shared secret instead could fail on a server
+            // that only trusts the key, so issuance stops until it is fixed.
+            return "The RSA signing key file (keys/signing-key.json) cannot be read; restore it or remove it";
+        }
+        if (rsaKeyActive)
         {
             return null;
         }

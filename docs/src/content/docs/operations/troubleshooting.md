@@ -178,6 +178,7 @@ See [Configuration: Room queue and lifecycle](/operations/configuration/#room-qu
    - In `hybrid`, the shared secret is still required for legacy HS256 tokens, and the server also needs a valid public-key trust store for RS256.
    - In `asymmetric`, the plugin's active RSA key must be present in the server trust store; `JWT_SECRET` is not used.
    - Empty secrets are allowed only in explicitly enabled local development mode on both sides. Never expose that mode.
+   - If diagnostics say the RSA signing key file cannot be read, token issuance stops until `keys/signing-key.json` in the plugin's data folder is restored from a backup, or removed and the server paired again.
 
 2. **Check token expiration**
    - Default: 1 hour
