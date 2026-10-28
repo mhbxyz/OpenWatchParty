@@ -10,7 +10,8 @@ OWP.utils.log = () => {};
 OWP.utils.startSyncing = () => {};
 let played = [];
 OWP.playback = { safePlay: (target, reason) => { played.push(reason); target.paused = false; return Promise.resolve(true); } };
-OWP.ui = { showChatToast: (name, text) => toasts.push({ name, text }), updateParticipantList: () => {}, showToast: () => {} };
+let roomToasts = [];
+OWP.ui = { showChatToast: (name, text) => toasts.push({ name, text }), updateParticipantList: () => {}, showToast: message => roomToasts.push(message) };
 let video = null;
 OWP.utils.getVideo = () => video;
 require('../chat/messages.js');
@@ -19,6 +20,7 @@ OWP.chat.isChatVisible = () => chatVisible;
 OWP.chat.updateBadge = () => {};
 require('../app/start.js');
 require('../ws/handlers/room.js');
+require('../ws/handlers/playback.js');
 
 const h = OWP._wsHandlers;
 const start = OWP.start;
@@ -52,6 +54,7 @@ describe('start when ready', () => {
   beforeEach(() => {
     sent = [];
     toasts = [];
+    roomToasts = [];
     played = [];
     chatVisible = false;
     OWP.chat.messages = [];
@@ -272,6 +275,78 @@ describe('start when ready', () => {
       await wait(250);
       assert.deepEqual(played, ['room start']);
       assert.equal(video.paused, false);
+    });
+
+    // The room's play, which the server sends right after `starting`, for the same time.
+    const roomPlay = (client, target) => ({
+      type: 'player_event',
+      room: 'room-1',
+      client,
+      server_ts: target,
+      payload: { action: 'play', position: 30, play_state: 'playing', target_server_ts: target }
+    });
+
+    // A guest's play the room waited for, on the host. `applyCommand` is when
+    // the room's play comes due: before or after this module's own start.
+    const guestPlayAfterWait = async (applyCommand) => {
+      const scheduleAt = OWP.utils.scheduleAt;
+      let command = null;
+      OWP.utils.scheduleAt = (target, callback) => { command = callback; };
+      try {
+        video.paused = false;
+        OWP.state.roomHostId = 'client-1';
+        start.onStartState(waiting([member('c2', 'Ana', 'buffering')]));
+        const target = OWP.utils.getServerNow() + 50;
+        start.onStartState({ state: 'starting', target_server_ts: target, countdown: false, without: [] });
+        h.handlePlayerEvent(roomPlay('c2', target), video);
+        if (applyCommand === 'first') command();
+        await wait(150);
+        if (applyCommand === 'after') command();
+        return target;
+      } finally {
+        OWP.utils.scheduleAt = scheduleAt;
+      }
+    };
+
+    it('tells the host a guest play resumed the room, though this module played the video first', async () => {
+      await guestPlayAfterWait('after');
+      assert.deepEqual(played, ['room start']);
+      assert.equal(video.paused, false);
+      assert.deepEqual(roomToasts, ['A guest resumed playback']);
+    });
+
+    it('tells no guest pause that changes nothing, even one for the start\'s time', async () => {
+      const target = await guestPlayAfterWait('after');
+      video.paused = true;
+      const pause = roomPlay('c2', target);
+      pause.payload = { action: 'pause', position: 30, play_state: 'paused', target_server_ts: target };
+      h.handlePlayerEvent(pause, video);
+      assert.deepEqual(roomToasts, ['A guest resumed playback']);
+    });
+
+    it('tells it once when the guest play comes first', async () => {
+      await guestPlayAfterWait('first');
+      assert.deepEqual(played, ['guest play command']);
+      assert.equal(video.paused, false);
+      assert.deepEqual(roomToasts, ['A guest resumed playback']);
+    });
+
+    it('plays the held video for the host\'s own play, and no guest play that changes nothing is told', async () => {
+      video.paused = false;
+      OWP.state.roomHostId = 'client-1';
+      OWP.state.hostControlAcks = ['play'];
+      start.onStartState(waiting([member('c2', 'Ana', 'buffering')]));
+      const target = OWP.utils.getServerNow() + 50;
+      start.onStartState({ state: 'starting', target_server_ts: target, countdown: false, without: [] });
+      h.handlePlayerEvent(roomPlay('client-1', target), video);
+      await wait(150);
+      assert.deepEqual(played, ['room start']);
+      assert.equal(video.paused, false);
+      // A later guest play, for another time, finds the room playing.
+      h.handlePlayerEvent(roomPlay('c2', OWP.utils.getServerNow() + 20), video);
+      await wait(100);
+      assert.deepEqual(played, ['room start']);
+      assert.deepEqual(roomToasts, []);
     });
 
     it('leaves alone a video it did not hold, or one already playing', async () => {

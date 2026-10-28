@@ -111,6 +111,9 @@
       return true;
     }
     const changed = playing === video.paused;
+    // A start the room waited for plays the held video at this same time
+    // (app/start.js), maybe first: this play still resumed the room.
+    const resumedByStart = playing && Boolean(OWP.start?.resumedFor?.(msg.payload.target_server_ts));
     const position = msg.payload.position;
     const threshold = playing ? SEEK_THRESHOLD : PAUSED_SEEK_THRESHOLD;
     // One target for both the decision and the seek: a playing projection
@@ -127,7 +130,7 @@
     if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
     else if (changed) video.pause();
     // Scheduled play retains its initiator; only guest actions get this toast.
-    if (changed && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
+    if ((changed || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;
   };
 

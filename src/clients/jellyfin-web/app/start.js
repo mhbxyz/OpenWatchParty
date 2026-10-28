@@ -71,6 +71,8 @@
   // would not, for the host's own play it sees as already applied.
   let heldVideo = null;
   let resumeTimer = null;
+  // The start (its time) this module last played its held video again for.
+  let resumedTarget = null;
   const hold = (position) => {
     const video = state.currentVideoElement || utils.getVideo();
     if (!video) return;
@@ -80,22 +82,27 @@
     if (typeof position === 'number' && Math.abs(video.currentTime - position) > 0.5) video.currentTime = position;
     heldVideo = video;
   };
-  const resumeHeld = () => {
+  const resumeHeld = (targetServerTs) => {
     resumeTimer = null;
     const video = heldVideo;
     heldVideo = null;
     if (!video || !state.inRoom || video !== (state.currentVideoElement || utils.getVideo()) || !video.paused) return;
     utils.suppress();
     utils.startSyncing();
+    resumedTarget = targetServerTs;
     if (OWP.playback?.safePlay) OWP.playback.safePlay(video, 'room start');
   };
+  // Whether this module played its held video again for the start at this
+  // time. The room's play for that start, due at the same time, may come
+  // after it and find the video already playing.
+  const resumedFor = targetServerTs => resumedTarget === targetServerTs;
   const stopResume = () => {
     if (resumeTimer) OWP.timers.clear(resumeTimer);
     resumeTimer = null;
   };
   const resumeAt = (targetServerTs) => {
     stopResume();
-    if (heldVideo) resumeTimer = OWP.timers.setTimeout(resumeHeld, Math.max(0, targetServerTs - utils.getServerNow()), 'room');
+    if (heldVideo) resumeTimer = OWP.timers.setTimeout(() => resumeHeld(targetServerTs), Math.max(0, targetServerTs - utils.getServerNow()), 'room');
   };
 
   // Until when this module holds the room work (pendingPlayUntil), so it only
@@ -227,5 +234,5 @@
     scheduleTick();
   };
 
-  Object.assign(start, { report, ownReason, onStartState, onClientLeft, startNow, canStart, FEATURE });
+  Object.assign(start, { report, ownReason, onStartState, onClientLeft, startNow, canStart, resumedFor, FEATURE });
 })();
