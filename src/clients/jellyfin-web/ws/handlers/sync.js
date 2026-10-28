@@ -45,8 +45,12 @@
     state.lastSyncPosition = basePos;
     state.lastSyncPlayState = msg.payload.state.play_state || 'paused';
     if (hostPlaying) state.roomWaiting = false;
+    // Whether the room waits for the host's buffering, in a room state built
+    // from what the guest heard while the room's item loaded.
+    const waiting = msg.payload.state.waiting;
+    if (typeof waiting === 'boolean') state.roomWaiting = waiting;
     state.pendingPlayUntil = 0;
-    state.syncStatus = hostPlaying ? 'syncing' : 'synced';
+    state.syncStatus = hostPlaying || waiting ? 'syncing' : 'synced';
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
     utils.log('CLIENT', {
       type: 'room_state',
@@ -74,6 +78,39 @@
     } else if (msg.payload.state.play_state === 'paused') {
       video.pause();
     }
+  };
+
+  // What a guest hears of its room after a room state: a play, pause or seek,
+  // or a state update. One that came while the room's item loaded is newer
+  // than the room state the ready video syncs to.
+  h.hearRoomState = (msg, playState, waiting = false) => {
+    if ((msg.room || state.roomId) !== state.roomId) return;
+    const heard = state.heardRoomState;
+    const update = msg.type === 'state_update';
+    // A state update does not replace a play still waiting for its time, and
+    // a paused one leaves the room waiting for the host's buffering.
+    if (update && heard?.targetServerTs > utils.getServerNow()) return;
+    state.heardRoomState = {
+      position: msg.payload.position,
+      playState,
+      waiting: waiting || (update && playState === 'paused' && Boolean(heard?.waiting)),
+      serverTs: msg.server_ts || utils.getServerNow(),
+      targetServerTs: msg.payload.target_server_ts ?? null
+    };
+  };
+
+  const latestRoomState = (msg) => {
+    const heard = state.heardRoomState;
+    if (!heard) return msg;
+    return {
+      ...msg,
+      payload: {
+        ...msg.payload,
+        state_server_ts: heard.serverTs,
+        target_server_ts: heard.targetServerTs,
+        state: { position: heard.position, play_state: heard.playState, waiting: heard.waiting }
+      }
+    };
   };
 
   const scheduleRoomSync = (msg, fallbackVideo, acceptedAsGuest = false) => {
@@ -144,15 +181,17 @@
         OWP.playback.ensurePlayback(msg.payload.media_id);
       }
       // After an advance, a play or pause that came while the item loaded is
-      // newer than this room state, paused at 0, and stands.
+      // newer than this room state, paused at 0, and stands. Otherwise the
+      // ready video syncs to the latest the guest heard of the room.
       const actionAttempt = state.playbackActionAttempt;
+      state.heardRoomState = null;
       if (OWP.playback?.watchReady) {
         OWP.playback.watchReady({
           roomId: msg.room,
           mediaId: msg.payload.media_id,
           onReady: (readyVideo) => {
             if (advanced && state.playbackActionAttempt !== actionAttempt) return;
-            scheduleRoomSync(msg, readyVideo, acceptedAsGuest);
+            scheduleRoomSync(latestRoomState(msg), readyVideo, acceptedAsGuest);
           }
         });
       }
@@ -169,9 +208,11 @@
   };
 
   h.handleStateUpdate = (msg, video) => {
-    if (state.isHost || !video) return;
+    if (state.isHost) return;
     // The host sent this before the room took this guest's own play or pause.
     if (utils.nowMs() < state.ownCommandUntil && msg.payload?.play_state !== state.ownCommandPlayState) return;
+    if (msg.payload) h.hearRoomState(msg, msg.payload.play_state);
+    if (!video) return;
     state.playbackActionAttempt++;
     if (msg.payload) {
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;

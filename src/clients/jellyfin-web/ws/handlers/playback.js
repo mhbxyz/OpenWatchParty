@@ -194,6 +194,9 @@
     }
     utils.startSyncing();
     if (!msg.payload) return;
+    const action = msg.payload.action;
+    const playing = action === 'play' || (action === 'seek' && msg.payload.play_state === 'playing');
+    if (h.hearRoomState) h.hearRoomState(msg, playing ? 'playing' : 'paused', action === 'buffering');
     state.ownCommandUntil = 0;
     state.ownCommandPlayState = '';
     const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();

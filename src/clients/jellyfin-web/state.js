@@ -221,6 +221,7 @@
     pendingMediaId: '',
     mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
     pendingMediaUntil: 0,
+    heardRoomState: null,  // A guest's latest room command or state update, for the room state a loading item syncs to
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     guestPaused: false,
     ownCommandUntil: 0,
