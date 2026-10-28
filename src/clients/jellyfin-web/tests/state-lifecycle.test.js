@@ -155,6 +155,27 @@ describe('state lifecycle boundaries', () => {
     assert.equal(OWP.timers.count(), 0);
   });
 
+  it('cleans up panel event listeners including wheel on cleanup', () => {
+    const events = [];
+    const panel = {
+      removeEventListener: (event) => {
+        events.push(event);
+      }
+    };
+    const prevGetElementById = globalThis.document?.getElementById;
+    globalThis.document = globalThis.document || {};
+    globalThis.document.getElementById = (id) => (id === OWP.constants.PANEL_ID ? panel : null);
+    OWP._lifecycle = OWP._lifecycle || {};
+    OWP._lifecycle.panelStopPropagation = () => {};
+    try {
+      OWP.app.cleanup();
+      assert.deepEqual(events.sort(), ['click', 'keydown', 'keypress', 'keyup', 'mousedown', 'wheel']);
+      assert.equal(OWP._lifecycle.panelStopPropagation, null);
+    } finally {
+      if (prevGetElementById) globalThis.document.getElementById = prevGetElementById;
+    }
+  });
+
   it('replaces the player without duplicate listeners or video intervals and can bind after cleanup', () => {
     const makeVideo = () => {
       const listeners = new Map();

@@ -52,6 +52,7 @@
     panel.addEventListener('keydown', panelStopPropagation);
     panel.addEventListener('keyup', panelStopPropagation);
     panel.addEventListener('keypress', panelStopPropagation);
+    panel.addEventListener('wheel', panelStopPropagation);
   };
 
   // The loader (/OpenWatchParty/ClientScript) can stay cached for up to an hour
