@@ -335,6 +335,11 @@
       clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap;
     }
     .owp-chat-text { color: #ecebe6; word-wrap: break-word; }
+    .owp-chat-timestamp {
+      background: none; border: none; padding: 0; margin: 0; font: inherit;
+      color: #85b7eb; text-decoration: underline; cursor: pointer; display: inline;
+    }
+    .owp-chat-timestamp:hover { color: #b5d5f5; }
     /* OWP's own lines (SERVER): a small tag and italic text; errors in red */
     .owp-chat-message.owp-chat-system .owp-chat-username {
       font-size: ${px(9)}; font-weight: 700; letter-spacing: 0.06em; color: #c2c0b6;
