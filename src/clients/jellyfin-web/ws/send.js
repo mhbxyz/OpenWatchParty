@@ -148,6 +148,17 @@
     }
   };
 
+  const removeParticipant = (id, block) => {
+    const participant = state.participants.find(member => member.id === id);
+    state.pendingModerations = state.pendingModerations.filter(request => request.id !== id);
+    state.pendingModerations.push({
+      id,
+      name: participant?.name || t('guest'),
+      block
+    });
+    send('remove_participant', { id, block });
+  };
+
   Object.assign(actions, {
     send,
     normalizePlaybackRate,
@@ -159,6 +170,7 @@
     createRoom,
     joinRoom,
     leaveRoom,
-    closeRoom
+    closeRoom,
+    removeParticipant
   });
 })();

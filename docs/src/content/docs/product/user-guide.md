@@ -114,6 +114,12 @@ The leave confirmation names the participant who will take over before you
 leave. The promoted participant then sees the **Host** badge in the room's
 participant list.
 
+### Removing someone
+
+The host can open **Participants**, select the three-dot button beside a person, and choose **Remove** or **Block**. Remove takes only that browser out of the room; the person sees why they were removed and can join again immediately. Block removes every connection signed in with that Jellyfin account, hides the room from that account, and prevents it from rejoining until the room closes. There is no unblock action for a live room.
+
+The three-dot controls appear only when the server and host client support moderation. In insecure mode, blocking uses the `user_id` declared by the client, so it holds only while clients continue to declare that same id.
+
 ![Host leave confirmation naming testclient1 as the next host](/assets/images/watch-party-host-transfer.png)
 
 ![Participant list after transfer, with testclient1 marked Host](/assets/images/watch-party-host-role.png)
@@ -143,6 +149,8 @@ Shared controls require a compatible server and host. With an older host or serv
 | Host seeks | Video jumps to new position |
 | Host leaves | A compatible participant becomes host; otherwise the room closes |
 | Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
+| Host removes you | You leave the room with a notice and may join it again |
+| Host blocks you | You leave with a notice; the room disappears and cannot be joined again while it exists |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
 
 ## The Panel Interface

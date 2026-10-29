@@ -3,6 +3,7 @@ mod chat;
 mod create;
 mod join;
 mod misc;
+mod moderation;
 mod playback;
 mod queue;
 mod start;
@@ -16,6 +17,7 @@ pub(in crate::ws) use misc::{
     handle_client_log, handle_close_room, handle_leave_room, handle_ping, handle_ready,
     handle_unknown,
 };
+pub(in crate::ws) use moderation::handle_remove_participant;
 pub(in crate::ws) use playback::handle_playback;
 pub(in crate::ws) use queue::handle_queue;
 pub(in crate::ws) use start::{handle_readiness, handle_start_now};

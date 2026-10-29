@@ -292,6 +292,12 @@
     .owp-participant-status.info { color: #85b7eb; }
     .owp-participant-status.bad { color: #f09595; }
     .owp-participant-status.idle { color: #85847e; }
+    .owp-mod-more { margin-inline-start: auto; flex-shrink: 0; width: ${px(26)}; height: ${px(26)}; padding: 0; }
+    .owp-mod-more[aria-expanded="true"] { background: rgba(255,255,255,0.12); }
+    .owp-participant.owp-mod-row { flex-wrap: wrap; }
+    .owp-mod-actions { flex-basis: 100%; margin: ${px(6)} 0 ${px(2)}; padding: ${px(8)}; border-radius: ${px(8)}; background: rgba(255,255,255,0.06); }
+    .owp-mod-hint { font-size: ${px(11)}; color: #9a9993; margin-bottom: ${px(8)}; }
+    .owp-mod-buttons { display: flex; justify-content: flex-end; gap: ${px(6)}; }
     .owp-host-badge {
       flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${px(5)};
       background: #27500a; color: #97c459; font-size: ${px(11)};

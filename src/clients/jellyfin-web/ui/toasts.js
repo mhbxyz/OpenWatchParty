@@ -1,7 +1,7 @@
 (() => {
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
   const ui = OWP.ui = OWP.ui || {};
-  const showToast = (message) => {
+  const showToast = (message, options = {}) => {
     const toast = document.createElement('div');
     toast.className = 'owp-toast-system';
     toast.textContent = message;
@@ -15,7 +15,7 @@
         toast.classList.add('owp-toast-out');
         OWP.timers.setTimeout(() => toast.remove(), 300, 'ui');
       }
-    }, 1500, 'ui');
+    }, options.duration ?? 1500, 'ui');
   };
 
   const getToastContainer = () => {

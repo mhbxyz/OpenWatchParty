@@ -92,9 +92,10 @@
     if (!Array.isArray(participants) || participants.length > MAX_PARTICIPANTS) return 'participants is invalid';
     for (const participant of participants) {
       if (!object(participant)) return 'participant entries must be objects';
-      if (!onlyKeys(participant, ['name', 'is_host'])) return 'participant entry has unknown fields';
+      if (!onlyKeys(participant, ['name', 'is_host', 'id'])) return 'participant entry has unknown fields';
       if (!string(participant.name, MAX_NAME_LENGTH, true)) return 'participant name is invalid';
       if (typeof participant.is_host !== 'boolean') return 'participant is_host is invalid';
+      if (!optional(participant.id, value => string(value, MAX_ID_LENGTH))) return 'participant id is invalid';
     }
     return null;
   };

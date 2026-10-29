@@ -25,7 +25,80 @@
   };
 
 
+  const canModerate = participant => state.isHost
+    && state.serverFeatures.includes('room_moderation')
+    && participant.id
+    && participant.id !== state.clientId;
+
+
+  const moderationButton = (className, label, action) => {
+    const button = createElement('button', className, label);
+    button.type = 'button';
+    button.dataset.moderationAction = action;
+    return button;
+  };
+
+
+  const closeModeration = (list, participantId) => {
+    state.moderationOpenParticipantId = '';
+    fillParticipantList(list);
+    const button = Array.from(list.querySelectorAll('.owp-mod-more'))
+      .find(candidate => candidate.dataset.participantId === participantId);
+    if (button) button.focus({ preventScroll: true });
+  };
+
+
+  const createModerationControls = (list, participant, name) => {
+    const open = state.moderationOpenParticipantId === participant.id;
+    const more = createElement('button', 'owp-bar-btn owp-mod-more');
+    more.type = 'button';
+    more.dataset.participantId = participant.id;
+    more.dataset.moderationAction = 'options';
+    more.title = t('participantOptions', { name });
+    more.setAttribute('aria-label', more.title);
+    more.setAttribute('aria-expanded', String(open));
+    more.appendChild(views.createIcon('more'));
+    more.onclick = () => {
+      state.moderationOpenParticipantId = open ? '' : participant.id;
+      fillParticipantList(list);
+    };
+    if (!open) return [more];
+
+    const actions = createElement('div', 'owp-mod-actions');
+    const hint = createElement('div', 'owp-mod-hint', t('moderationHint'));
+    const buttons = createElement('div', 'owp-mod-buttons');
+    const cancel = moderationButton('owp-pill-btn secondary owp-mod-cancel', t('cancel'), 'cancel');
+    const remove = moderationButton('owp-pill-btn secondary owp-mod-remove', t('removeParticipant'), 'remove');
+    const block = moderationButton('owp-pill-btn danger owp-mod-block', t('blockParticipant'), 'block');
+    cancel.onclick = () => closeModeration(list, participant.id);
+    remove.onclick = () => {
+      OWP.actions?.removeParticipant?.(participant.id, false);
+      closeModeration(list, participant.id);
+    };
+    block.onclick = () => {
+      OWP.actions?.removeParticipant?.(participant.id, true);
+      closeModeration(list, participant.id);
+    };
+    actions.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeModeration(list, participant.id);
+    });
+    buttons.append(cancel, remove, block);
+    actions.append(hint, buttons);
+    return [more, actions];
+  };
+
+
   const fillParticipantList = (list) => {
+    if (!state.participants.some(participant => canModerate(participant)
+        && participant.id === state.moderationOpenParticipantId)) {
+      state.moderationOpenParticipantId = '';
+    }
+    const active = document.activeElement;
+    const focusedAction = active && list.contains(active) ? active.dataset?.moderationAction : '';
+    const focusedParticipantId = active && list.contains(active) ? active.dataset?.participantId : '';
     if (!state.participants.length) {
       list.replaceChildren(document.createTextNode(t('onlineCount', { count: state.participantCount || 1 })));
       return;
@@ -38,9 +111,12 @@
       const nameEl = createElement('span', 'owp-participant-name', name);
       const badge = participant.isHost ? createElement('span', 'owp-host-badge', t('host')) : null;
       const status = PARTICIPANT_STATUS[participant.status];
+      const moderation = canModerate(participant) ? createModerationControls(list, participant, name) : [];
+      if (moderation.length > 1) item.classList.add('owp-mod-row');
       if (!status) {
         item.append(avatar, nameEl);
         if (badge) item.appendChild(badge);
+        item.append(...moderation);
         return item;
       }
       item.classList.add('owp-has-status');
@@ -49,9 +125,15 @@
       if (badge) line.appendChild(badge);
       const main = createElement('span', 'owp-participant-main');
       main.append(line, createElement('span', `owp-participant-status ${status.tone}`, t(`status_${participant.status}`)));
-      item.append(avatar, main);
+      item.append(avatar, main, ...moderation);
       return item;
     }));
+    if (focusedAction) {
+      const replacement = Array.from(list.querySelectorAll('button')).find(button =>
+        button.dataset.moderationAction === focusedAction
+        && (!focusedParticipantId || button.dataset.participantId === focusedParticipantId));
+      if (replacement) replacement.focus({ preventScroll: true });
+    }
   };
 
 

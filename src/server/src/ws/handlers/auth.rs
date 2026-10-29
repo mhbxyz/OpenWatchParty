@@ -11,6 +11,7 @@ use std::sync::Arc;
 const HOST_TRANSFER_FEATURE: &str = "host_transfer";
 const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
 const SHARED_PLAYBACK_FEATURE: &str = "shared_playback_control";
+const ROOM_MODERATION_FEATURE: &str = "room_moderation";
 const MEDIA_QUEUE_FEATURE: &str = "media_queue";
 const START_WHEN_READY_FEATURE: &str = "start_when_ready";
 
@@ -59,6 +60,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&SHARED_PLAYBACK_FEATURE) {
         supported.push(SHARED_PLAYBACK_FEATURE.to_string());
+    }
+    if declared.contains(&ROOM_MODERATION_FEATURE) {
+        supported.push(ROOM_MODERATION_FEATURE.to_string());
     }
     if declared.contains(&MEDIA_QUEUE_FEATURE) {
         supported.push(MEDIA_QUEUE_FEATURE.to_string());
@@ -132,6 +136,9 @@ async fn handle_jwt_auth(
                     client.supports_shared_playback_control = features.is_some_and(|features| {
                         features.iter().any(|f| f == SHARED_PLAYBACK_FEATURE)
                     });
+                    client.supports_room_moderation = features.is_some_and(|features| {
+                        features.iter().any(|f| f == ROOM_MODERATION_FEATURE)
+                    });
                     client.supports_media_queue = features
                         .is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
                     client.supports_start_when_ready = features.is_some_and(|features| {
@@ -186,6 +193,8 @@ async fn handle_identity(
                 .is_some_and(|features| features.iter().any(|f| f == HOST_TRANSFER_FEATURE));
             client.supports_shared_playback_control = features
                 .is_some_and(|features| features.iter().any(|f| f == SHARED_PLAYBACK_FEATURE));
+            client.supports_room_moderation = features
+                .is_some_and(|features| features.iter().any(|f| f == ROOM_MODERATION_FEATURE));
             client.supports_media_queue =
                 features.is_some_and(|features| features.iter().any(|f| f == MEDIA_QUEUE_FEATURE));
             client.supports_start_when_ready = features
@@ -871,7 +880,7 @@ mod tests {
             "client",
             &auth_message(serde_json::json!({
                 "token": token,
-                "features": ["host_transfer", "shared_playback_control", "media_queue", "start_when_ready", "future"]
+                "features": ["host_transfer", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready", "future"]
             })),
             &state,
             &jwt_config,
@@ -880,6 +889,7 @@ mod tests {
 
         assert!(state.read().await.clients["client"].supports_host_transfer);
         assert!(state.read().await.clients["client"].supports_shared_playback_control);
+        assert!(state.read().await.clients["client"].supports_room_moderation);
         assert!(state.read().await.clients["client"].supports_media_queue);
         assert!(state.read().await.clients["client"].supports_start_when_ready);
         assert_eq!(
@@ -887,10 +897,44 @@ mod tests {
             serde_json::json!([
                 "host_transfer",
                 "shared_playback_control",
+                "room_moderation",
                 "media_queue",
                 "start_when_ready"
             ])
         );
+    }
+
+    #[tokio::test]
+    async fn insecure_room_moderation_is_negotiated_and_cleared_on_reauth() {
+        let state = test_helpers::create_state();
+        let (client, mut rx) = test_helpers::create_client_with_rx("user", "Guest", true);
+        state.write().await.clients.insert("client".into(), client);
+        for (declared, expected) in [
+            (serde_json::json!(["room_moderation", "future"]), true),
+            (serde_json::json!([]), false),
+        ] {
+            handle_auth(
+                "client",
+                &auth_message(serde_json::json!({ "user_name": "Guest", "features": declared })),
+                &state,
+                &insecure_jwt_config(),
+            )
+            .await;
+            assert_eq!(
+                state.read().await.clients["client"].supports_room_moderation,
+                expected
+            );
+            let features =
+                test_helpers::recv_msg(&mut rx).unwrap().payload.unwrap()["features"].clone();
+            assert_eq!(
+                features,
+                if expected {
+                    serde_json::json!(["room_moderation"])
+                } else {
+                    serde_json::json!([])
+                }
+            );
+        }
     }
 
     #[tokio::test]

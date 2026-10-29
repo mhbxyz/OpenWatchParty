@@ -81,7 +81,7 @@ describe('state lifecycle boundaries', () => {
   it('creates independent mutable defaults for every new application state', () => {
     const first = OWP.stateFactories.createState();
     const second = OWP.stateFactories.createState();
-    for (const field of ['participants', 'rooms', 'serverFeatures', 'rejectedRejoinRoomIds',
+    for (const field of ['participants', 'pendingModerations', 'rooms', 'serverFeatures', 'rejectedRejoinRoomIds',
       'timeSyncSamples', 'logBuffer', 'intervals', 'homeRoomCache']) {
       assert.notEqual(first[field], second[field], field);
     }

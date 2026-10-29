@@ -113,7 +113,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'room_moderation'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -194,7 +194,8 @@
     inRoom: false,
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    participants: [],      // [{ id, name, isHost, status }] from participant_list and participant_statuses
+    pendingModerations: [], // Host remove/block requests awaiting client_left, by participant id
     lastParticipantCount: 0,
     statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
     statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
@@ -308,6 +309,7 @@
 
   const createRoomUIState = () => ({
     roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
+    moderationOpenParticipantId: '', // Participant whose remove/block choices are open
   });
 
   const createUIState = () => ({

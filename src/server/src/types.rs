@@ -25,6 +25,7 @@ pub struct Client {
     pub authentication_version: u64,
     pub supports_host_transfer: bool,
     pub supports_shared_playback_control: bool,
+    pub supports_room_moderation: bool,
     pub supports_media_queue: bool,
     pub supports_start_when_ready: bool,
     pub message_count: u32,
@@ -45,6 +46,9 @@ pub struct Room {
     /// connection id before the grace-period task expires.
     #[serde(skip)]
     pub pending_host_reconnect: Option<PendingHostReconnect>,
+    /// Jellyfin user ids that may not rejoin while this room exists.
+    #[serde(skip)]
+    pub blocked_users: HashSet<String>,
     pub state: PlaybackState,
     #[serde(skip)]
     pub state_server_ts: u64,
@@ -181,6 +185,7 @@ pub enum ClientMessageType {
     JoinRoom,
     Ready,
     LeaveRoom,
+    RemoveParticipant,
     CloseRoom,
     PlayerEvent,
     StateUpdate,
@@ -209,6 +214,7 @@ impl ClientMessageType {
             Self::JoinRoom => "join_room",
             Self::Ready => "ready",
             Self::LeaveRoom => "leave_room",
+            Self::RemoveParticipant => "remove_participant",
             Self::CloseRoom => "close_room",
             Self::PlayerEvent => "player_event",
             Self::StateUpdate => "state_update",
@@ -474,6 +480,7 @@ mod tests {
         assert!(json["pending_play"].get("deadline_server_ts").is_none());
         assert!(json.get("not_ready").is_none());
         assert!(json.get("countdown_pending").is_none());
+        assert!(json.get("blocked_users").is_none());
         assert_eq!(json["pending_play"]["position_ts"], 1_700_000_000_000_u64);
     }
 
@@ -487,6 +494,7 @@ mod tests {
             JoinRoom,
             Ready,
             LeaveRoom,
+            RemoveParticipant,
             CloseRoom,
             PlayerEvent,
             StateUpdate,

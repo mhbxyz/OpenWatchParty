@@ -13,6 +13,7 @@
     chatUnread_one: 'Chat, {count} unread', chatUnread_other: 'Chat, {count} unread',
     latency: 'Latency to the watch party server (client {client})', leaveRoom: 'Leave room', closeRoom: 'Close room',
     invite: 'Invite', typeMessage: 'Type a message...', sendMessage: 'Send message', emoji: 'Emoji', emojiPicker: 'Emoji picker', emojiCat_faces: 'Smileys & Emotion', emojiCat_hands: 'People & Body', emojiCat_symbols: 'Symbols', emojiCat_nature: 'Animals & Nature', emojiCat_food: 'Food & Drink', emojiCat_activity: 'Activities', cancel: 'Cancel', leave: 'Leave', closeForEveryone: 'Close for everyone', leaveHint: 'If you leave, {name} becomes the host and the room stays open.',
+    participantOptions: 'Options for {name}', moderationHint: 'Someone removed can join again. Someone blocked can’t come back to this room.', removeParticipant: 'Remove', blockParticipant: 'Block',
     closeRoomQuestion: 'Close the room for everyone?', leaveRoomQuestion: 'Leave the room?', noActiveRooms: 'No active rooms.',
     user_one: '{count} user', user_other: '{count} users', noMedia: 'No media', join: 'Join',
     watching_one: '{count} watching', watching_other: '{count} watching', loading: 'Loading...', unknown: 'Unknown',
@@ -27,7 +28,7 @@
     playbackStartFailed: 'Failed to start playback. Try refreshing the page.',
     playbackBlocked: 'Playback was blocked. Press Play in Jellyfin to continue.', waitingForMedia: 'Still waiting for the watch party media',
     hostOnlyPlayback: 'Only the host can control playback', participantJoined: 'A participant joined the room',
-    participantLeft: 'A participant left the room', roomClosed: 'The room was closed', unknownError: 'Unknown error',
+    participantLeft: 'A participant left the room', participantRemoved: '{name} was removed from the room', participantBlocked: '{name} was blocked from this room', roomClosed: 'The room was closed', unknownError: 'Unknown error',
     hostResumed: 'Host resumed playback', hostPaused: 'Host paused playback', roomName: "{name}'s room", queue: 'Queue', queueTitle: 'Room queue', queuePrevious: 'Previous', queueNext: 'Next', queuePlayNow: 'Play now', queueMoveUp: 'Move up', queueMoveDown: 'Move down', queueRemove: 'Remove', queueWatching: 'Watching', queueAutoNote: 'The next episodes are added automatically.', queueReadOnly: 'Only the host can change the queue.', queueUpNext: 'Up next:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
     rejoinFailed: 'Could not rejoin the watch party', reauthFailed: 'Could not reauthenticate the watch party connection',
     hostDisconnected: 'The watch party closed when the host disconnected', youAreHost: 'You are now the host', nowHost: '{name} is now the host', authInvalidResult: 'OpenWatchParty authentication returned an invalid result',
@@ -42,7 +43,7 @@
     authBadUrl: 'OpenWatchParty token endpoint returned an invalid session server URL: {error}',
     authBadResponse: 'OpenWatchParty token endpoint returned an invalid authentication response', authTimeout: 'OpenWatchParty token request timed out',
     authAborted: 'OpenWatchParty token request was aborted', authUnreachable: 'Could not reach the OpenWatchParty token endpoint',
-    errorRoomNotFound: 'Room not found', errorRoomFull: 'Room is full', errorRateLimited: 'Rate limit exceeded', errorHostOnly: 'Only the room host can do that', errorChatTooLong: 'Message too long', errorProtocol: 'The OpenWatchParty client and server versions are incompatible', inviteExpired: 'Invite ticket has expired', inviteWrongRoom: 'Invite ticket does not match this room', roomClosedHostLeft: 'Host left the room', roomClosedNewRoom: 'Host started a new room', roomClosedHostClosed: 'Host closed the room', inviteHostOnly: 'Only the room host can create invite links', inviteUnreachable: 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.', authInvalidated: 'Authentication request was invalidated',
+    errorRoomNotFound: 'Room not found', errorRoomFull: 'Room is full', errorRateLimited: 'Rate limit exceeded', errorHostOnly: 'Only the room host can do that', errorChatTooLong: 'Message too long', errorProtocol: 'The OpenWatchParty client and server versions are incompatible', inviteExpired: 'Invite ticket has expired', inviteWrongRoom: 'Invite ticket does not match this room', roomClosedHostLeft: 'Host left the room', roomClosedNewRoom: 'Host started a new room', roomClosedHostClosed: 'Host closed the room', roomClosedRemoved: 'The host removed you from the room', roomClosedBlocked: 'The host removed you from the room and blocked you from rejoining', blockedFromRoom: 'The host blocked you from this room', participantNotFound: 'That person is no longer in the room', cannotBlockOwnAccount: 'You can’t block your own account', inviteHostOnly: 'Only the room host can create invite links', inviteUnreachable: 'Could not reach the invite service. Check that your reverse proxy sends /invite to the session server.', authInvalidated: 'Authentication request was invalidated',
     startWaiting: 'Waiting for {names}', startTwoNames: '{first} and {second}', startManyNames: '{count} people', startCountdown: 'Starting in', startNowHint: 'Select to start without waiting', startIs_loading: 'loading the video', startIs_transcoding: 'the server is converting the video', startIs_buffering: 'filling the buffer', startIs_autoplay_blocked: 'the browser stopped the play: press Play', startWas_loading: 'still loading', startWas_transcoding: 'the server was still converting the video', startWas_buffering: 'still filling the buffer', startWas_autoplay_blocked: 'the browser stopped the play', startWaitingFor: 'Waiting for {name}: {reason}', startMemberReady: '{name} is ready ({seconds} s)', startWithout: 'Started without {name} ({reason})', startCancelled: 'Start cancelled'
   };
 
@@ -58,6 +59,7 @@
     chatUnread_one: 'Chat, {count} sin leer', chatUnread_other: 'Chat, {count} sin leer',
     latency: 'Latencia al servidor de la sala (cliente {client})', leaveRoom: 'Salir de la sala', closeRoom: 'Cerrar sala',
     invite: 'Invitar', typeMessage: 'Escribir un mensaje...', sendMessage: 'Enviar mensaje', emoji: 'Emoji', emojiPicker: 'Selector de emojis', emojiCat_faces: 'Emoticonos y emociones', emojiCat_hands: 'Personas y cuerpo', emojiCat_symbols: 'Símbolos', emojiCat_nature: 'Animales y naturaleza', emojiCat_food: 'Comida y bebida', emojiCat_activity: 'Actividades', cancel: 'Cancelar', leave: 'Salir', closeForEveryone: 'Cerrar para todos', leaveHint: 'Si te vas, {name} pasa a ser el anfitrión y la sala sigue abierta.',
+    participantOptions: 'Opciones para {name}', moderationHint: 'Si se la quita, puede volver a entrar. Si se la bloquea, no puede volver a esta sala.', removeParticipant: 'Quitar', blockParticipant: 'Bloquear',
     closeRoomQuestion: '¿Cerrar la sala para todos?', leaveRoomQuestion: '¿Salir de la sala?', noActiveRooms: 'No hay salas activas.',
     user_one: '{count} usuario', user_other: '{count} usuarios', noMedia: 'Sin contenido', join: 'Unirse',
     watching_one: '{count} viendo', watching_other: '{count} viendo', loading: 'Cargando...', unknown: 'Desconocido',
@@ -72,7 +74,7 @@
     playbackStartFailed: 'No se pudo iniciar la reproducción. Recargar la página puede ayudar.',
     playbackBlocked: 'El navegador bloqueó la reproducción. Para continuar, pulsar Reproducir en Jellyfin.', waitingForMedia: 'Esperando el contenido de la sala',
     hostOnlyPlayback: 'Solo el anfitrión controla la reproducción', participantJoined: 'Se unió un participante',
-    participantLeft: 'Un participante salió de la sala', roomClosed: 'La sala se cerró', unknownError: 'Error desconocido',
+    participantLeft: 'Un participante salió de la sala', participantRemoved: 'Se quitó a {name} de la sala', participantBlocked: 'Se bloqueó a {name} en esta sala', roomClosed: 'La sala se cerró', unknownError: 'Error desconocido',
     hostResumed: 'El anfitrión reanudó la reproducción', hostPaused: 'El anfitrión pausó la reproducción', roomName: 'Sala de {name}', queue: 'Cola', queueTitle: 'Cola de la sala', queuePrevious: 'Anterior', queueNext: 'Siguiente', queuePlayNow: 'Reproducir ahora', queueMoveUp: 'Subir', queueMoveDown: 'Bajar', queueRemove: 'Quitar', queueWatching: 'Viendo', queueAutoNote: 'Los episodios siguientes se agregan solos.', queueReadOnly: 'Solo el anfitrión cambia la cola.', queueUpNext: 'A continuación:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'T{season}:E{episode} · {name}',
     rejoinFailed: 'No se pudo volver a la sala', reauthFailed: 'No se pudo reautenticar la conexión',
     hostDisconnected: 'La sala se cerró al desconectarse el anfitrión', youAreHost: 'Pasaste a ser el anfitrión', nowHost: '{name} pasó a ser el anfitrión', authInvalidResult: 'La autenticación de OpenWatchParty devolvió un resultado no válido',
@@ -86,7 +88,7 @@
     authMissingUrl: 'El servicio de tokens debe proporcionar session_server_url', authBadUrl: 'El servicio de tokens devolvió una URL no válida: {error}',
     authBadResponse: 'El servicio de tokens devolvió una respuesta de autenticación no válida', authTimeout: 'La solicitud del token agotó el tiempo',
     authAborted: 'Se canceló la solicitud del token', authUnreachable: 'No se pudo acceder al servicio de tokens',
-    errorRoomNotFound: 'La sala ya no existe', errorRoomFull: 'La sala está llena', errorRateLimited: 'Demasiadas solicitudes. Intentar de nuevo en un momento.', errorHostOnly: 'Solo el anfitrión puede hacer eso', errorChatTooLong: 'Mensaje demasiado largo', errorProtocol: 'Las versiones del cliente y del servidor de OpenWatchParty no son compatibles', inviteExpired: 'El enlace de invitación expiró', inviteWrongRoom: 'El enlace de invitación es de otra sala', roomClosedHostLeft: 'El anfitrión salió de la sala', roomClosedNewRoom: 'El anfitrión creó otra sala', roomClosedHostClosed: 'El anfitrión cerró la sala', inviteHostOnly: 'Solo el anfitrión puede crear enlaces de invitación', inviteUnreachable: 'No se pudo llegar al servicio de invitaciones. El proxy inverso tiene que enviar /invite al servidor de sesiones.', authInvalidated: 'Se invalidó la solicitud de autenticación',
+    errorRoomNotFound: 'La sala ya no existe', errorRoomFull: 'La sala está llena', errorRateLimited: 'Demasiadas solicitudes. Intentar de nuevo en un momento.', errorHostOnly: 'Solo el anfitrión puede hacer eso', errorChatTooLong: 'Mensaje demasiado largo', errorProtocol: 'Las versiones del cliente y del servidor de OpenWatchParty no son compatibles', inviteExpired: 'El enlace de invitación expiró', inviteWrongRoom: 'El enlace de invitación es de otra sala', roomClosedHostLeft: 'El anfitrión salió de la sala', roomClosedNewRoom: 'El anfitrión creó otra sala', roomClosedHostClosed: 'El anfitrión cerró la sala', roomClosedRemoved: 'El anfitrión te quitó de la sala', roomClosedBlocked: 'El anfitrión te quitó de la sala y no te deja volver a entrar', blockedFromRoom: 'El anfitrión no te deja entrar a esta sala', participantNotFound: 'Esa persona ya no está en la sala', cannotBlockOwnAccount: 'No se puede bloquear la propia cuenta', inviteHostOnly: 'Solo el anfitrión puede crear enlaces de invitación', inviteUnreachable: 'No se pudo llegar al servicio de invitaciones. El proxy inverso tiene que enviar /invite al servidor de sesiones.', authInvalidated: 'Se invalidó la solicitud de autenticación',
     startWaiting: 'Esperando a {names}', startTwoNames: '{first} y {second}', startManyNames: '{count} personas', startCountdown: 'Arranca en', startNowHint: 'Tocá para arrancar sin esperar', startIs_loading: 'cargando el video', startIs_transcoding: 'el servidor está convirtiendo el video', startIs_buffering: 'llenando el buffer', startIs_autoplay_blocked: 'el navegador frenó el play: tiene que tocar Play', startWas_loading: 'seguía cargando', startWas_transcoding: 'el servidor seguía convirtiendo el video', startWas_buffering: 'seguía llenando el buffer', startWas_autoplay_blocked: 'el navegador frenó el play', startWaitingFor: 'Esperando a {name}: {reason}', startMemberReady: '{name} ya está ({seconds} s)', startWithout: 'Arrancó sin {name} ({reason})', startCancelled: 'Arranque cancelado'
   };
 
@@ -102,6 +104,7 @@
     chatUnread_one: 'Chat, {count} non lu', chatUnread_other: 'Chat, {count} non lus',
     latency: 'Latence vers le serveur de session (client {client})', leaveRoom: 'Quitter le salon', closeRoom: 'Fermer le salon',
     invite: 'Inviter', typeMessage: 'Écrire un message...', sendMessage: 'Envoyer', emoji: 'Emoji', emojiPicker: 'Sélecteur d’émojis', emojiCat_faces: 'Émoticônes et émotions', emojiCat_hands: 'Personnes et corps', emojiCat_symbols: 'Symboles', emojiCat_nature: 'Animaux et nature', emojiCat_food: 'Nourriture et boissons', emojiCat_activity: 'Activités', cancel: 'Annuler', leave: 'Quitter', closeForEveryone: 'Fermer pour tous', leaveHint: "Si vous partez, {name} devient l'hôte et le salon reste ouvert.",
+    participantOptions: 'Options pour {name}', moderationHint: 'Une personne retirée peut revenir. Une personne bloquée ne peut plus revenir dans ce salon.', removeParticipant: 'Retirer', blockParticipant: 'Bloquer',
     closeRoomQuestion: 'Fermer le salon pour tous ?', leaveRoomQuestion: 'Quitter le salon ?', noActiveRooms: 'Aucun salon actif.',
     user_one: '{count} personne', user_other: '{count} personnes', noMedia: 'Aucun média', join: 'Rejoindre',
     watching_one: '{count} spectateur', watching_other: '{count} spectateurs', loading: 'Chargement...', unknown: 'Inconnu',
@@ -116,7 +119,7 @@
     playbackStartFailed: 'Impossible de lancer la lecture. Actualisez la page.',
     playbackBlocked: 'Lecture bloquée. Appuyez sur Lecture dans Jellyfin.', waitingForMedia: 'En attente du média de la Watch Party',
     hostOnlyPlayback: "Seul l'hôte contrôle la lecture", participantJoined: 'Un participant a rejoint le salon',
-    participantLeft: 'Un participant a quitté le salon', roomClosed: 'Le salon a été fermé', unknownError: 'Erreur inconnue',
+    participantLeft: 'Un participant a quitté le salon', participantRemoved: '{name} a été retiré du salon', participantBlocked: '{name} a été bloqué dans ce salon', roomClosed: 'Le salon a été fermé', unknownError: 'Erreur inconnue',
     hostResumed: "L'hôte a repris la lecture", hostPaused: "L'hôte a mis en pause", roomName: 'Salon : {name}', queue: "File d'attente", queueTitle: "File d'attente du salon", queuePrevious: 'Précédent', queueNext: 'Suivant', queuePlayNow: 'Lire maintenant', queueMoveUp: 'Monter', queueMoveDown: 'Descendre', queueRemove: 'Retirer', queueWatching: 'En cours', queueAutoNote: 'Les épisodes suivants sont ajoutés automatiquement.', queueReadOnly: "Seul l'hôte peut modifier la file d'attente.", queueUpNext: 'À suivre :', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
     rejoinFailed: 'Impossible de rejoindre à nouveau la Watch Party', reauthFailed: 'Impossible de réauthentifier la connexion',
     hostDisconnected: "La Watch Party a été fermée après la déconnexion de l'hôte", youAreHost: "Vous êtes maintenant l'hôte", nowHost: "{name} est maintenant l'hôte", authInvalidResult: "Résultat d'authentification OpenWatchParty invalide",
@@ -130,7 +133,7 @@
     authMissingUrl: 'Le service de jetons doit fournir session_server_url', authBadUrl: 'Le service de jetons a renvoyé une URL invalide : {error}',
     authBadResponse: "Réponse d'authentification du service de jetons invalide", authTimeout: 'La demande de jeton a expiré',
     authAborted: 'La demande de jeton a été annulée', authUnreachable: 'Le service de jetons est inaccessible',
-    errorRoomNotFound: "Le salon n'existe plus", errorRoomFull: 'Le salon est complet', errorRateLimited: 'Trop de requêtes. Réessayez dans un instant.', errorHostOnly: "Seul l'hôte peut faire cela", errorChatTooLong: 'Message trop long', errorProtocol: 'Les versions du client et du serveur OpenWatchParty sont incompatibles', inviteExpired: "Le lien d'invitation a expiré", inviteWrongRoom: "Le lien d'invitation correspond à un autre salon", roomClosedHostLeft: "L'hôte a quitté le salon", roomClosedNewRoom: "L'hôte a créé un autre salon", roomClosedHostClosed: "L'hôte a fermé le salon", inviteHostOnly: "Seul l'hôte peut créer des liens d'invitation", inviteUnreachable: "Impossible de joindre le service d'invitation. Le proxy inverse doit envoyer /invite au serveur de session.", authInvalidated: "La demande d'authentification a été invalidée",
+    errorRoomNotFound: "Le salon n'existe plus", errorRoomFull: 'Le salon est complet', errorRateLimited: 'Trop de requêtes. Réessayez dans un instant.', errorHostOnly: "Seul l'hôte peut faire cela", errorChatTooLong: 'Message trop long', errorProtocol: 'Les versions du client et du serveur OpenWatchParty sont incompatibles', inviteExpired: "Le lien d'invitation a expiré", inviteWrongRoom: "Le lien d'invitation correspond à un autre salon", roomClosedHostLeft: "L'hôte a quitté le salon", roomClosedNewRoom: "L'hôte a créé un autre salon", roomClosedHostClosed: "L'hôte a fermé le salon", roomClosedRemoved: 'L’hôte vous a retiré du salon', roomClosedBlocked: 'L’hôte vous a retiré du salon et vous a interdit d’y revenir', blockedFromRoom: 'L’hôte vous a bloqué dans ce salon', participantNotFound: 'Cette personne n’est plus dans le salon', cannotBlockOwnAccount: 'Vous ne pouvez pas bloquer votre propre compte', inviteHostOnly: "Seul l'hôte peut créer des liens d'invitation", inviteUnreachable: "Impossible de joindre le service d'invitation. Le proxy inverse doit envoyer /invite au serveur de session.", authInvalidated: "La demande d'authentification a été invalidée",
     startWaiting: 'En attente de {names}', startTwoNames: '{first} et {second}', startManyNames: '{count} personnes', startCountdown: 'Début dans', startNowHint: 'Sélectionnez pour commencer sans attendre', startIs_loading: 'charge la vidéo', startIs_transcoding: 'le serveur convertit la vidéo', startIs_buffering: 'remplit le tampon', startIs_autoplay_blocked: 'le navigateur a bloqué la lecture : appuyer sur Lecture', startWas_loading: 'chargeait encore', startWas_transcoding: 'le serveur convertissait encore la vidéo', startWas_buffering: 'remplissait encore le tampon', startWas_autoplay_blocked: 'le navigateur a bloqué la lecture', startWaitingFor: 'En attente de {name} : {reason}', startMemberReady: '{name} peut commencer ({seconds} s)', startWithout: 'Démarré sans {name} ({reason})', startCancelled: 'Démarrage annulé'
   };
 
@@ -146,6 +149,7 @@
     chatUnread_one: 'Chat, {count} ungelesen', chatUnread_other: 'Chat, {count} ungelesen',
     latency: 'Latenz zum Watch-Party-Server (Client {client})', leaveRoom: 'Raum verlassen', closeRoom: 'Raum schließen',
     invite: 'Einladen', typeMessage: 'Nachricht schreiben...', sendMessage: 'Senden', emoji: 'Emoji', emojiPicker: 'Emoji-Auswahl', emojiCat_faces: 'Smileys & Emotionen', emojiCat_hands: 'Menschen & Körper', emojiCat_symbols: 'Symbole', emojiCat_nature: 'Tiere & Natur', emojiCat_food: 'Essen & Trinken', emojiCat_activity: 'Aktivitäten', cancel: 'Abbrechen', leave: 'Verlassen', closeForEveryone: 'Für alle schließen', leaveHint: 'Beim Verlassen wird {name} der Host und der Raum bleibt offen.',
+    participantOptions: 'Optionen für {name}', moderationHint: 'Entfernte Personen können erneut beitreten. Gesperrte Personen können nicht in diesen Raum zurückkehren.', removeParticipant: 'Entfernen', blockParticipant: 'Sperren',
     closeRoomQuestion: 'Raum für alle schließen?', leaveRoomQuestion: 'Raum verlassen?', noActiveRooms: 'Keine aktiven Räume.',
     user_one: '{count} Person', user_other: '{count} Personen', noMedia: 'Keine Medien', join: 'Beitreten',
     watching_one: '{count} schaut zu', watching_other: '{count} schauen zu', loading: 'Lädt...', unknown: 'Unbekannt',
@@ -160,7 +164,7 @@
     playbackStartFailed: 'Wiedergabe konnte nicht starten. Seite neu laden.',
     playbackBlocked: 'Wiedergabe wurde blockiert. In Jellyfin Play drücken.', waitingForMedia: 'Warten auf Watch-Party-Medien',
     hostOnlyPlayback: 'Nur der Host steuert die Wiedergabe', participantJoined: 'Ein Teilnehmer ist beigetreten',
-    participantLeft: 'Ein Teilnehmer hat den Raum verlassen', roomClosed: 'Der Raum wurde geschlossen', unknownError: 'Unbekannter Fehler',
+    participantLeft: 'Ein Teilnehmer hat den Raum verlassen', participantRemoved: '{name} wurde aus dem Raum entfernt', participantBlocked: '{name} wurde für diesen Raum gesperrt', roomClosed: 'Der Raum wurde geschlossen', unknownError: 'Unbekannter Fehler',
     hostResumed: 'Der Host hat die Wiedergabe fortgesetzt', hostPaused: 'Der Host hat die Wiedergabe pausiert', roomName: 'Raum von {name}', queue: 'Warteschlange', queueTitle: 'Warteschlange des Raums', queuePrevious: 'Zurück', queueNext: 'Weiter', queuePlayNow: 'Jetzt abspielen', queueMoveUp: 'Nach oben', queueMoveDown: 'Nach unten', queueRemove: 'Entfernen', queueWatching: 'Läuft', queueAutoNote: 'Die nächsten Folgen werden automatisch hinzugefügt.', queueReadOnly: 'Nur der Host kann die Warteschlange ändern.', queueUpNext: 'Als Nächstes:', queueSeconds: '{seconds} s', queueEpisodeTitle: 'S{season}:E{episode} · {name}',
     rejoinFailed: 'Watch Party konnte nicht erneut betreten werden', reauthFailed: 'Verbindung konnte nicht neu authentifiziert werden',
     hostDisconnected: 'Watch Party wurde nach Trennung des Hosts geschlossen', youAreHost: 'Host-Rolle übernommen', nowHost: '{name} ist jetzt der Host', authInvalidResult: 'Ungültiges OpenWatchParty-Authentifizierungsergebnis',
@@ -174,7 +178,7 @@
     authMissingUrl: 'Token-Dienst muss session_server_url angeben', authBadUrl: 'Token-Dienst lieferte eine ungültige URL: {error}',
     authBadResponse: 'Token-Dienst lieferte eine ungültige Authentifizierungsantwort', authTimeout: 'Token-Anfrage hat das Zeitlimit überschritten',
     authAborted: 'Token-Anfrage wurde abgebrochen', authUnreachable: 'Token-Dienst ist nicht erreichbar',
-    errorRoomNotFound: 'Der Raum existiert nicht mehr', errorRoomFull: 'Der Raum ist voll', errorRateLimited: 'Zu viele Anfragen. Bitte gleich erneut versuchen.', errorHostOnly: 'Nur der Host kann das tun', errorChatTooLong: 'Nachricht zu lang', errorProtocol: 'Die Versionen von OpenWatchParty-Client und -Server sind nicht kompatibel', inviteExpired: 'Der Einladungslink ist abgelaufen', inviteWrongRoom: 'Der Einladungslink gehört zu einem anderen Raum', roomClosedHostLeft: 'Der Host hat den Raum verlassen', roomClosedNewRoom: 'Der Host hat einen neuen Raum erstellt', roomClosedHostClosed: 'Der Host hat den Raum geschlossen', inviteHostOnly: 'Nur der Host kann Einladungslinks erstellen', inviteUnreachable: 'Der Einladungsdienst ist nicht erreichbar. Der Reverse-Proxy muss /invite an den Sitzungsserver weiterleiten.', authInvalidated: 'Die Authentifizierungsanfrage ist nicht mehr gültig',
+    errorRoomNotFound: 'Der Raum existiert nicht mehr', errorRoomFull: 'Der Raum ist voll', errorRateLimited: 'Zu viele Anfragen. Bitte gleich erneut versuchen.', errorHostOnly: 'Nur der Host kann das tun', errorChatTooLong: 'Nachricht zu lang', errorProtocol: 'Die Versionen von OpenWatchParty-Client und -Server sind nicht kompatibel', inviteExpired: 'Der Einladungslink ist abgelaufen', inviteWrongRoom: 'Der Einladungslink gehört zu einem anderen Raum', roomClosedHostLeft: 'Der Host hat den Raum verlassen', roomClosedNewRoom: 'Der Host hat einen neuen Raum erstellt', roomClosedHostClosed: 'Der Host hat den Raum geschlossen', roomClosedRemoved: 'Der Host hat dich aus dem Raum entfernt', roomClosedBlocked: 'Der Host hat dich aus dem Raum entfernt und für einen erneuten Beitritt gesperrt', blockedFromRoom: 'Der Host hat dich für diesen Raum gesperrt', participantNotFound: 'Diese Person ist nicht mehr im Raum', cannotBlockOwnAccount: 'Du kannst dein eigenes Konto nicht sperren', inviteHostOnly: 'Nur der Host kann Einladungslinks erstellen', inviteUnreachable: 'Der Einladungsdienst ist nicht erreichbar. Der Reverse-Proxy muss /invite an den Sitzungsserver weiterleiten.', authInvalidated: 'Die Authentifizierungsanfrage ist nicht mehr gültig',
     startWaiting: 'Warten auf {names}', startTwoNames: '{first} und {second}', startManyNames: '{count} Personen', startCountdown: 'Start in', startNowHint: 'Auswählen, um ohne Warten zu starten', startIs_loading: 'lädt das Video', startIs_transcoding: 'der Server wandelt das Video um', startIs_buffering: 'füllt den Puffer', startIs_autoplay_blocked: 'der Browser hat die Wiedergabe blockiert: Play drücken', startWas_loading: 'lud noch', startWas_transcoding: 'der Server wandelte das Video noch um', startWas_buffering: 'füllte noch den Puffer', startWas_autoplay_blocked: 'der Browser hat die Wiedergabe blockiert', startWaitingFor: 'Warten auf {name}: {reason}', startMemberReady: '{name} ist bereit ({seconds} s)', startWithout: 'Ohne {name} gestartet ({reason})', startCancelled: 'Start abgebrochen'
   };
 
@@ -219,6 +223,8 @@
     ROOM_FULL: 'errorRoomFull',
     RATE_LIMITED: 'errorRateLimited',
     HOST_PERMISSION_REQUIRED: 'errorHostOnly',
+    BLOCKED_FROM_ROOM: 'blockedFromRoom',
+    PARTICIPANT_NOT_FOUND: 'participantNotFound',
     NOT_IN_ROOM: 'notInRoom',
     NOT_ROOM_MEMBER: 'notInRoom',
     CHAT_MESSAGE_TOO_LONG: 'errorChatTooLong',
@@ -230,13 +236,17 @@
     'Invalid invite ticket': 'inviteInvalid',
     'Invite ticket has expired': 'inviteExpired',
     'Invite ticket does not match this room': 'inviteWrongRoom',
-    'Only the room host can control playback': 'hostOnlyPlayback'
+    'Only the room host can control playback': 'hostOnlyPlayback',
+    'You cannot block your own account': 'cannotBlockOwnAccount'
   };
   const ROOM_CLOSED_KEYS = {
     'Host left the room': 'roomClosedHostLeft',
     'Host started a new room': 'roomClosedNewRoom',
-    'Host closed the room': 'roomClosedHostClosed'
+    'Host closed the room': 'roomClosedHostClosed',
+    'The host removed you from the room': 'roomClosedRemoved',
+    'The host removed you from the room and blocked you from rejoining': 'roomClosedBlocked'
   };
+  const MODERATION_ROOM_CLOSED_KEYS = new Set(['roomClosedRemoved', 'roomClosedBlocked']);
   const ownKey = (map, key) => (Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null);
   const localizeServerError = (code, message) => {
     const key = ownKey(SERVER_MESSAGE_KEYS, message) || ownKey(SERVER_ERROR_KEYS, code);
@@ -246,6 +256,7 @@
     const key = ownKey(ROOM_CLOSED_KEYS, reason);
     return key ? t(key) : (reason || t('roomClosed'));
   };
+  const isModerationRoomClosedReason = reason => MODERATION_ROOM_CLOSED_KEYS.has(ownKey(ROOM_CLOSED_KEYS, reason));
 
   const formatNumber = (value, min, max) => {
     try {
@@ -255,5 +266,8 @@
     }
   };
 
-  OWP.i18n = { t, locale, formatNumber, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason };
+  OWP.i18n = {
+    t, locale, formatNumber, catalogs, localizeRoomName, localizeServerError, localizeRoomClosedReason,
+    isModerationRoomClosedReason
+  };
 })();

@@ -72,9 +72,10 @@ struct RoomListEntry<'a> {
     media_id: &'a Option<String>,
 }
 
-fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
+fn build_room_list_msg(rooms: &HashMap<String, Room>, user_id: Option<&str>) -> WsMessage {
     let list: Vec<_> = rooms
         .values()
+        .filter(|room| user_id.is_none_or(|user_id| !room.blocked_users.contains(user_id)))
         .map(|r| RoomListEntry {
             id: &r.room_id,
             name: &r.name,
@@ -94,8 +95,9 @@ fn build_room_list_msg(rooms: &HashMap<String, Room>) -> WsMessage {
 
 pub async fn send_room_list(client_id: &str, state: &SharedState) {
     let state = state.read().await;
-    let sender = state.clients.get(client_id).map(|c| c.sender.clone());
-    let msg = build_room_list_msg(&state.rooms);
+    let client = state.clients.get(client_id);
+    let sender = client.map(|client| client.sender.clone());
+    let msg = build_room_list_msg(&state.rooms, client.map(|client| client.user_id.as_str()));
     send_message(sender, &msg, Some(client_id));
 }
 
@@ -104,14 +106,23 @@ pub async fn broadcast_room_list(state: &SharedState) {
     // Only authenticated clients may learn about rooms, matching the gate on
     // `list_rooms` and on the initial room list. In insecure mode every client
     // is marked authenticated, so that deployment keeps its behaviour.
-    let senders = state
+    let unfiltered = build_room_list_msg(&state.rooms, None);
+    for (client_id, client) in state
         .clients
-        .values()
-        .filter(|client| client.authenticated)
-        .map(|c| c.sender.clone())
-        .collect::<Vec<_>>();
-    let msg = build_room_list_msg(&state.rooms);
-    send_to_senders(&senders, &msg, "room list");
+        .iter()
+        .filter(|(_, client)| client.authenticated)
+    {
+        if state
+            .rooms
+            .values()
+            .any(|room| room.blocked_users.contains(&client.user_id))
+        {
+            let msg = build_room_list_msg(&state.rooms, Some(&client.user_id));
+            send_message(Some(client.sender.clone()), &msg, Some(client_id));
+        } else {
+            send_message(Some(client.sender.clone()), &unfiltered, Some(client_id));
+        }
+    }
 }
 
 pub async fn send_to_client(client_id: &str, state: &SharedState, msg: &WsMessage) {
@@ -196,7 +207,7 @@ mod tests {
     #[test]
     fn build_room_list_msg_empty() {
         let rooms = HashMap::new();
-        let msg = build_room_list_msg(&rooms);
+        let msg = build_room_list_msg(&rooms, None);
         assert_eq!(msg.msg_type, ServerMessageType::RoomList);
         let payload = msg.payload.unwrap();
         let list = payload.as_array().unwrap();
@@ -217,6 +228,7 @@ mod tests {
                 ready_clients: HashSet::new(),
                 pending_play: None,
                 pending_host_reconnect: None,
+                blocked_users: HashSet::new(),
                 state: PlaybackState {
                     position: 0.0,
                     play_state: crate::types::PlayState::Paused,
@@ -245,6 +257,7 @@ mod tests {
                 ready_clients: HashSet::new(),
                 pending_play: None,
                 pending_host_reconnect: None,
+                blocked_users: HashSet::new(),
                 state: PlaybackState {
                     position: 10.0,
                     play_state: crate::types::PlayState::Playing,
@@ -262,7 +275,7 @@ mod tests {
                 countdown_pending: false,
             },
         );
-        let msg = build_room_list_msg(&rooms);
+        let msg = build_room_list_msg(&rooms, None);
         let list = msg.payload.unwrap();
         let arr = list.as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -376,6 +389,62 @@ mod tests {
         assert!(
             anon_rx.try_recv().is_err(),
             "unauthenticated clients must not receive the room list"
+        );
+    }
+
+    #[tokio::test]
+    async fn room_lists_hide_blocking_rooms_only_from_the_blocked_user() {
+        let state = crate::test_helpers::create_state();
+        let (blocked, mut blocked_rx) =
+            test_helpers::create_client_with_rx("blocked", "Blocked", true);
+        let (other, mut other_rx) = test_helpers::create_client_with_rx("other", "Other", true);
+        {
+            let mut locked = state.write().await;
+            let mut hidden = test_helpers::create_room("hidden", "host");
+            hidden.blocked_users.insert("blocked".to_string());
+            locked.rooms.insert("hidden".to_string(), hidden);
+            locked.rooms.insert(
+                "visible".to_string(),
+                test_helpers::create_room("visible", "host"),
+            );
+            locked.clients.insert("blocked".to_string(), blocked);
+            locked.clients.insert("other".to_string(), other);
+        }
+
+        send_room_list("blocked", &state).await;
+        send_room_list("other", &state).await;
+        let blocked_list = test_helpers::recv_msg(&mut blocked_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        let other_list = test_helpers::recv_msg(&mut other_rx)
+            .unwrap()
+            .payload
+            .unwrap();
+        assert_eq!(blocked_list.as_array().unwrap().len(), 1);
+        assert_eq!(blocked_list[0]["id"], "visible");
+        assert_eq!(other_list.as_array().unwrap().len(), 2);
+
+        broadcast_room_list(&state).await;
+        assert_eq!(
+            test_helpers::recv_msg(&mut blocked_rx)
+                .unwrap()
+                .payload
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut other_rx)
+                .unwrap()
+                .payload
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            2
         );
     }
 

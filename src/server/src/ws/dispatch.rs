@@ -2,7 +2,8 @@ use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
     handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
     handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
-    handle_queue, handle_readiness, handle_ready, handle_start_now, handle_unknown,
+    handle_queue, handle_readiness, handle_ready, handle_remove_participant, handle_start_now,
+    handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -62,6 +63,10 @@ pub(super) enum ErrorCode {
     ChatMessageEmpty,
     ChatMessageTooLong,
     InvalidQueuePayload,
+    InvalidModerationPayload,
+    ParticipantNotFound,
+    InvalidModerationTarget,
+    BlockedFromRoom,
 }
 
 pub(super) fn error_message(
@@ -275,6 +280,9 @@ pub(super) async fn client_msg(
         }
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
         ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
+        ClientMessageType::RemoveParticipant => {
+            handle_remove_participant(client_id, &parsed, state).await
+        }
         ClientMessageType::CloseRoom => handle_close_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
             handle_playback(client_id, parsed, state, tasks).await
@@ -426,6 +434,16 @@ mod tests {
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
             (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
+            (
+                ErrorCode::InvalidModerationPayload,
+                "INVALID_MODERATION_PAYLOAD",
+            ),
+            (ErrorCode::ParticipantNotFound, "PARTICIPANT_NOT_FOUND"),
+            (
+                ErrorCode::InvalidModerationTarget,
+                "INVALID_MODERATION_TARGET",
+            ),
+            (ErrorCode::BlockedFromRoom, "BLOCKED_FROM_ROOM"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

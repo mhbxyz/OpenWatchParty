@@ -3,7 +3,7 @@ use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_na
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
 use crate::room::{
-    handle_leave, participant_list_message, participant_statuses_message, send_leave_notification,
+    handle_leave, participant_statuses_message, send_leave_notification, send_room_participant_list,
 };
 use crate::types::{
     IncomingMessage, PlayState, PlaybackState, Room, ServerMessageType, SharedState, WsMessage,
@@ -62,6 +62,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         ready_clients: HashSet::from([client_id.to_string()]),
         pending_play: None,
         pending_host_reconnect: None,
+        blocked_users: HashSet::new(),
         state: PlaybackState {
             position: start_pos,
             play_state: PlayState::Paused,
@@ -163,16 +164,11 @@ pub(in crate::ws) async fn handle_create_room(
         let room = build_room(client_id, &host_name, payload_ref);
         let crate::types::ServerState { clients, rooms } = &mut *state;
         let (sender, room_msg) = insert_and_notify(client_id, room, &payload_name, clients, rooms);
-        let participant_list = room_msg
+        let participant_statuses = room_msg
             .room
             .as_ref()
             .and_then(|room_id| rooms.get(room_id))
-            .map(|room| {
-                (
-                    participant_list_message(room, clients),
-                    participant_statuses_message(room),
-                )
-            });
+            .map(participant_statuses_message);
         if let Some(notification) = previous_leave {
             send_leave_notification(&notification, "previous room leave");
         }
@@ -194,9 +190,9 @@ pub(in crate::ws) async fn handle_create_room(
         let room = room_msg.room.as_ref().and_then(|id| rooms.get(id));
         if let Some(room) = room {
             crate::room::send_room_capabilities(room, clients);
+            send_room_participant_list(room, clients);
         }
-        if let Some((list, statuses)) = participant_list {
-            send_message(sender.clone(), &list, Some(client_id));
+        if let Some(statuses) = participant_statuses {
             send_message(sender, &statuses, Some(client_id));
         }
         // The host's client fills the queue only once it has the room's.
@@ -296,38 +292,45 @@ mod tests {
 
     #[tokio::test]
     async fn create_room_sends_the_host_its_participant_list() {
-        let state = test_helpers::create_state();
-        let (host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
-        state.write().await.clients.insert("host".to_string(), host);
-        let parsed = IncomingMessage {
-            msg_type: crate::types::ClientMessageType::CreateRoom,
-            room: None,
-            client: Some("host".to_string()),
-            payload: Some(serde_json::json!({})),
-            ts: crate::utils::now_ms(),
-            server_ts: None,
-        };
+        for supports_moderation in [false, true] {
+            let state = test_helpers::create_state();
+            let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+            host.supports_room_moderation = supports_moderation;
+            state.write().await.clients.insert("host".to_string(), host);
+            let parsed = IncomingMessage {
+                msg_type: crate::types::ClientMessageType::CreateRoom,
+                room: None,
+                client: Some("host".to_string()),
+                payload: Some(serde_json::json!({})),
+                ts: crate::utils::now_ms(),
+                server_ts: None,
+            };
 
-        let rooms = crate::metrics::metrics().rooms();
-        handle_create_room("host", &parsed, &state).await;
-        assert_eq!(crate::metrics::metrics().rooms(), rooms + 1);
+            let rooms = crate::metrics::metrics().rooms();
+            handle_create_room("host", &parsed, &state).await;
+            assert_eq!(crate::metrics::metrics().rooms(), rooms + 1);
 
-        assert_eq!(
-            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
-            ServerMessageType::RoomState
-        );
-        let list = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(list.msg_type, ServerMessageType::ParticipantList);
-        assert_eq!(
-            list.payload.unwrap()["participants"],
-            serde_json::json!([{ "name": "Franco", "is_host": true }])
-        );
-        let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
-        assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
-        assert_eq!(
-            statuses.payload.unwrap()["statuses"],
-            serde_json::json!([null])
-        );
+            assert_eq!(
+                test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+                ServerMessageType::RoomState
+            );
+            let list = test_helpers::recv_msg(&mut host_rx).unwrap();
+            assert_eq!(list.msg_type, ServerMessageType::ParticipantList);
+            assert_eq!(
+                list.payload.unwrap()["participants"],
+                if supports_moderation {
+                    serde_json::json!([{ "id": "host", "name": "Franco", "is_host": true }])
+                } else {
+                    serde_json::json!([{ "name": "Franco", "is_host": true }])
+                }
+            );
+            let statuses = test_helpers::recv_msg(&mut host_rx).unwrap();
+            assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
+            assert_eq!(
+                statuses.payload.unwrap()["statuses"],
+                serde_json::json!([null])
+            );
+        }
     }
 
     #[tokio::test]

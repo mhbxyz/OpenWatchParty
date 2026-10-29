@@ -6,8 +6,8 @@ use crate::messaging::{
     broadcast_room_list, collect_room_senders, send_message, send_to_senders, ClientSender,
 };
 use crate::room::{
-    handle_leave_without_transfer, host_changed_message, participant_list_message,
-    participant_statuses_message, send_leave_notification,
+    handle_leave_without_transfer, host_changed_message, participant_statuses_message,
+    send_leave_notification, send_room_participant_list,
 };
 use crate::types::{Client, IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -244,7 +244,30 @@ pub(in crate::ws) async fn handle_join_room(
             let full = !reclaims_host
                 && !room.clients.iter().any(|id| id == client_id)
                 && reserved_size >= MAX_CLIENTS_PER_ROOM;
-            if full {
+            // Checked under the same lock as the join, so a block that lands
+            // while the join is on its way still holds. It also refuses a
+            // reclaim and an invite ticket.
+            let blocked = state
+                .clients
+                .get(client_id)
+                .is_some_and(|client| room.blocked_users.contains(&client.user_id));
+            if blocked {
+                let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+                (
+                    (
+                        sender,
+                        error_message(
+                            client_id,
+                            Some(room_id.clone()),
+                            ErrorCode::BlockedFromRoom,
+                            "The host blocked you from this room",
+                        ),
+                        None,
+                    ),
+                    None,
+                    None,
+                )
+            } else if full {
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 (
                     (
@@ -285,7 +308,6 @@ pub(in crate::ws) async fn handle_join_room(
                             .unwrap_or_default();
                         host_changed_message(room_id, client_id, host_name)
                     }),
-                    participant_list_message(room, clients),
                     participant_statuses_message(room),
                 );
                 if reclaimed_host {
@@ -299,11 +321,12 @@ pub(in crate::ws) async fn handle_join_room(
         }
         enqueue_join_notifications(client_id, notifications);
         let joined = participants.is_some();
-        if let Some((senders, host_changed, list, statuses)) = participants {
+        if let Some((senders, host_changed, statuses)) = participants {
             if let Some(message) = host_changed {
                 send_to_senders(&senders, &message, "host reconnect");
             }
-            send_to_senders(&senders, &list, "participant list");
+            let room = state.rooms.get(room_id).expect("joined room still exists");
+            send_room_participant_list(room, &state.clients);
             send_to_senders(&senders, &statuses, "participant statuses");
         }
         if let Some(room) = state.rooms.get(room_id) {
@@ -792,6 +815,7 @@ mod tests {
         let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
         let (guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
         host.room_id = Some("room".to_string());
+        host.supports_room_moderation = true;
         {
             let mut locked = state.write().await;
             locked.clients.insert("host".to_string(), host);
@@ -804,10 +828,16 @@ mod tests {
 
         handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
 
-        let expected = serde_json::json!({
+        let legacy = serde_json::json!({
             "participants": [
                 { "name": "Franco", "is_host": true },
                 { "name": "Ana", "is_host": false }
+            ]
+        });
+        let moderation = serde_json::json!({
+            "participants": [
+                { "id": "host", "name": "Franco", "is_host": true },
+                { "id": "guest", "name": "Ana", "is_host": false }
             ]
         });
         assert_eq!(
@@ -816,14 +846,14 @@ mod tests {
         );
         let guest_list = test_helpers::recv_msg(&mut guest_rx).unwrap();
         assert_eq!(guest_list.msg_type, ServerMessageType::ParticipantList);
-        assert_eq!(guest_list.payload.unwrap(), expected);
+        assert_eq!(guest_list.payload.unwrap(), legacy);
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
             ServerMessageType::ParticipantsUpdate
         );
         let host_list = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(host_list.msg_type, ServerMessageType::ParticipantList);
-        assert_eq!(host_list.payload.unwrap(), expected);
+        assert_eq!(host_list.payload.unwrap(), moderation);
         for rx in [&mut guest_rx, &mut host_rx] {
             let statuses = test_helpers::recv_msg(rx).unwrap();
             assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);
