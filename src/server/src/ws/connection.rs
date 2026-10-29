@@ -45,6 +45,7 @@ fn register_client(
         authentication_version: 0,
         supports_host_transfer: false,
         supports_shared_playback_control: false,
+        supports_room_permissions: false,
         supports_media_queue: false,
         supports_start_when_ready: false,
         message_count: 0,

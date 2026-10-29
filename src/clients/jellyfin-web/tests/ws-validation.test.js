@@ -25,6 +25,19 @@ describe('WebSocket message schema validation', () => {
     invalid(envelope('room_capabilities', { features: [] }));
   });
 
+  it('validates all three room permissions as strict booleans', () => {
+    const permissions = payload => envelope('room_permissions', payload, { room: 'room-1' });
+    valid(permissions({ seek: true, change_media: false, edit_queue: true }));
+    for (const payload of [
+      null, [], {},
+      { seek: true, change_media: false },
+      { seek: 'yes', change_media: false, edit_queue: true },
+      { seek: true, change_media: false, edit_queue: 1 },
+      { seek: true, change_media: false, edit_queue: true, extra: false }
+    ]) invalid(permissions(payload));
+    invalid(envelope('room_permissions', { seek: false, change_media: false, edit_queue: false }));
+  });
+
   it('validates the room queue strictly', () => {
     const item = { id: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', title: 'Pilot' };
     const queue = payload => envelope('queue_state', payload, { room: 'room-1' });

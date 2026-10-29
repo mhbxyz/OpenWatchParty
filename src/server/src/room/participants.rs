@@ -1,4 +1,4 @@
-use crate::types::{Client, Room, ServerMessageType, WsMessage};
+use crate::types::{Client, Room, RoomPermissions, ServerMessageType, WsMessage};
 use crate::utils::now_ms;
 use std::collections::HashMap;
 
@@ -32,6 +32,52 @@ pub(crate) fn send_room_capabilities(room: &Room, clients: &HashMap<String, Clie
         },
         "room capabilities",
     );
+}
+
+/// What the host lets guests do, as `room_permissions`, to the room's
+/// members (or `only` that one) that negotiated the feature. Older clients
+/// keep today's rules and would reject the message.
+pub(crate) fn send_room_permissions(
+    room: &Room,
+    clients: &HashMap<String, Client>,
+    only: Option<&str>,
+) {
+    let senders = room
+        .clients
+        .iter()
+        .filter(|id| only.is_none_or(|only| only == id.as_str()))
+        .filter_map(|id| clients.get(id))
+        .filter(|client| client.supports_room_permissions)
+        .map(|client| client.sender.clone())
+        .collect::<Vec<_>>();
+    crate::messaging::send_to_senders(
+        &senders,
+        &WsMessage {
+            msg_type: ServerMessageType::RoomPermissions,
+            room: Some(room.room_id.clone()),
+            client: None,
+            payload: Some(
+                serde_json::to_value(room.permissions).expect("typed permissions serialize"),
+            ),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        },
+        "room permissions",
+    );
+}
+
+/// After the host changes: a host without the feature can neither see nor
+/// change the permissions, so they go back to today's rules.
+pub(crate) fn reset_room_permissions_for_host(room: &mut Room, clients: &HashMap<String, Client>) {
+    if room.permissions == RoomPermissions::default()
+        || clients
+            .get(&room.host_id)
+            .is_some_and(|client| client.supports_room_permissions)
+    {
+        return;
+    }
+    room.permissions = Default::default();
+    send_room_permissions(room, clients, None);
 }
 
 #[cfg(test)]
@@ -72,6 +118,52 @@ mod capability_tests {
             .supports_shared_playback_control = false;
         send_room_capabilities(&room, &clients);
         assert!(test_helpers::recv_msg(&mut guest_rx).is_none());
+    }
+}
+
+#[cfg(test)]
+mod permission_tests {
+    use super::*;
+    use crate::test_helpers;
+
+    #[test]
+    fn permissions_reach_only_negotiated_members() {
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (legacy, mut legacy_rx) = test_helpers::create_client_with_rx("legacy", "Legacy", true);
+        host.supports_room_permissions = true;
+        let mut room = test_helpers::create_room("r1", "host");
+        room.clients.push("legacy".into());
+        room.permissions.seek = true;
+        let clients = HashMap::from([("host".into(), host), ("legacy".into(), legacy)]);
+
+        send_room_permissions(&room, &clients, None);
+
+        let message = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(message.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(
+            message.payload.unwrap(),
+            serde_json::json!({"seek": true, "change_media": false, "edit_queue": false})
+        );
+        assert!(test_helpers::recv_msg(&mut legacy_rx).is_none());
+    }
+
+    #[test]
+    fn targeted_permissions_reach_only_the_requested_member() {
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut guest, mut guest_rx) = test_helpers::create_client_with_rx("guest", "Guest", true);
+        host.supports_room_permissions = true;
+        guest.supports_room_permissions = true;
+        let mut room = test_helpers::create_room("r1", "host");
+        room.clients.push("guest".into());
+        let clients = HashMap::from([("host".into(), host), ("guest".into(), guest)]);
+
+        send_room_permissions(&room, &clients, Some("guest"));
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            ServerMessageType::RoomPermissions
+        );
+        assert!(test_helpers::recv_msg(&mut host_rx).is_none());
     }
 }
 

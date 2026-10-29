@@ -284,6 +284,40 @@ describe('guest playback controls', () => {
     assert.deepEqual(h.toasts, ['Only the host can seek']);
   });
 
+  it('unlocks seeking live while keeping track changes host-only', () => {
+    h.setGuest({ paused: false, playState: 'playing' });
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-locked'), true);
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-track-locked'), true);
+
+    h.OWP.state.roomPermissions.seek = true;
+    h.OWP.ui.updateGuestControls();
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-locked'), false);
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-track-locked'), true);
+    assert.equal(h.document.getElementById('owp-guest-lock-label'), null);
+    assert.equal(Boolean(h.dispatch('click', h.buttons.btnRewind).defaultPrevented), false);
+    assert.equal(Boolean(h.dispatch('keydown', h.document.body, { code: 'ArrowRight' }).defaultPrevented), false);
+    assert.equal(Boolean(h.dispatch('pointerdown', h.sliderRow.querySelector('.osdPositionSlider')).defaultPrevented), false);
+    assert.equal(h.dispatch('click', h.buttons.btnNextTrack).defaultPrevented, true);
+    assert.equal(h.dispatch('keydown', h.document.body, { code: 'KeyN', shiftKey: true }).defaultPrevented, true);
+    assert.equal(h.toasts.at(-1), 'Only the host can skip to another item');
+
+    h.OWP.state.roomWaiting = true;
+    h.video.paused = true;
+    h.OWP.ui.updateGuestControls();
+    assert.equal(h.document.documentElement.classList.contains('owp-guest-play-locked'), true);
+  });
+
+  it('names track changes for both guest track shortcuts when seeking is allowed', () => {
+    for (const code of ['KeyN', 'KeyP']) {
+      h = createHarness();
+      h.setGuest({ paused: false, playState: 'playing' });
+      h.OWP.state.roomPermissions.seek = true;
+      const event = h.dispatch('keydown', h.document.body, { code, shiftKey: true });
+      assert.equal(event.defaultPrevented, true, code);
+      assert.deepEqual(h.toasts, ['Only the host can skip to another item'], code);
+    }
+  });
+
   it('lets a guest play and pause, and blocks play only while the room waits for the host', () => {
     h.setGuest({ paused: false, playState: 'playing' });
     assert.equal(Boolean(h.dispatch('click', h.buttons.btnPause).defaultPrevented), false);

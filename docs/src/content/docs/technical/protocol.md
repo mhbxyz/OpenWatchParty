@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "room_permissions", "media_queue", "start_when_ready"]
   },
   "ts": 1678900000000
 }
@@ -76,7 +76,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `start_when_ready` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `room_permissions`, `media_queue` and `start_when_ready` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
 Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
@@ -120,7 +120,7 @@ Create a new watch party room.
 
 **Effects:**
 - Client becomes host
-- After `room_state`, the host receives `room_capabilities` if it negotiated shared playback control, then its `participant_list` and `participant_statuses`
+- After `room_state`, the host receives `room_capabilities` and `room_permissions` for the features it negotiated, then its `participant_list` and `participant_statuses`
 - Members that negotiated `media_queue` receive the initial `queue_state`
 - Broadcast `room_list` to all clients
 
@@ -144,6 +144,7 @@ Join an existing room.
 - Broadcast `participants_update` to other participants
 - Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
+- Send `room_permissions` to the new client if it negotiated the feature
 - Send the new client `queue_state` if it negotiated `media_queue`
 - Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
@@ -173,6 +174,11 @@ grace period expires first, the server promotes the earliest transfer-capable me
 or closes the room when no such member remains. An explicit `leave_room` still
 transfers or closes the room immediately. A disconnect broadcasts `room_list` only
 when the client was in a room.
+
+Room guest permissions survive a transfer, disconnect grace, or reclaim when the
+new host negotiated `room_permissions`. When the new host did not, all three
+permissions reset to `false` and the server broadcasts `room_permissions` to
+members that negotiated it.
 
 ### `close_room`
 
@@ -209,7 +215,7 @@ Indicate client is ready to receive playback commands.
 
 ### `player_event`
 
-Send a playback event. Guests may send `play` and `pause` only when both they and the current host negotiated `shared_playback_control` in `auth`. Otherwise guest commands receive `HOST_PERMISSION_REQUIRED`. `seek`, `buffering` and `state_update` remain host only.
+Send a playback event. Guests may send `play` and `pause` only when both they and the current host negotiated `shared_playback_control` in `auth`. A guest may send `seek` when the room's `seek` permission is enabled: its position is used, its `play_state` is ignored in favor of the room's current state, and every other member (including the host) receives the event. Guest `buffering` and `state_update` remain host only. Refused guest commands receive `HOST_PERMISSION_REQUIRED`.
 
 The server sends `room_capabilities` with `{ "features": ["shared_playback_control"] }` (or an empty array) only to clients that negotiated this extension. It follows room creation/join, host transfer/reclaim and authentication changes. Legacy clients receive no new fields or message types. A new client uses shared controls only after both the server acknowledgement and the room announcement; otherwise it keeps the guest seek/play lock and private pause behavior.
 
@@ -248,7 +254,35 @@ A guest's `play` or `pause` holds the room's play state: until its cooldown ends
 
 `PendingPlay` retains the initiating client ID. Both readiness completion and the readiness timeout emit the scheduled event under that ID, including the sender in the broadcast. Readiness updates do not turn a guest's play into a host command.
 
-Only the host seeks, so a guest's `play` or `pause` cannot move the room: its `position` is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
+Unless it is a permitted `seek`, a guest command cannot move the room: a guest's `play` or `pause` position is replaced by where the room is (the last position, moved on by the time since it took effect while playing).
+
+### `set_room_permissions`
+
+The current host sets the guest permissions for its current room. The payload is
+strict: all three boolean fields are required and unknown fields are rejected.
+
+```json
+{
+  "type": "set_room_permissions",
+  "payload": {
+    "seek": true,
+    "change_media": false,
+    "edit_queue": true
+  },
+  "ts": 1678900000000
+}
+```
+
+An unauthenticated client receives `AUTHENTICATION_REQUIRED`, malformed payloads
+receive `INVALID_PERMISSIONS_PAYLOAD`, a client outside a room receives
+`NOT_IN_ROOM`, and a guest receives `HOST_PERMISSION_REQUIRED`. An unchanged
+value is ignored. A change is broadcast as `room_permissions` only to room
+members that negotiated the feature.
+
+New rooms start with every permission `false`. The host can always seek, change
+media and edit the queue. These settings do not affect `queue_add`,
+`queue_countdown`, `close_room`, `start_now`, invites, or host transfer; their
+existing host and readiness rules remain in force.
 
 ### `state_update`
 
@@ -352,7 +386,7 @@ Report how this client is doing, for the room's participants list. Informational
 
 ### Room queue
 
-`queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. Only the host sends them: other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
+`queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. The host may send every command. A guest may send `queue_advance` when `change_media` is enabled, and `queue_remove` or `queue_move` when `edit_queue` is enabled. Guest `queue_add` and `queue_countdown` remain host-only. Other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
 
 ```json
 {
@@ -514,6 +548,28 @@ feature. This announcement is additive in protocol version 1.
 }
 ```
 
+### `room_permissions`
+
+The room's current guest permissions, sent only to clients that advertised
+`room_permissions`: after they create or join a room, after a host changes to a
+client without the feature and the permissions reset, and after the host changes
+them. It is a separate message so strictly validating legacy `room_state`
+payloads remain unchanged.
+
+```json
+{
+  "type": "room_permissions",
+  "room": "uuid-room-id",
+  "payload": {
+    "seek": false,
+    "change_media": false,
+    "edit_queue": false
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
 ### `participants_update`
 
 Participant count update.
@@ -600,7 +656,7 @@ It is a separate message because `participant_list` rejects unknown fields: clie
 
 ### `queue_state`
 
-The room's authoritative [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, participant list/statuses and `room_capabilities`), and after a move to another item (after `room_state`).
+The room's authoritative [queue](#room-queue), sent only to members that declared `media_queue`: after each change, on creating the room and on joining it (after `room_state`, participant list/statuses, `room_capabilities` and `room_permissions`), and after a move to another item (after `room_state`).
 
 ```json
 {

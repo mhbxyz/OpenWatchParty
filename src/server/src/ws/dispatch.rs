@@ -2,7 +2,8 @@ use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
     handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
     handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
-    handle_queue, handle_readiness, handle_ready, handle_start_now, handle_unknown,
+    handle_queue, handle_readiness, handle_ready, handle_set_room_permissions, handle_start_now,
+    handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -62,6 +63,7 @@ pub(super) enum ErrorCode {
     ChatMessageEmpty,
     ChatMessageTooLong,
     InvalidQueuePayload,
+    InvalidPermissionsPayload,
 }
 
 pub(super) fn error_message(
@@ -290,6 +292,9 @@ pub(super) async fn client_msg(
         | ClientMessageType::QueueMove
         | ClientMessageType::QueueAdvance
         | ClientMessageType::QueueCountdown => handle_queue(client_id, &parsed, state, tasks).await,
+        ClientMessageType::SetRoomPermissions => {
+            handle_set_room_permissions(client_id, &parsed, state).await
+        }
         ClientMessageType::Readiness => handle_readiness(client_id, &parsed, state).await,
         ClientMessageType::StartNow => handle_start_now(client_id, &parsed, state).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
@@ -426,6 +431,10 @@ mod tests {
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
             (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
+            (
+                ErrorCode::InvalidPermissionsPayload,
+                "INVALID_PERMISSIONS_PAYLOAD",
+            ),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);
@@ -435,6 +444,51 @@ mod tests {
         assert_eq!(
             &crate::metrics::ERROR_CODES[..crate::metrics::ERROR_CODES.len() - 1],
             &listed[..]
+        );
+    }
+
+    #[tokio::test]
+    async fn dispatches_set_room_permissions() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        host.room_id = Some("room".to_string());
+        host.supports_room_permissions = true;
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.rooms.insert(
+                "room".to_string(),
+                test_helpers::create_room("room", "host"),
+            );
+        }
+        let message = warp::ws::Message::text(
+            serde_json::json!({
+                "type": "set_room_permissions",
+                "payload": {
+                    "seek": true,
+                    "change_media": false,
+                    "edit_queue": false
+                },
+                "ts": 0
+            })
+            .to_string(),
+        );
+
+        assert!(
+            !client_msg(
+                "host",
+                message,
+                &state,
+                &insecure_jwt_config(),
+                &crate::tasks::AppTasks::new(),
+            )
+            .await
+        );
+
+        assert!(state.read().await.rooms["room"].permissions.seek);
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            ServerMessageType::RoomPermissions
         );
     }
 

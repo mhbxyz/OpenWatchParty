@@ -140,6 +140,14 @@ impl QueueCommand {
         };
         Some(command)
     }
+
+    fn is_allowed_for_guest(&self, permissions: crate::types::RoomPermissions) -> bool {
+        match self {
+            Self::Advance(_) => permissions.change_media,
+            Self::Remove(_) | Self::Move(_, _) => permissions.edit_queue,
+            Self::Add(_) | Self::Countdown(_) => false,
+        }
+    }
 }
 
 /// Moves the room to a queued item from the start, as on joining: every
@@ -393,10 +401,14 @@ pub(in crate::ws) async fn handle_queue(
             .and_then(|room_id| rooms.get_mut(room_id));
         match room {
             None => Err((ErrorCode::NotInRoom, "Client is not in a room")),
-            Some(room) if room.host_id != client_id => Err((
-                ErrorCode::HostPermissionRequired,
-                "Only the room host can change the queue",
-            )),
+            Some(room)
+                if room.host_id != client_id && !command.is_allowed_for_guest(room.permissions) =>
+            {
+                Err((
+                    ErrorCode::HostPermissionRequired,
+                    "Only the room host can change the queue",
+                ))
+            }
             Some(room) => match apply(room, clients, command, now_ms(), Instant::now()) {
                 Outcome::Unchanged => Ok(None),
                 Outcome::Changed => {
@@ -606,6 +618,116 @@ mod tests {
             "INVALID_QUEUE_PAYLOAD"
         );
         assert!(state.read().await.rooms["room"].queue.items.is_empty());
+    }
+
+    #[tokio::test]
+    async fn change_media_permission_controls_guest_advance() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B]), &state, &tasks).await;
+        for receiver in &mut receivers[..2] {
+            drain(receiver);
+        }
+        let advance = message(
+            ClientMessageType::QueueAdvance,
+            serde_json::json!({ "id": B }),
+        );
+
+        handle_queue("guest", &advance, &state, &tasks).await;
+        assert_eq!(
+            drain(&mut receivers[1])[0].payload.as_ref().unwrap()["code"],
+            "HOST_PERMISSION_REQUIRED"
+        );
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .permissions
+            .change_media = true;
+        handle_queue("guest", &advance, &state, &tasks).await;
+
+        assert_eq!(
+            state.read().await.rooms["room"].media_id.as_deref(),
+            Some(B)
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut receivers[0]).unwrap().msg_type,
+            ServerMessageType::RoomState
+        );
+    }
+
+    #[tokio::test]
+    async fn edit_queue_permission_controls_guest_remove_and_move() {
+        let (state, mut receivers) = room_with_members().await;
+        let tasks = AppTasks::new();
+        handle_queue("host", &add(&[A, B, C]), &state, &tasks).await;
+        for receiver in &mut receivers[..2] {
+            drain(receiver);
+        }
+        let move_c = message(
+            ClientMessageType::QueueMove,
+            serde_json::json!({ "id": C, "to": 1 }),
+        );
+
+        handle_queue("guest", &move_c, &state, &tasks).await;
+        assert_eq!(
+            drain(&mut receivers[1])[0].payload.as_ref().unwrap()["code"],
+            "HOST_PERMISSION_REQUIRED"
+        );
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .permissions
+            .edit_queue = true;
+        handle_queue("guest", &move_c, &state, &tasks).await;
+        handle_queue(
+            "guest",
+            &message(
+                ClientMessageType::QueueRemove,
+                serde_json::json!({ "id": B }),
+            ),
+            &state,
+            &tasks,
+        )
+        .await;
+
+        let ids: Vec<_> = state.read().await.rooms["room"]
+            .queue
+            .items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect();
+        assert_eq!(ids, [A.to_string(), C.to_string()]);
+    }
+
+    #[tokio::test]
+    async fn permissions_never_open_guest_add_or_countdown() {
+        let (state, mut receivers) = room_with_members().await;
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
+        let tasks = AppTasks::new();
+
+        for command in [add(&[B]), countdown(true)] {
+            handle_queue("guest", &command, &state, &tasks).await;
+            assert_eq!(
+                drain(&mut receivers[1])[0].payload.as_ref().unwrap()["code"],
+                "HOST_PERMISSION_REQUIRED"
+            );
+        }
     }
 
     #[tokio::test]

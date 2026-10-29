@@ -55,6 +55,9 @@ const renderRoom = (overrides = {}) => {
     participantCount: 2,
     participants: [{ name: 'FrancoTosky', isHost: true }, { name: 'Ana', isHost: false }],
     serverFeatures: [],
+    roomPermissions: { seek: false, change_media: false, edit_queue: false },
+    roomPermissionsReceived: false,
+    sharedPlaybackControl: false,
     syncStatus: 'synced',
     ...overrides
   });
@@ -108,6 +111,115 @@ describe('room bar', () => {
     assert.ok(bar.querySelector('.owp-close-btn .owp-icon-x'));
     assert.ok(byId('owp-chat-send').querySelector('.owp-icon-send'));
     assert.equal(bar.querySelector('.material-icons'), null);
+  });
+
+  it('shows host permission switches and sends the complete flipped set', () => {
+    let changed;
+    OWP.actions.setRoomPermissions = permissions => { changed = permissions; };
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['room_permissions'],
+      roomPermissions: { seek: false, change_media: true, edit_queue: false },
+      roomPermissionsReceived: true,
+      sharedPlaybackControl: true
+    });
+    const section = byId('owp-room-permissions');
+    assert.equal(section.querySelector('.owp-perm-title').textContent, 'Guest controls');
+    const switches = section.querySelectorAll('.owp-perm-switch');
+    assert.deepEqual(switches.map(button => [button.getAttribute('aria-label'), button.getAttribute('aria-checked')]), [
+      ['Seek', 'false'], ['Change what is playing', 'true'], ['Edit the queue', 'false']
+    ]);
+    switches[0].click();
+    assert.deepEqual(changed, { seek: true, change_media: true, edit_queue: false });
+    assert.equal(section.querySelector('.owp-perm-note').textContent, 'Play and pause are always shared.');
+  });
+
+  it('shows guests permission values, hides the shared note when disabled, and needs negotiation', () => {
+    renderRoom({
+      serverFeatures: ['room_permissions'],
+      roomPermissions: { seek: true, change_media: false, edit_queue: true },
+      roomPermissionsReceived: true
+    });
+    const section = byId('owp-room-permissions');
+    assert.equal(section.querySelector('.owp-perm-title').textContent, 'What guests can do');
+    assert.deepEqual(section.querySelectorAll('.owp-perm-value').map(value => value.textContent), ['Yes', 'No', 'Yes']);
+    assert.equal(section.querySelectorAll('.owp-perm-hint').length, 0);
+    assert.equal(section.querySelector('.owp-perm-note'), null);
+
+    renderRoom({ serverFeatures: [] });
+    assert.equal(byId('owp-room-permissions'), null);
+  });
+
+  it('toasts guests only after their first permissions, with one or many changes', () => {
+    const toasts = [];
+    OWP.ui.showToast = message => toasts.push(message);
+    renderRoom({ serverFeatures: ['room_permissions'] });
+    const message = payload => ({ room: 'room-1', payload });
+    OWP._wsHandlers.handleRoomPermissions(message({ seek: true, change_media: false, edit_queue: false }));
+    assert.deepEqual(toasts, []);
+    OWP._wsHandlers.handleRoomPermissions(message({ seek: false, change_media: false, edit_queue: false }));
+    assert.deepEqual(toasts, ['The host no longer lets guests seek']);
+    OWP._wsHandlers.handleRoomPermissions(message({ seek: true, change_media: true, edit_queue: false }));
+    assert.equal(toasts.at(-1), 'The host changed what guests can do');
+  });
+
+  it('does not toast the host when permissions change', () => {
+    const toasts = [];
+    OWP.ui.showToast = message => toasts.push(message);
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['room_permissions'],
+      roomPermissionsReceived: true
+    });
+    OWP._wsHandlers.handleRoomPermissions({
+      room: 'room-1',
+      payload: { seek: true, change_media: false, edit_queue: false }
+    });
+    assert.deepEqual(toasts, []);
+  });
+
+  it('ignores permissions for another room or without server negotiation', () => {
+    renderRoom({
+      serverFeatures: ['room_permissions'],
+      roomPermissionsReceived: true
+    });
+    const enabled = { seek: true, change_media: true, edit_queue: true };
+    OWP._wsHandlers.handleRoomPermissions({ room: 'room-2', payload: enabled });
+    assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+
+    OWP.state.serverFeatures = [];
+    OWP._wsHandlers.handleRoomPermissions({ room: 'room-1', payload: enabled });
+    assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+  });
+
+  it('changes guest permission rows into host switches on promotion', () => {
+    renderRoom({
+      serverFeatures: ['room_permissions'],
+      roomPermissionsReceived: true
+    });
+    assert.equal(byId('owp-room-permissions').querySelectorAll('.owp-perm-value').length, 3);
+
+    OWP.state.isHost = true;
+    OWP.ui.updateRoomRoleControls();
+    assert.equal(byId('owp-room-permissions').querySelectorAll('.owp-perm-value').length, 0);
+    assert.equal(byId('owp-room-permissions').querySelectorAll('.owp-perm-switch').length, 3);
+  });
+
+  it('restores focus to the same permission switch after an update', () => {
+    renderRoom({
+      isHost: true,
+      serverFeatures: ['room_permissions'],
+      roomPermissionsReceived: true
+    });
+    const original = byId('owp-room-permissions').querySelectorAll('.owp-perm-switch')[1];
+    original.focus();
+    OWP._wsHandlers.handleRoomPermissions({
+      room: 'room-1',
+      payload: { seek: false, change_media: true, edit_queue: false }
+    });
+    const replacement = byId('owp-room-permissions').querySelectorAll('.owp-perm-switch')[1];
+    assert.notEqual(replacement, original);
+    assert.equal(document.activeElement, replacement);
   });
 
   it('starts with every drop-down closed', () => {

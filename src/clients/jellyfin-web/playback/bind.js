@@ -174,6 +174,24 @@
     actions.send('player_event', { action, position: video.currentTime, play_state: playState });
   };
 
+  // A guest's own seek, when the host lets guests seek. Its sync seeks, the
+  // room's commands and a stream reload are told apart as the host's are.
+  // The room's position becomes this one, so the sync doesn't pull it back.
+  const onGuestSeek = (video) => {
+    const actions = OWP.actions;
+    if (!state.inRoom || state.isHost || !state.roomPermissions.seek || !actions?.send) return;
+    if (!utils.shouldSend() || state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
+    if (!utils.isVideoReady()) return;
+    state.lastSyncPosition = video.currentTime;
+    state.lastSyncServerTs = utils.getServerNow();
+    state.isInitialSync = false;
+    state.initialSyncUntil = 0;
+    state.initialSyncTargetPos = null;
+    state.syncCooldownUntil = utils.nowMs() + 2000;
+    utils.log('GUEST', { action: 'seek', pos: video.currentTime });
+    actions.send('player_event', { action: 'seek', position: video.currentTime });
+  };
+
   const createVideoListeners = (video) => {
     return {
       waiting: () => {
@@ -232,6 +250,7 @@
       },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
+        onGuestSeek(video);
         onHostEvent('seek', video);
       },
       // The room waits for the host's reload as it does while the host buffers,

@@ -217,6 +217,7 @@ mod tests {
                 ready_clients: HashSet::new(),
                 pending_play: None,
                 pending_host_reconnect: None,
+                permissions: Default::default(),
                 state: PlaybackState {
                     position: 0.0,
                     play_state: crate::types::PlayState::Paused,
@@ -245,6 +246,7 @@ mod tests {
                 ready_clients: HashSet::new(),
                 pending_play: None,
                 pending_host_reconnect: None,
+                permissions: Default::default(),
                 state: PlaybackState {
                     position: 10.0,
                     play_state: crate::types::PlayState::Playing,

@@ -5,15 +5,15 @@
   const t = OWP.i18n.t;
 
   const LOCKED_CLASS = 'owp-guest-locked';
+  const TRACK_LOCKED_CLASS = 'owp-guest-track-locked';
   const PLAY_LOCKED_CLASS = 'owp-guest-play-locked';
   const LABEL_ID = 'owp-guest-lock-label';
   // The position slider's container, marked so the CSS dims it and not the
   // volume slider, which uses the same container class.
   const POSITION_CONTAINER_CLASS = 'owp-position-slider-container';
   const TOAST_INTERVAL_MS = 2500;
+  const TRACK_BUTTON_SELECTOR = '.btnPreviousTrack, .btnNextTrack';
   const SEEK_BUTTON_SELECTOR = [
-    '.btnPreviousTrack',
-    '.btnNextTrack',
     '.btnPreviousChapter',
     '.btnNextChapter',
     '.btnRewind',
@@ -31,10 +31,11 @@
 
   const getVideo = () => OWP.utils?.getVideo?.() || null;
   const isGuest = () => state.inRoom && !state.isHost;
-  const isGuestLocked = (video) => Boolean(video && isGuest());
+  const isGuestWithVideo = video => Boolean(video && isGuest());
+  const isGuestLocked = video => isGuestWithVideo(video) && !state.roomPermissions.seek;
   // Play and pause are everyone's; play only waits while the host's stream
   // loads.
-  const isPlayLocked = (video) => isGuestLocked(video)
+  const isPlayLocked = (video) => isGuestWithVideo(video)
     && video.paused
     && (state.roomWaiting || (!state.sharedPlaybackControl && state.lastSyncPlayState === 'paused'));
 
@@ -66,15 +67,20 @@
   // The CSS that makes the slider inert follows the role on the next tick;
   // this covers a guest who presses on it before that.
   const handlePointerDown = (event) => {
-    if (isGuest() && isPositionSlider(event.target) && getVideo()) blockEvent(event);
+    if (isGuest() && isPositionSlider(event.target) && isGuestLocked(getVideo())) blockEvent(event);
   };
 
   const handleClick = (event) => {
     if (!isGuest()) return;
     const video = getVideo();
-    if (!isGuestLocked(video)) return;
+    if (!video) return;
+    const trackButton = event.target?.closest?.(TRACK_BUTTON_SELECTOR);
+    if (trackButton?.closest('.videoOsdBottom')) {
+      blockEvent(event, state.roomPermissions.seek ? t('hostOnlyTrack') : t('hostOnlySeek'));
+      return;
+    }
     const seekButton = event.target?.closest?.(SEEK_BUTTON_SELECTOR);
-    if (seekButton?.closest('.videoOsdBottom')) {
+    if (isGuestLocked(video) && seekButton?.closest('.videoOsdBottom')) {
       blockEvent(event);
       return;
     }
@@ -103,7 +109,13 @@
     const code = event.code || '';
     const key = event.key || '';
     if (SEEK_CODES.has(code) || SEEK_KEYS.has(code) || SEEK_CODES.has(key) || SEEK_KEYS.has(key)) return true;
-    if (/^(Digit|Numpad)[0-9]$/.test(code) || /^[0-9]$/.test(key)) return true;
+    return /^(Digit|Numpad)[0-9]$/.test(code) || /^[0-9]$/.test(key);
+  };
+
+  // Shift+P and Shift+N: the previous and next item, which stay the host's.
+  const isTrackKey = (event) => {
+    const code = event.code || '';
+    const key = event.key || '';
     return event.shiftKey
       && (code === 'KeyP' || code === 'KeyN' || key.toLowerCase() === 'p' || key.toLowerCase() === 'n');
   };
@@ -124,12 +136,16 @@
   const handleKeydown = (event) => {
     if (!isGuest()) return;
     const video = getVideo();
-    if (!isGuestLocked(video) || event.ctrlKey || event.altKey || event.metaKey || isEditable(event.target)) return;
+    if (!video || event.ctrlKey || event.altKey || event.metaKey || isEditable(event.target)) return;
     // On the focused slider every arrow seeks (up and down too), in the TV
     // layout as well.
     const onSlider = isPositionSlider(event.target);
     if (isTvNavigationKey(event) && !onSlider) return;
-    if (isSeekKey(event) || (onSlider && isArrowKey(event))) {
+    if (isTrackKey(event)) {
+      blockEvent(event, state.roomPermissions.seek ? t('hostOnlyTrack') : t('hostOnlySeek'));
+      return;
+    }
+    if (isGuestLocked(video) && (isSeekKey(event) || (onSlider && isArrowKey(event)))) {
       blockEvent(event);
       return;
     }
@@ -196,7 +212,7 @@
     if (!state.inRoom) {
       if (clearedOutsideRoom) return;
       clearedOutsideRoom = true;
-      root.classList.remove(LOCKED_CLASS, PLAY_LOCKED_CLASS);
+      root.classList.remove(LOCKED_CLASS, TRACK_LOCKED_CLASS, PLAY_LOCKED_CLASS);
       removeLabel();
       return;
     }
@@ -204,6 +220,7 @@
     const video = getVideo();
     const locked = isGuestLocked(video);
     root.classList.toggle(LOCKED_CLASS, locked);
+    root.classList.toggle(TRACK_LOCKED_CLASS, Boolean(video && isGuest()));
     root.classList.toggle(PLAY_LOCKED_CLASS, isPlayLocked(video));
     if (locked) updateLabel();
     else removeLabel();

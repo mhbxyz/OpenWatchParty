@@ -48,6 +48,8 @@ const makeDirtyRoomState = () => {
     roomWaiting: true,
     roomHostId: 'host',
     sharedPlaybackControl: true,
+    roomPermissions: { seek: true, change_media: true, edit_queue: true },
+    roomPermissionsReceived: true,
     guestPaused: true,
     ownCommandUntil: Date.now() + 1000,
     ownCommandPlayState: 'paused',
@@ -102,6 +104,8 @@ const assertRoomStateReset = (video) => {
   assert.equal(OWP.state.roomWaiting, false);
   assert.equal(OWP.state.roomHostId, '');
   assert.equal(OWP.state.sharedPlaybackControl, false);
+  assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+  assert.equal(OWP.state.roomPermissionsReceived, false);
   assert.equal(OWP.state.guestPaused, false);
   assert.equal(OWP.state.ownCommandUntil, 0);
   assert.equal(OWP.state.ownCommandPlayState, '');

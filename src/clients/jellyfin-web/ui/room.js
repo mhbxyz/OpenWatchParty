@@ -7,6 +7,66 @@
   const { createElement, createIcon, createCloseButton, fillParticipantList, participantTotal, peopleLabel } = views;
   const { updateLeaveConfirm } = ui;
 
+  // What the host lets guests do, under the People list: switches for the
+  // host, a read-only list for guests. Only with a server that has them.
+  const PERMISSIONS = [
+    ['seek', 'permSeek', 'permSeekHint'],
+    ['change_media', 'permChangeMedia', 'permChangeMediaHint'],
+    ['edit_queue', 'permEditQueue', 'permEditQueueHint']
+  ];
+
+  const createPermissionSection = () => {
+    if (!state.serverFeatures.includes('room_permissions')) return null;
+    const section = createElement('div', 'owp-perm');
+    section.id = 'owp-room-permissions';
+    section.appendChild(createElement('div', 'owp-perm-title', t(state.isHost ? 'guestControls' : 'guestCanDo')));
+    PERMISSIONS.forEach(([key, labelKey, hintKey]) => {
+      const row = createElement('div', 'owp-perm-row');
+      const text = createElement('div', 'owp-perm-text');
+      const label = t(labelKey);
+      text.appendChild(createElement('span', 'owp-perm-label', label));
+      if (state.isHost) text.appendChild(createElement('span', 'owp-perm-hint', t(hintKey)));
+      row.appendChild(text);
+      if (state.isHost) {
+        const button = createElement('button', 'owp-perm-switch');
+        button.type = 'button';
+        button.setAttribute('role', 'switch');
+        button.setAttribute('aria-checked', String(state.roomPermissions[key]));
+        button.setAttribute('aria-label', label);
+        button.dataset.permission = key;
+        button.onclick = () => OWP.actions?.setRoomPermissions?.({
+          ...state.roomPermissions,
+          [key]: !state.roomPermissions[key]
+        });
+        row.appendChild(button);
+      } else {
+        row.appendChild(createElement(
+          'span',
+          `owp-perm-value${state.roomPermissions[key] ? ' on' : ''}`,
+          t(state.roomPermissions[key] ? 'permYes' : 'permNo')
+        ));
+      }
+      section.appendChild(row);
+    });
+    if (state.sharedPlaybackControl) {
+      section.appendChild(createElement('div', 'owp-perm-note', t('sharedPlayPause')));
+    }
+    return section;
+  };
+
+  // Rebuilt on each change; a switch that had the focus keeps it.
+  const updateRoomPermissions = () => {
+    const people = document.getElementById('owp-people-section');
+    if (!people) return;
+    const focused = document.activeElement?.closest?.('#owp-room-permissions')
+      ? document.activeElement.dataset.permission
+      : '';
+    document.getElementById('owp-room-permissions')?.remove();
+    const permissions = createPermissionSection();
+    if (!permissions) return;
+    people.appendChild(permissions);
+    if (focused) permissions.querySelector(`[data-permission="${focused}"]`)?.focus();
+  };
 
   const createBarButton = (id, label, iconName, sectionId) => {
     const button = createElement('button', 'owp-bar-btn');
@@ -194,6 +254,7 @@
     }
     updateLeaveConfirm();
     if (ui.updateQueue) ui.updateQueue();
+    updateRoomPermissions();
     updateStartLabel();
     applyRoomSection();
   };
@@ -352,6 +413,8 @@
     participantList.id = 'owp-participants-list';
     fillParticipantList(participantList);
     peopleSection.appendChild(participantList);
+    const permissions = createPermissionSection();
+    if (permissions) peopleSection.appendChild(permissions);
 
     const chatSection = createElement('div');
     chatSection.id = 'owp-chat-section';
@@ -426,5 +489,5 @@
   };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
-  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });
+  Object.assign(ui, { updateRoomRoleControls, updateRoomPermissions, updateSyncSection, updateStartLabel });
 })();

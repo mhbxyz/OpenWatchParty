@@ -27,6 +27,11 @@
   const optional = (value, validator) => value === undefined || validator(value);
   const nullable = (value, validator) => value === null || validator(value);
   const payloadObject = message => object(message.payload);
+  const roomPermissions = value => object(value)
+    && onlyKeys(value, ['seek', 'change_media', 'edit_queue'])
+    && typeof value.seek === 'boolean'
+    && typeof value.change_media === 'boolean'
+    && typeof value.edit_queue === 'boolean';
 
   const invalid = error => ({ valid: false, error });
   const valid = () => ({ valid: true, error: null });
@@ -207,6 +212,7 @@
     auth_success: validateAuthSuccess,
     room_capabilities: message => object(message.payload) && onlyKeys(message.payload, ['features']) && features(message.payload.features)
       ? null : 'room_capabilities is invalid',
+    room_permissions: message => roomPermissions(message.payload) ? null : 'room_permissions is invalid',
     room_state: validateRoomState,
     participants_update: validateParticipantCount,
     client_left: validateParticipantCount,
@@ -225,6 +231,7 @@
   const roomRequired = new Set([
     'room_state',
     'room_capabilities',
+    'room_permissions',
     'participants_update',
     'client_left',
     'participant_list',
