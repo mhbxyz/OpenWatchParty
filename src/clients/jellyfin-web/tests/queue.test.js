@@ -104,7 +104,22 @@ describe('room queue', () => {
     assert.equal(OWP.state.queueCountdownUntil, 0);
     assert.equal(OWP.state.queueLastAdded, null);
     assert.equal(OWP.state.queueReceived, false);
+    assert.deepEqual(OWP.state.queueSuggestions, []);
+    assert.deepEqual(OWP.state.queueUnavailable, []);
     assert.equal(OWP.state.roomMediaId, 'x');
+  });
+
+  it('stores queue details for its room and passes the previous suggestions to the queue logic', () => {
+    let previous;
+    OWP.queue.onQueueDetails = value => { previous = value; };
+    const suggestion = { id: 'a'.repeat(32), title: 'Pilot', by: 'Ana', mine: false };
+    const unavailable = { id: suggestion.id, names: ['Ana'], you: false };
+    h.handleQueueDetails({ room: 'room-1', payload: { suggestions: [suggestion], unavailable: [unavailable] } });
+    assert.deepEqual(previous, []);
+    assert.deepEqual(OWP.state.queueSuggestions, [suggestion]);
+    assert.deepEqual(OWP.state.queueUnavailable, [unavailable]);
+    h.handleQueueDetails({ room: 'room-2', payload: { suggestions: [], unavailable: [] } });
+    assert.deepEqual(OWP.state.queueSuggestions, [suggestion]);
   });
 
   it('loads the next item on the host too and reports ready again after an advance', () => {

@@ -8,6 +8,8 @@
   const MAX_CHAT_LENGTH = 500;
   const MAX_ID_LENGTH = 128;
   const MAX_QUEUE_ITEMS = 20;
+  const MAX_SUGGESTIONS = 10;
+  const MAX_AVAILABILITY_ITEMS = 30;
   const PLAY_STATES = new Set(['playing', 'paused']);
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
   const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
@@ -169,6 +171,29 @@
     return nullable(countdownUntil, timestamp) ? null : 'countdown_until is invalid';
   };
 
+  const jellyfinId = value => typeof value === 'string' && /^[0-9a-f]{32}$/i.test(value);
+  const validateQueueDetails = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    const { suggestions, unavailable } = message.payload;
+    if (!onlyKeys(message.payload, ['suggestions', 'unavailable'])) return 'queue_details has unknown fields';
+    if (!Array.isArray(suggestions) || suggestions.length > MAX_SUGGESTIONS) return 'suggestions is invalid';
+    for (const suggestion of suggestions) {
+      if (!object(suggestion) || !onlyKeys(suggestion, ['id', 'title', 'series', 'by', 'mine'])) return 'suggestion is invalid';
+      if (!jellyfinId(suggestion.id) || !string(suggestion.title, MAX_NAME_LENGTH)
+          || !optional(suggestion.series, jellyfinId) || !string(suggestion.by, MAX_NAME_LENGTH)
+          || typeof suggestion.mine !== 'boolean') return 'suggestion is invalid';
+    }
+    if (!Array.isArray(unavailable) || unavailable.length > MAX_AVAILABILITY_ITEMS) return 'unavailable is invalid';
+    for (const entry of unavailable) {
+      if (!object(entry) || !onlyKeys(entry, ['id', 'names', 'you'])) return 'unavailable entry is invalid';
+      if (!jellyfinId(entry.id) || !Array.isArray(entry.names) || entry.names.length > MAX_PARTICIPANTS
+          || !entry.names.every(name => string(name, MAX_NAME_LENGTH)) || typeof entry.you !== 'boolean') {
+        return 'unavailable entry is invalid';
+      }
+    }
+    return null;
+  };
+
   // A play the room holds until its members are ready: who it waits for and
   // why, its start (and who it went without), or the end of the wait.
   const startMembers = value => Array.isArray(value) && value.length <= MAX_PARTICIPANTS && value.every(member =>
@@ -219,6 +244,7 @@
     pong: validatePong,
     chat_message: validateChat,
     queue_state: validateQueueState,
+    queue_details: validateQueueDetails,
     start_state: validateStartState,
     error: validateError
   };
@@ -235,6 +261,7 @@
     'state_update',
     'chat_message',
     'queue_state',
+    'queue_details',
     'start_state'
   ]);
   const envelopeKeys = ['type', 'room', 'client', 'payload', 'ts', 'server_ts'];

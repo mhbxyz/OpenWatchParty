@@ -81,6 +81,7 @@ fn detach_client_from_room(
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
     room.not_ready.remove(client_id);
+    let availability_changed = room.queue.forget_availability(client_id);
     // The host's play waits no more; another member's goes on without the
     // one that left.
     let wait_ended = room.host_id == client_id && room.pending_play.take().is_some();
@@ -107,6 +108,9 @@ fn detach_client_from_room(
         }
         messages.push(participant_list_message(room, clients));
         messages.push(participant_statuses_message(room));
+        if availability_changed {
+            crate::ws::send_queue_details(room, clients, None);
+        }
         let senders = collect_room_senders(room, clients, None);
         Some(LeaveOutcome::Left((senders, messages)))
     }
@@ -137,6 +141,7 @@ fn begin_host_reconnect_grace(
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
     room.not_ready.remove(client_id);
+    let availability_changed = room.queue.forget_availability(client_id);
     if room.pending_play.take().is_some() {
         send_idle(room, clients);
     }
@@ -151,6 +156,9 @@ fn begin_host_reconnect_grace(
         participant_statuses_message(room),
     ];
     let senders = collect_room_senders(room, clients, None);
+    if availability_changed {
+        crate::ws::send_queue_details(room, clients, None);
+    }
     Some((room_id, generation, (senders, messages)))
 }
 
@@ -350,6 +358,43 @@ mod tests {
     }
 
     #[test]
+    fn explicit_leave_forgets_availability_and_sends_details() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let mut host_rx = test_helpers::setup_room_with_host(&mut clients, &mut rooms, "host-1");
+        clients
+            .get_mut("host-1")
+            .unwrap()
+            .supports_queue_suggestions = true;
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("ug", "Guest", true);
+        guest.room_id = Some("room-1".to_string());
+        clients.insert("guest-1".to_string(), guest);
+        let room = rooms.get_mut("room-1").unwrap();
+        room.clients.push("guest-1".to_string());
+        room.queue.add(
+            vec![crate::room::QueueItem {
+                id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                title: "Pilot".to_string(),
+                series: None,
+            }],
+            None,
+        );
+        room.queue.report_availability(
+            "guest-1",
+            std::collections::HashSet::from(["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
+        );
+
+        let notification = handle_leave("guest-1", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(
+            test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
+            ServerMessageType::QueueDetails
+        );
+        assert!(!rooms["room-1"].queue.availability.contains_key("guest-1"));
+        send_leave_notification(&notification, "test");
+    }
+
+    #[test]
     fn detach_host_clears_pending_play() {
         let mut clients = HashMap::new();
         let mut rooms = HashMap::new();
@@ -451,6 +496,98 @@ mod tests {
         assert!(!state.read().await.rooms["room"]
             .statuses
             .contains_key("guest"));
+    }
+
+    #[tokio::test]
+    async fn disconnect_forgets_availability_and_sends_details_to_the_others() {
+        let state = test_helpers::create_state();
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Host", true);
+        let (mut guest, _guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
+        host.room_id = Some("room".to_string());
+        host.supports_queue_suggestions = true;
+        guest.room_id = Some("room".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            room.queue.add(
+                vec![crate::room::QueueItem {
+                    id: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string(),
+                    title: "Pilot".to_string(),
+                    series: None,
+                }],
+                None,
+            );
+            room.queue.report_availability(
+                "guest",
+                std::collections::HashSet::from(["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_string()]),
+            );
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        handle_disconnect("guest", &state, &AppTasks::new()).await;
+
+        let details = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(details.msg_type, ServerMessageType::QueueDetails);
+        assert!(details.payload.unwrap()["unavailable"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!state.read().await.rooms["room"]
+            .queue
+            .availability
+            .contains_key("guest"));
+    }
+
+    #[tokio::test]
+    async fn host_reconnect_grace_forgets_availability_and_sends_details() {
+        const ITEM: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host-user", "Host", true);
+        let (mut guest, mut guest_rx) =
+            test_helpers::create_client_with_rx("guest-user", "Guest", true);
+        host.room_id = Some("room".to_string());
+        host.supports_host_transfer = true;
+        host.session_expires_at = Some(u64::MAX);
+        guest.room_id = Some("room".to_string());
+        guest.supports_queue_suggestions = true;
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("guest".to_string(), guest);
+            let mut room = test_helpers::create_room("room", "host");
+            room.clients.push("guest".to_string());
+            room.queue.add(
+                vec![crate::room::QueueItem {
+                    id: ITEM.to_string(),
+                    title: "Pilot".to_string(),
+                    series: None,
+                }],
+                None,
+            );
+            room.queue
+                .report_availability("host", std::collections::HashSet::from([ITEM.to_string()]));
+            locked.rooms.insert("room".to_string(), room);
+        }
+
+        let tasks = AppTasks::new();
+        handle_disconnect("host", &state, &tasks).await;
+
+        let details = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(details.msg_type, ServerMessageType::QueueDetails);
+        assert!(details.payload.unwrap()["unavailable"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert!(!state.read().await.rooms["room"]
+            .queue
+            .availability
+            .contains_key("host"));
+
+        tasks.cancel();
+        tasks.wait().await;
     }
 
     #[tokio::test]

@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `start_when_ready`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `queue_suggestions` and `start_when_ready`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "queue_suggestions", "start_when_ready"]
   },
   "ts": 1678900000000
 }
@@ -76,10 +76,10 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue` and `start_when_ready` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `queue_suggestions` and `start_when_ready` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, gets `queue_state` only when it declared `media_queue`, and gets `queue_details` only when it declared `queue_suggestions`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged the corresponding feature. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
 
 ### `list_rooms`
 
@@ -121,7 +121,7 @@ Create a new watch party room.
 **Effects:**
 - Client becomes host
 - After `room_state`, the host receives `room_capabilities` if it negotiated shared playback control, then its `participant_list` and `participant_statuses`
-- Members that negotiated `media_queue` receive the initial `queue_state`
+- Members that negotiated `media_queue` receive the initial `queue_state`; members that negotiated `queue_suggestions` then receive their `queue_details`
 - Broadcast `room_list` to all clients
 
 ### `join_room`
@@ -144,7 +144,7 @@ Join an existing room.
 - Broadcast `participants_update` to other participants
 - Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
-- Send the new client `queue_state` if it negotiated `media_queue`
+- Send the new client `queue_state` if it negotiated `media_queue`, then its `queue_details` if it negotiated `queue_suggestions`
 - Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
 ### `leave_room`
@@ -354,6 +354,8 @@ Report how this client is doing, for the room's participants list. Informational
 
 `queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. Only the host sends them: other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
 
+`queue_suggest`, `queue_dismiss` and `queue_availability` may be sent by any authenticated room member, without a feature check. Malformed payloads receive `INVALID_QUEUE_PAYLOAD`, and a member outside a room receives `NOT_IN_ROOM`.
+
 ```json
 {
   "type": "queue_add",
@@ -366,11 +368,14 @@ Report how this client is doing, for the room's participants list. Informational
 
 | Message | Payload | Effect |
 |---------|---------|--------|
-| `queue_add` | `items`: 1 to 20 `{ id, title, series? }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters; `series`, optional, is the Jellyfin id of an episode's series. The server keeps it to tell whether the next item goes on the same series and never sends it back in `queue_state` | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out |
+| `queue_add` | `items`: 1 to 20 `{ id, title, series? }`. `id` is a Jellyfin item id like `media_id` (32 hexadecimal characters); `title` is cleaned like a name and cut to 100 characters; `series`, optional, is the Jellyfin id of an episode's series. The server keeps it to tell whether the next item goes on the same series and never sends it back in `queue_state` | Appends the items not queued yet. A full queue evicts its oldest watched item for each new item; the current and upcoming items are not evicted. Items that still do not fit are left out. Each item actually appended drops a suggestion with the same id |
 | `queue_remove` | `id` | Removes an item other than the room's own |
 | `queue_move` | `id`, `to` (the item's new index) | Moves an upcoming item to another upcoming place; the room's item and the watched ones keep theirs |
 | `queue_advance` | `id` | Moves the room to that queued item |
 | `queue_countdown` | `start` (boolean) | Starts a 10-second countdown toward the next item, or cancels it |
+| `queue_suggest` | `{ id, title, series? }`, validated like one `queue_add` item | Appends a suggestion with the sender's current display name, unless the id is queued or suggested already or there are already 10 suggestions |
+| `queue_dismiss` | `id` | Removes a suggestion when sent by the host or by the member who suggested it; otherwise it is ignored |
+| `queue_availability` | `missing`: 0 to 30 item ids | Replaces this member's report of queued or suggested items their Jellyfin user cannot open; the report is forgotten when they leave |
 
 **Moving to another item** (`queue_advance`, or a countdown that ends):
 - The room's `media_id` becomes the item's; the position goes back to 0, paused, and the ready set is cleared
@@ -438,7 +443,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "queue_suggestions", "start_when_ready"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -626,6 +631,25 @@ The room's authoritative [queue](#room-queue), sent only to members that declare
 | `current` | number or null | Index of the room's `media_id` in `items`, or `null` when it isn't queued |
 | `last_added` | string or null | The last item `queue_add` appended, or `null` before the first. It stays after that item is removed: the host's web client fills the queue on from it, so an episode the host removed doesn't come back after a reload or a host change |
 | `countdown_until` | number or null | Server time (ms) at which the room moves to the next item, or `null` |
+
+### `queue_details`
+
+Suggestions and item availability, sent only to members that declared `queue_suggestions`. It follows every `queue_state`, is sent after a suggestion is added or dismissed, after a visible availability change, and after a reporting member leaves. The payload is built for each recipient.
+
+```json
+{
+  "type": "queue_details",
+  "room": "uuid-room-id",
+  "payload": {
+    "suggestions": [{ "id": "0123456789abcdef0123456789abcdef", "title": "The Storm", "by": "Ana", "mine": false }],
+    "unavailable": [{ "id": "0123456789abcdef0123456789abcdef", "names": ["Ana"], "you": false }]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+`suggestions` keeps suggestion order; optional `series` is present only when supplied, and `mine` uses the suggester's stable user id (or client id when no user id exists). `unavailable` follows queue order and then suggestion order, omits items nobody currently reports, lists other reporting members in room join order, never includes the recipient in `names`, and records the recipient separately in `you`. Reports for ids no longer queued or suggested are ignored.
 
 ### `start_state`
 

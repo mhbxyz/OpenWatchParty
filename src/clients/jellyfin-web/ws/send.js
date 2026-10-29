@@ -59,6 +59,7 @@
 
   const resetRoomState = () => {
     resetRoomPlayback();
+    if (OWP.queue?.resetRoom) OWP.queue.resetRoom();
     resetRoomMembership();
     resetRoomUI();
     Object.assign(state, OWP.stateFactories.createInviteWorkState());

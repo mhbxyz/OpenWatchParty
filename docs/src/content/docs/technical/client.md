@@ -45,8 +45,9 @@ The 40 modules are loaded in dependency waves, parallelizing where possible:
 focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
 `leave-confirm.js`; room sections and chat input setup in `room.js`; the room
-queue's section and up-next strip in `queue.js`, whose host logic (filling the
-queue, starting the countdown at the credits) is `app/queue.js`. `app/start.js`
+queue's section, library search, suggestions, availability warnings and up-next
+strip in `queue.js`, whose behavior (searching, filling the queue, availability
+checks and starting the countdown at the credits) is `app/queue.js`. `app/start.js`
 reports this client's readiness and follows `start_state`; `room.js` shows it in
 the room bar.
 
@@ -138,6 +139,8 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | `queueCountdownUntil` | number | Server time (ms) at which the room moves to the next item; 0 without a countdown |
 | `queueLastAdded` | string\|null | `last_added` from `queue_state`: the item the room's queue was filled up to |
 | `queueReceived` | boolean | `true` once `queue_state` came for this room since joining or reconnecting; the host waits for it before filling the queue |
+| `queueSuggestions` | array | Per-recipient `{ id, title, series?, by, mine }` entries from `queue_details` |
+| `queueUnavailable` | array | Per-recipient `{ id, names, you }` entries from `queue_details` |
 | `lastSyncServerTs` | number | Server timestamp of last sync |
 | `lastSyncPosition` | number | Position of last sync (seconds) |
 | `lastSyncPlayState` | string | Play state of last sync |
@@ -353,7 +356,7 @@ previous drift-correction status.
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "queue_suggestions"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
 
 `room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. The host keeps the play and pause it sent (`hostControlAcks`) until their canonical events return, and retires them without applying them again; a newer opposite control supersedes a pending command, and a guest command that changes neither the play state nor the position does not start the syncing lock. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
@@ -436,6 +439,17 @@ Stores each participant's status, when the list has the same length as the parti
 
 #### `queue_state` and media queue
 The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.
+
+With `queue_suggestions`, the queue panel searches `Users/{user}/Items` after a
+300 ms debounce and resolves a series to this user's `Shows/NextUp` episode, or
+its first real episode. A host sends the selected item with `queue_add`,
+prepending the room item when it is not queued; a guest sends `queue_suggest`.
+`queue_details` updates the room-scoped suggestion and unavailability state.
+For every queued or suggested ID not checked in this room, the client calls
+`ApiClient.getItem`: only HTTP 404 is reported missing, while other failures are
+retried on the next queue snapshot/details. Changed, sorted missing sets are
+sent with `queue_availability`; an initially empty set is omitted. The cache and
+last report are discarded on a room or connection change.
 
 #### `start_state` and readiness
 With a server that acknowledges `start_when_ready`, `app/start.js` sends `readiness` when this client's reason changes, from `start.ownReason()`: `loading` until the room's media shows (`transcoding` when it comes through the server's HLS, a `blob:` or `.m3u8` source), `autoplay_blocked` after the browser stopped a play, and `buffering` while the video stalls (`waiting`) or seeks. A paused video that has its frame (`readyState` 2) is ready: browsers stop loading a paused video. It runs on every sync tick and on the video's own events. While the room waits (`start_state` `waiting`) or counts down (`starting` with `countdown`), the client pauses its video at the play's position as OWP's own action (nothing is sent) and holds its room work (`pendingPlayUntil`). A play pressed meanwhile sends `start_now` while the room waits and only keeps waiting during the countdown; OWP's own play at the start time goes through. `ui.updateStartLabel()` puts "Waiting for Ana" (two names, or a count) or "Starting in 3" in place of the room's name, centred in the name's place with as much space after it as the fixed-width latency leaves before it, and as wide as the name at least so the bar keeps its size; with the panel closed it shows on its own where the bar would be (`#owp-start-float`). Selecting it sends `start_now` for the host, or a guest sharing the controls; its tooltip names each member's reason. SERVER lines in the chat (`chat.system()`) say who the room waits for and why, who got ready (a moment later, and not for a member whose `client_left` came meanwhile), who it started without, and a cancelled start. Only the last kind, an error, counts as unread and shows a toast.

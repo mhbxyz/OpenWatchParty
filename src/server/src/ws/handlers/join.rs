@@ -742,7 +742,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn join_sends_the_queue_to_a_joiner_that_negotiated_it() {
+    async fn join_sends_the_negotiated_queue_messages_in_order() {
         for supports_queue in [true, false] {
             let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
             {
@@ -752,6 +752,11 @@ mod tests {
                     .get_mut("guest")
                     .unwrap()
                     .supports_media_queue = supports_queue;
+                locked
+                    .clients
+                    .get_mut("guest")
+                    .unwrap()
+                    .supports_queue_suggestions = true;
                 let room = locked.rooms.get_mut("room").unwrap();
                 room.media_id = Some("a".repeat(32));
                 room.queue.add(
@@ -775,14 +780,19 @@ mod tests {
                 std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
             let queue = messages
                 .iter()
-                .find(|msg| msg.msg_type == ServerMessageType::QueueState);
+                .position(|msg| msg.msg_type == ServerMessageType::QueueState);
             assert_eq!(queue.is_some(), supports_queue);
             if let Some(queue) = queue {
-                let payload = queue.payload.as_ref().unwrap();
+                let payload = messages[queue].payload.as_ref().unwrap();
                 assert_eq!(payload["current"], 0);
                 assert_eq!(payload["items"].as_array().unwrap().len(), 1);
                 assert_eq!(payload["last_added"], "b".repeat(32));
             }
+            let details = messages
+                .iter()
+                .position(|msg| msg.msg_type == ServerMessageType::QueueDetails)
+                .unwrap();
+            assert!(queue.is_none_or(|queue| queue < details));
         }
     }
 

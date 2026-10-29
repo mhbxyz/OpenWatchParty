@@ -65,6 +65,15 @@
     if (OWP.queue?.onQueueState) OWP.queue.onQueueState();
   };
 
+  h.handleQueueDetails = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    const previous = state.queueSuggestions;
+    state.queueSuggestions = msg.payload.suggestions;
+    state.queueUnavailable = msg.payload.unavailable;
+    if (OWP.queue?.onQueueDetails) OWP.queue.onQueueDetails(previous);
+    if (ui.updateQueue) ui.updateQueue();
+  };
+
   h.handleStartState = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     if (OWP.start?.onStartState) OWP.start.onStartState(msg.payload);

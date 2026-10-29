@@ -96,6 +96,21 @@ fn valid_id(id: String) -> Option<String> {
     is_valid_media_id(&id).then_some(id)
 }
 
+pub(super) fn validated_item(
+    id: String,
+    title: String,
+    series: Option<String>,
+) -> Option<QueueItem> {
+    Some(QueueItem {
+        id: valid_id(id)?,
+        title: sanitize_name(&title)?,
+        series: match series {
+            Some(series) => Some(valid_id(series)?),
+            None => None,
+        },
+    })
+}
+
 impl QueueCommand {
     fn parse(parsed: &IncomingMessage) -> Option<Self> {
         let payload = parsed.payload.clone()?;
@@ -107,16 +122,7 @@ impl QueueCommand {
                 }
                 let items = items
                     .into_iter()
-                    .map(|item| {
-                        Some(QueueItem {
-                            id: valid_id(item.id)?,
-                            title: sanitize_name(&item.title)?,
-                            series: match item.series {
-                                Some(series) => Some(valid_id(series)?),
-                                None => None,
-                            },
-                        })
-                    })
+                    .map(|item| validated_item(item.id, item.title, item.series))
                     .collect::<Option<_>>()?;
                 Self::Add(items)
             }
@@ -253,18 +259,18 @@ pub(super) fn send_queue_state(room: &Room, clients: &HashMap<String, Client>, o
         .filter(|client| client.supports_media_queue)
         .map(|client| client.sender.clone())
         .collect();
-    if senders.is_empty() {
-        return;
+    if !senders.is_empty() {
+        let message = WsMessage {
+            msg_type: ServerMessageType::QueueState,
+            room: Some(room.room_id.clone()),
+            client: None,
+            payload: Some(room.queue.payload(room.media_id.as_deref())),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        };
+        send_to_senders(&senders, &message, "queue state");
     }
-    let message = WsMessage {
-        msg_type: ServerMessageType::QueueState,
-        room: Some(room.room_id.clone()),
-        client: None,
-        payload: Some(room.queue.payload(room.media_id.as_deref())),
-        ts: now_ms(),
-        server_ts: Some(now_ms()),
-    };
-    send_to_senders(&senders, &message, "queue state");
+    super::queue_suggestions::send_queue_details(room, clients, only);
 }
 
 /// Tells every member the room moved: `room_state` to all of them, then
