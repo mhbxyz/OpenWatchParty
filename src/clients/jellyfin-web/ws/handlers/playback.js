@@ -37,6 +37,10 @@
     return activeVideo || (fallbackIsUsable ? fallbackVideo : null);
   };
 
+  // What the guests read when the host skips a segment with Jellyfin's Skip
+  // button, so the jump does not surprise them.
+  const SKIP_TOASTS = { Intro: 'hostSkippedIntro', Recap: 'hostSkippedRecap', Outro: 'hostSkippedCredits' };
+
   // The canonical event retains the initiating member, even after readiness.
   const fromGuest = msg => Boolean(msg.client) && msg.client !== state.roomHostId;
 
@@ -73,7 +77,10 @@
         if (applyToVideo) video.pause();
         if (ui.showToast) ui.showToast(t(fromGuest(msg) ? 'guestPaused' : 'hostPaused'));
         break;
-      case 'seek':
+      case 'seek': {
+        // Where the room was before this seek. Only guests get here: the
+        // host's own seeks do not come back to it.
+        const before = state.lastSyncPlayState === 'playing' ? OWP.playback.expectedPosition?.() : state.lastSyncPosition;
         state.roomWaiting = false;
         applyPosition(video, position, hostPlayState === 'playing', msg.server_ts, applyToVideo);
         state.lastSyncPlayState = hostPlayState;
@@ -85,7 +92,14 @@
           state.syncStatus = 'synced';
           if (applyToVideo) video.pause();
         }
+        if (OWP.segments && ui.showToast) {
+          OWP.segments.whenKnown(() => {
+            const skipped = OWP.segments.skipped(before, position);
+            if (skipped) ui.showToast(t(SKIP_TOASTS[skipped]));
+          });
+        }
         break;
+      }
       case 'buffering':
         state.roomWaiting = true;
         applyPosition(video, position, false, null, applyToVideo);

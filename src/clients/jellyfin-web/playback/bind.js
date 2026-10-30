@@ -3,7 +3,7 @@
   const playback = OWP.playback = OWP.playback || {};
   const state = OWP.state;
   const utils = OWP.utils;
-  const { STATE_UPDATE_MS, SEEK_THRESHOLD, STREAM_RELOAD_MAX_MS, OWN_COMMAND_HOLD_MS } = OWP.constants;
+  const { STATE_UPDATE_MS, SEEK_THRESHOLD, STREAM_RELOAD_MAX_MS, OWN_COMMAND_HOLD_MS, DRIFT_SOFT_MAX_SEC } = OWP.constants;
   const hasPendingRoomWork = () => Boolean(
     (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil)
     || (state.pendingMediaId && state.pendingMediaUntil && utils.nowMs() < state.pendingMediaUntil)
@@ -143,6 +143,28 @@
     }
   };
 
+  // A guest's Jellyfin set to skip intros (or credits, recaps) by itself takes
+  // it to the end of a segment the room still plays in (when the host skips,
+  // the room is past it too). The sync loop brings it back at once, without the
+  // cooldown that holds hard seeks for a while after an item starts, which is
+  // when intros come.
+  const returnFromOwnSkip = (video) => {
+    if (!OWP.segments) return;
+    const position = video.currentTime;
+    // Maybe once Jellyfin answers: the room is looked at then.
+    OWP.segments.whenKnown(() => {
+      if (!state.inRoom || state.isHost || state.lastSyncPlayState !== 'playing') return;
+      // A stream that reloaded meanwhile is another video.
+      if (state.currentVideoElement !== video) return;
+      const roomPosition = playback.expectedPosition();
+      if (!OWP.segments.skipped(roomPosition, position)) return;
+      if (Math.abs(roomPosition - video.currentTime) < DRIFT_SOFT_MAX_SEC) return;
+      utils.log('SYNC', { type: 'own_skip', pos: position, room: roomPosition });
+      state.syncCooldownUntil = 0;
+      if (OWP.ui?.showToast) OWP.ui.showToast(OWP.i18n.t('hostOnlySeek'));
+    });
+  };
+
   // A guest's own play or pause is the room's: the server passes it to everyone,
   // the host included. OWP's own plays and pauses set the room state first, so
   // they never match here.
@@ -232,6 +254,7 @@
       },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
+        returnFromOwnSkip(video);
         onHostEvent('seek', video);
       },
       // The room waits for the host's reload as it does while the host buffers,

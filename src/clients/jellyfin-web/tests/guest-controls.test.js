@@ -284,6 +284,33 @@ describe('guest playback controls', () => {
     assert.deepEqual(h.toasts, ['Only the host can seek']);
   });
 
+  it("blocks Jellyfin's own skip button, outside the OSD, for a guest only", () => {
+    // Jellyfin adds its Skip Intro (or credits, recap) prompt to the body.
+    const container = h.document.createElement('div');
+    container.className = 'skip-button-container';
+    const skip = h.document.createElement('button');
+    skip.className = 'skip-button';
+    const icon = h.document.createElement('span');
+    icon.className = 'material-icons skip_next';
+    skip.appendChild(icon);
+    container.appendChild(skip);
+    h.document.body.appendChild(container);
+
+    h.setGuest({ paused: false, playState: 'playing' });
+    for (const target of [skip, icon]) {
+      const event = h.dispatch('click', target);
+      assert.equal(event.defaultPrevented, true);
+      assert.equal(event.immediatePropagationStopped, true);
+    }
+    assert.deepEqual(h.toasts, ['Only the host can seek']);
+
+    h.OWP.state.isHost = true;
+    assert.equal(Boolean(h.dispatch('click', skip).defaultPrevented), false);
+    h.OWP.state.isHost = false;
+    h.OWP.state.inRoom = false;
+    assert.equal(Boolean(h.dispatch('click', skip).defaultPrevented), false);
+  });
+
   it('lets a guest play and pause, and blocks play only while the room waits for the host', () => {
     h.setGuest({ paused: false, playState: 'playing' });
     assert.equal(Boolean(h.dispatch('click', h.buttons.btnPause).defaultPrevented), false);

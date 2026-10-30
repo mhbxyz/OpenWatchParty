@@ -32,7 +32,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   └── handlers/
     │       ├── clock.js, playback.js, room.js, sync.js
     └── app/                 # Initialization and cleanup
-        ├── cleanup.js, invite.js, lifecycle.js, queue.js
+        ├── cleanup.js, invite.js, lifecycle.js, queue.js, segments.js
 ```
 
 The 40 modules are loaded in dependency waves, parallelizing where possible:
@@ -46,7 +46,12 @@ focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
 `leave-confirm.js`; room sections and chat input setup in `room.js`; the room
 queue's section and up-next strip in `queue.js`, whose host logic (filling the
-queue, starting the countdown at the credits) is `app/queue.js`. `app/start.js`
+queue, starting the countdown at the credits) is `app/queue.js`. `app/segments.js`
+keeps the segments of the room's item that Jellyfin offers to skip (`Intro`,
+`Recap`, `Outro`, as Intro Skipper marks them) and tells a seek that skipped one
+from any other: from inside the segment (or up to 1.5 s before it starts) to its
+end (0.5 s short of it to 1.5 s past it). A check made before Jellyfin answers
+runs when it does. `app/start.js`
 reports this client's readiness and follows `start_state`; `room.js` shows it in
 the room bar.
 
@@ -299,7 +304,7 @@ Binds video events to synchronization handlers.
 - `playing`: Sets `isBuffering = false`; a host may report the end of a stream reload
 - `play`: A host reports it; a guest reports it only with negotiated `sharedPlaybackControl`
 - `pause`: A host reports it (ignored if buffering); a guest reports it only with negotiated shared control
-- `seeked`: The host reports it; guests cannot seek the room
+- `seeked`: The host reports it; guests cannot seek the room. A guest that Jellyfin took to the end of a segment of the room's item by itself (its Skip setting) while the room still plays in it (from the room's expected position) gets the `hostOnlySeek` toast and loses `syncCooldownUntil`, so the next sync loop seeks it back at once
 
 **Send logic (`sendStateUpdate`):**
 ```
@@ -454,7 +459,7 @@ Playback command received from host:
 4. Actions based on `action`:
    - `play`: Schedule play at `target_server_ts` or immediate with compensation
    - `pause`: Schedule pause
-   - `seek`: Schedule seek
+   - `seek`: Schedule seek; when the room was in an intro, recap or credits segment (its expected position while playing, its position while paused) and the seek goes to its end, the guest shows that the host skipped it
 
 #### `state_update`
 Periodic update from host:
