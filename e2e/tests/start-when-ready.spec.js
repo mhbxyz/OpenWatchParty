@@ -138,8 +138,7 @@ test('selecting the waiting label starts without the guest, and says so as an er
 
   await helpers.togglePlayback(host);
   await expect(startLabel(host)).toContainText(`Waiting for ${helpers.GUEST_USER}`);
-  await helpers.ensureRoomBarVisible(host);
-  await startLabel(host).click();
+  await helpers.clickRoomBar(host, startLabel(host));
 
   await helpers.waitForPlaying(host);
   await helpers.waitForPlaying(guest);
