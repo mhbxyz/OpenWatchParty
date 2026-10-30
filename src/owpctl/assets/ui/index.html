@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>OpenWatchParty diagnostics</title>
+  <style>
+    :root{color-scheme:dark;--bg:#111827;--card:#1f2937;--text:#f9fafb;--hint:#9ca3af;--line:#374151;--pass:#22c55e;--warning:#f59e0b;--fail:#ef4444}
+    *{box-sizing:border-box}
+    body{margin:0;font:16px system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text)}
+    button{font:inherit}
+    .shell{width:min(960px,calc(100% - 32px));margin:auto;padding:24px 0 34px}
+    header{margin-bottom:24px}
+    .headline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+    h1{font-size:clamp(28px,5vw,40px);line-height:1.08;letter-spacing:-.035em;margin:0}
+    .pill{padding:4px 9px;border:1px solid #4b5563;border-radius:999px;color:#d1d5db;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+    .instance{display:flex;flex-wrap:wrap;gap:6px 10px;margin:12px 0 0;color:var(--hint);font-size:14px}
+    .instance strong{color:#d1d5db;font-weight:600}
+    .version{margin-left:auto}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.06);border-radius:16px}
+    .overall{display:flex;align-items:center;gap:18px;padding:22px 24px;margin-bottom:24px;box-shadow:0 12px 28px rgba(0,0,0,.16)}
+    .overall-mark{display:grid;place-items:center;flex:0 0 52px;height:52px;border-radius:15px;font-size:29px;font-weight:800;background:color-mix(in srgb,var(--status) 16%,transparent);color:var(--status)}
+    .overall-copy{min-width:150px}
+    .overall-copy h2{font-size:23px;line-height:1.2;margin:0 0 6px}
+    .overall-copy p{margin:0;color:var(--hint);font-size:14px}
+    .actions{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap}
+    .actions button{border:1px solid #4b5563;border-radius:10px;padding:10px 14px;color:var(--text);background:#273449;font-weight:700;cursor:pointer;white-space:nowrap}
+    .actions .primary{border-color:#2563eb;background:#2563eb}
+    .actions button:hover{filter:brightness(1.12)}
+    .actions button:disabled{cursor:wait;filter:none;opacity:.65}
+    .actions button:focus-visible{outline:3px solid #93c5fd;outline-offset:2px}
+    .grid{display:grid;grid-template-columns:1fr;gap:14px}
+    .tile{position:relative;display:grid;grid-template-columns:38px 1fr;gap:13px;padding:18px 18px 17px;border-left:4px solid var(--status);overflow:hidden}
+    .tile::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,color-mix(in srgb,var(--status) 7%,transparent),transparent 48%)}
+    .tile.fail{border-color:var(--fail);box-shadow:0 0 0 1px rgba(239,68,68,.28),0 12px 26px rgba(0,0,0,.17)}
+    .mark{position:relative;z-index:1;display:grid;place-items:center;width:36px;height:36px;border-radius:10px;color:var(--status);background:color-mix(in srgb,var(--status) 14%,transparent);font-size:20px;font-weight:900}
+    .details{position:relative;z-index:1;min-width:0}
+    .details h3{font-size:17px;line-height:1.25;margin:1px 0 7px}
+    .summary{margin:0;color:#d1d5db;line-height:1.48;overflow-wrap:anywhere}
+    .id{display:block;margin-top:12px;color:var(--hint);font:12px ui-monospace,SFMono-Regular,Consolas,monospace}
+    .pass{--status:var(--pass)}.warning{--status:var(--warning)}.fail{--status:var(--fail)}
+    footer{margin-top:24px;padding:0 3px;color:var(--hint);font-size:13px;line-height:1.55}
+    code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#d1d5db}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(min-width:720px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:650px){.overall{align-items:flex-start;flex-wrap:wrap}.actions{width:100%;margin:2px 0 0}.actions button{flex:1 1 190px}}
+    @media(max-width:440px){.shell{width:calc(100% - 24px);padding-top:14px}.overall{padding:18px}.version{width:100%;margin-left:0}.tile{padding:16px 14px}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="headline"><h1>OpenWatchParty diagnostics</h1><span class="pill">Read-only</span></div>
+      <p class="instance"><span id="instance-details">Loading configuration…</span><span class="version">owpctl <span id="version">…</span></span></p>
+    </header>
+    <section id="overall" class="overall card warning" aria-live="polite">
+      <div id="overall-mark" class="overall-mark" aria-hidden="true">…</div>
+      <div class="overall-copy"><h2 id="overall-title">Running checks…</h2><p id="last-run"></p></div>
+      <div class="actions"><button id="run" class="primary" type="button" disabled>Running…</button><button id="download" type="button">Download support report</button></div>
+    </section>
+    <section><h2 class="sr-only">Diagnostic checks</h2><div id="checks" class="grid"></div></section>
+    <footer>This dashboard only reads. Run <code>owpctl doctor --bundle &lt;file&gt;</code> for the same report from the terminal.</footer>
+  </main>
+  <script>
+    const titles={docker:"Docker",compose:"Docker Compose",jellyfin:"Jellyfin",session_server:"Session server",session_ready:"Readiness",plugin:"Plugin",versions:"Versions",authentication:"Authentication",mixed_content:"Secure WebSocket",websocket:"WebSocket",clock:"Latency and clock",installation_phase:"Installation",plugin_report:"Plugin report",configuration:"Configuration"};
+    const states={pass:{icon:"✓",text:"Passed"},warning:{icon:"!",text:"Warning"},fail:{icon:"✕",text:"Failed"}};
+    const el=id=>document.getElementById(id);
+    const fetchOptions={credentials:"same-origin",headers:{"X-OWP-CSRF":"1"}};
+    function showFailure(message){
+      el("overall").className="overall card fail";el("overall-mark").textContent=states.fail.icon;el("overall-title").textContent=message;
+    }
+    function httpFailure(action,status){
+      if(status===401||status===403)return "This dashboard session has ended. Run owpctl ui again.";
+      return `Could not ${action} (HTTP ${status})`;
+    }
+    function render(data){
+      const report=data.report,fails=report.checks.filter(c=>c.status==="fail").length,warnings=report.checks.filter(c=>c.status==="warning").length;
+      let title="All checks passed";
+      if(report.overall==="warning")title=`${warnings} warning${warnings===1?"":"s"}`;
+      if(report.overall==="fail")title=`${fails} check${fails===1?"":"s"} failed${warnings?`, ${warnings} warning${warnings===1?"":"s"}`:""}`;
+      el("overall").className=`overall card ${report.overall}`;el("overall-mark").textContent=states[report.overall].icon;el("overall-title").textContent=title;el("version").textContent=data.owpctl_version;
+      const instance=el("instance-details");instance.replaceChildren();
+      if(data.instance){
+        const jellyfin=document.createElement("span"),jellyfinLabel=document.createElement("strong"),separator=document.createElement("span"),websocket=document.createElement("span"),websocketLabel=document.createElement("strong");
+        jellyfinLabel.textContent="Jellyfin";jellyfin.append(jellyfinLabel,document.createTextNode(` ${data.instance.jellyfin}`));separator.setAttribute("aria-hidden","true");separator.textContent=" · ";websocketLabel.textContent="Session server";websocket.append(websocketLabel,document.createTextNode(` ${data.instance.websocket}`));instance.append(jellyfin,separator,websocket);
+      }else instance.textContent="No configuration yet: run owpctl setup";
+      const ordered=["fail","warning","pass"].flatMap(status=>report.checks.filter(check=>check.status===status));
+      el("checks").replaceChildren(...ordered.map(check=>{
+        const article=document.createElement("article");article.className=`tile card ${check.status}`;
+        const mark=document.createElement("div");mark.className="mark";mark.setAttribute("aria-hidden","true");mark.textContent=states[check.status].icon;
+        const details=document.createElement("div");details.className="details";
+        const heading=document.createElement("h3"),status=document.createElement("span"),summary=document.createElement("p"),id=document.createElement("span");
+        status.className="sr-only";status.textContent=`${states[check.status].text}: `;heading.append(status,document.createTextNode(titles[check.id]||check.id));
+        summary.className="summary";summary.textContent=check.summary;id.className="id";id.textContent=check.id;details.append(heading,summary,id);article.append(mark,details);return article;
+      }));
+      const now=new Date(),time=[now.getHours(),now.getMinutes(),now.getSeconds()].map(value=>String(value).padStart(2,"0")).join(":");el("last-run").textContent=`Last run ${time}`;
+    }
+    async function runChecks(){
+      const button=el("run");button.textContent="Running…";button.disabled=true;el("overall").className="overall card warning";el("overall-title").textContent="Running checks…";el("overall-mark").textContent="…";
+      let status=null;
+      try{
+        const response=await fetch("/api/report",fetchOptions);status=response.status;if(!response.ok)throw new Error();render(await response.json());
+      }catch(error){showFailure(status===null?"owpctl ui is not running. Run it again.":httpFailure("run the checks",status));}
+      finally{button.textContent="Run again";button.disabled=false;}
+    }
+    async function downloadBundle(){
+      const button=el("download");button.disabled=true;let status=null;
+      try{
+        const response=await fetch("/api/bundle",fetchOptions);status=response.status;if(!response.ok)throw new Error();const blob=await response.blob(),disposition=response.headers.get("content-disposition")||"",match=/filename="([^"]+)"/.exec(disposition),link=document.createElement("a"),url=URL.createObjectURL(blob);link.href=url;link.download=match?match[1]:"owp-support.json";document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }catch(error){showFailure(status===null?"owpctl ui is not running. Run it again.":httpFailure("download the support report",status));}
+      finally{button.disabled=false;}
+    }
+    history.replaceState(null,"","/");el("run").addEventListener("click",runChecks);el("download").addEventListener("click",downloadBundle);runChecks();
+  </script>
+</body>
+</html>

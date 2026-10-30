@@ -138,12 +138,24 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             Ok(())
         }
         Command::Doctor(arguments) => {
-            let (report, config, state) = diagnostics(&paths, &arguments)?;
+            let (mut report, config, state) = diagnostics(&paths, &arguments)?;
+            let plugin_report = arguments.bundle.as_ref().and_then(|_| {
+                crate::diagnostics::collect_plugin_report(
+                    &mut report,
+                    config.as_ref(),
+                    arguments.api_token_file.as_deref(),
+                )
+            });
             if !arguments.quiet {
                 crate::output::print_diagnostics(&report, cli.json)?;
             }
             if let Some(path) = &arguments.bundle {
-                let bundle = crate::diagnostics::bundle(&report, config.as_ref(), state.as_ref());
+                let bundle = crate::diagnostics::bundle(
+                    &report,
+                    config.as_ref(),
+                    state.as_ref(),
+                    plugin_report.as_ref(),
+                );
                 crate::storage::write_json(path, &bundle)?;
                 if !arguments.quiet {
                     println!("Support bundle written to {}", path.display());
@@ -151,6 +163,7 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             }
             Ok(())
         }
+        Command::Ui(arguments) => crate::ui::run(paths, arguments),
         Command::Logs(arguments) => {
             if !paths.config_file.exists() {
                 bail!("run `owpctl setup` first");
@@ -177,16 +190,7 @@ fn diagnostics(
     Option<DesiredConfig>,
     Option<InstallationState>,
 )> {
-    let config: Option<DesiredConfig> = paths
-        .config_file
-        .exists()
-        .then(|| crate::storage::read_toml(&paths.config_file))
-        .transpose()?;
-    let state: Option<InstallationState> = paths
-        .state_file
-        .exists()
-        .then(|| crate::storage::read_json(&paths.state_file))
-        .transpose()?;
+    let (config, state) = crate::diagnostics::load(paths)?;
     let report = crate::diagnostics::run(
         config.as_ref(),
         state.as_ref(),

@@ -168,7 +168,7 @@ fn authorized(state: &WebState, headers: &HeaderMap) -> bool {
             == Some("1")
 }
 
-fn secure_headers(headers: &mut HeaderMap) {
+pub(crate) fn secure_headers(headers: &mut HeaderMap) {
     headers.insert("content-security-policy", HeaderValue::from_static(
         "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"));
     headers.insert(
@@ -179,7 +179,7 @@ fn secure_headers(headers: &mut HeaderMap) {
     headers.insert("cache-control", HeaderValue::from_static("no-store"));
 }
 
-fn random_token() -> String {
+pub(crate) fn random_token() -> String {
     let mut bytes = [0_u8; 32];
     rand::fill(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
