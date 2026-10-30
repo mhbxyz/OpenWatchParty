@@ -138,12 +138,31 @@ pub fn run(cli: Cli) -> anyhow::Result<()> {
             Ok(())
         }
         Command::Doctor(arguments) => {
-            let (report, config, state) = diagnostics(&paths, &arguments)?;
+            let (mut report, config, state) = diagnostics(&paths, &arguments)?;
+            let mut plugin_report = None;
+            if let (Some(_), Some(config), Some(token_file)) = (
+                arguments.bundle.as_ref(),
+                config.as_ref(),
+                arguments.api_token_file.as_deref(),
+            ) {
+                match crate::diagnostics::fetch_plugin_report(config, token_file) {
+                    Ok(value) => plugin_report = Some(value),
+                    Err(error) => report.add_warning(
+                        "plugin_report",
+                        format!("could not collect the plugin diagnostics report: {error}"),
+                    ),
+                }
+            }
             if !arguments.quiet {
                 crate::output::print_diagnostics(&report, cli.json)?;
             }
             if let Some(path) = &arguments.bundle {
-                let bundle = crate::diagnostics::bundle(&report, config.as_ref(), state.as_ref());
+                let bundle = crate::diagnostics::bundle(
+                    &report,
+                    config.as_ref(),
+                    state.as_ref(),
+                    plugin_report.as_ref(),
+                );
                 crate::storage::write_json(path, &bundle)?;
                 if !arguments.quiet {
                     println!("Support bundle written to {}", path.display());

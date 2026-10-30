@@ -138,6 +138,19 @@ impl JellyfinClient {
         self.get("OpenWatchParty/Token")
     }
 
+    pub fn diagnostics_report(&self) -> anyhow::Result<serde_json::Value> {
+        let token = self
+            .token
+            .as_ref()
+            .context("Jellyfin admin token is required")?;
+        let response = self
+            .client
+            .post(self.url("OpenWatchParty/Diagnostics/Run")?)
+            .header("Authorization", authorization_header(Some(token)))
+            .send()?;
+        checked_json(response)
+    }
+
     pub fn signing_key(&self) -> anyhow::Result<SigningKeyInfo> {
         self.get("OpenWatchParty/SigningKey")
     }

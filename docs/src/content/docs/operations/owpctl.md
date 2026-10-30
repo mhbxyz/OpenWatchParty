@@ -104,7 +104,22 @@ owpctl doctor --json --api-token-file /run/owp-jellyfin-token
 owpctl doctor --bundle /tmp/owp-support.json --api-token-file /run/owp-jellyfin-token
 ```
 
-`doctor` verifies Docker, Jellyfin, plugin metadata, session health, JWT issuance and an authenticated WebSocket ping/pong. It never prints the token or JWT. `--bundle` writes a redacted support file (the report, the desired configuration and the installation state, with the secret fingerprint removed) that can be shared when asking for help.
+`doctor` runs these checks in order:
+
+- `docker`: verifies that the Docker daemon is reachable; failure means the managed services cannot be inspected or started.
+- `compose`: verifies that Docker Compose is installed; failure means the managed stack cannot be operated.
+- `jellyfin`: reads Jellyfin's public system information; failure means the configured Jellyfin URL is unreachable or invalid.
+- `session_server`: validates the session server `/health` response, version, protocol and authentication mode; failure means the server is unreachable, unhealthy or returned an unexpected response.
+- `session_ready`: checks `/ready`; failure means the server is shutting down, not ready or the reverse proxy does not expose the endpoint.
+- `plugin`: reads the installed plugin metadata with the admin token; failure means the plugin is absent or the token lacks access.
+- `versions`: compares Jellyfin, plugin, session-server and protocol versions with the compatibility matrix; failure identifies the component that must be upgraded or changed.
+- `authentication`: compares token issuance with the session server's authentication mode; failure means their JWT modes or keys are configured inconsistently.
+- `mixed_content`: verifies that an HTTPS Jellyfin page uses `wss://`; failure means browsers will block the WebSocket connection.
+- `websocket`: performs a real upgrade, origin check, JWT authentication and ping/pong; failure distinguishes proxy, origin and authentication problems.
+- `clock`: measures WebSocket round-trip latency and server clock offset; a warning indicates high latency or a clock that should be synchronized with NTP.
+- `installation_phase`: warns when a saved installation did not reach its ready phase and should be resumed.
+
+It never prints the token, JWT or secret. `--bundle` writes a redacted support file containing the report, desired configuration, installation state and, when an admin token is supplied, the plugin's own diagnostics report. The installation secret fingerprint is removed, and a plugin-report collection failure is recorded as a warning instead of preventing the bundle from being written.
 
 ## Maintenance
 
