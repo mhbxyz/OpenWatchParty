@@ -170,6 +170,7 @@ public class PluginConfigurationTests
     [InlineData("solid", "solid")]
     [InlineData("light", "light")]
     [InlineData("contrast", "contrast")]
+    [InlineData("jellyfin", "jellyfin")]
     [InlineData("Light", "glass")]
     [InlineData("neon", "glass")]
     [InlineData("", "glass")]
@@ -220,7 +221,7 @@ public class PluginConfigurationTests
         Assert.Contains("id=\"AppearanceOpacity\" min=\"40\" max=\"100\" step=\"5\"", page, StringComparison.Ordinal);
         Assert.Contains("id=\"AppearanceTextSize\" min=\"12\" max=\"18\" step=\"1\"", page, StringComparison.Ordinal);
         Assert.Contains("id=\"ResetAppearanceButton\"", page, StringComparison.Ordinal);
-        foreach (var preset in new[] { "glass", "solid", "light", "contrast" })
+        foreach (var preset in new[] { "glass", "solid", "light", "contrast", "jellyfin" })
         {
             Assert.Contains($"<option value=\"{preset}\"", page, StringComparison.Ordinal);
         }

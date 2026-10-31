@@ -231,7 +231,7 @@ describe('configuration page appearance theme', () => {
   it('moves the opacity to the suggestion of the chosen theme, which can then change', async () => {
     const form = loadConfigPage(baseConfig);
     await form.show();
-    for (const [preset, suggested] of [['solid', 100], ['light', 85], ['contrast', 100], ['glass', 55]]) {
+    for (const [preset, suggested] of [['solid', 100], ['light', 85], ['contrast', 100], ['jellyfin', 95], ['glass', 55]]) {
       form.choose('AppearancePreset', preset);
       assert.deepEqual(opacity(form), [suggested, `${suggested} %`], preset);
     }

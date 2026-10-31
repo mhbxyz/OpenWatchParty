@@ -106,6 +106,12 @@ describe('appearance settings', () => {
     assert.deepEqual(variables(), { scale: 14 / 12, alpha: 1 });
     set(100, 14, 'solid');
     assert.deepEqual(presetVariables(), { '--owp-blur': '0px' });
+    set(95, 14, 'jellyfin');
+    assert.equal(presetVariables()['--owp-accent'], '#00a4dc');
+    assert.equal(presetVariables()['--owp-surface'], '32, 32, 32');
+    assert.equal(presetVariables()['--owp-round'], '0.3');
+    assert.equal(presetVariables()['--owp-avatar-bg'], '#00a4dc');
+    assert.equal(presetVariables()['--owp-blur'], '0px');
     for (const preset of ['glass', undefined, 'neon', 'constructor']) {
       set(55, 14, preset);
       assert.deepEqual(presetVariables(), {}, String(preset));
@@ -134,7 +140,7 @@ describe('appearance styles', () => {
 
   it('scales every size of the panel and the toasts with the text size', () => {
     const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
-    const unscaled = panel.replace(/calc\(-?\d+(\.\d+)?px \* var\(--owp-scale\)\)/g, '');
+    const unscaled = panel.replace(/calc\(-?\d+(\.\d+)?px \* var\(--owp-scale\)( \* var\(--owp-round\))?\)/g, '');
     // What stays fixed: hairline borders, the visually hidden text, the window
     // widths of the media queries, the places on screen, the margins to the
     // window edges, the animations and the blur.
@@ -165,6 +171,22 @@ describe('appearance styles', () => {
     const fixed = /rgba\(0, ?0, ?0, ?0\.\d+\)|color: #fff;|\.owp-card-count \{[^}]*\}|#1565c0|#aaa|#388e3c|#69f0ae/g;
     const rules = panel.slice(defaults.length).replace(fixed, '');
     assert.deepEqual(rules.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\d[^)]*\)/g), null);
+  });
+
+  it('rounds every corner with the preset, except the dots and the spinner', () => {
+    const panel = css.slice(css.indexOf('#owp-panel, .owp-toast-container'));
+    const radii = panel.match(/border-radius: [^;]+/g);
+    const others = radii.filter(radius => !/^border-radius: calc\(\d+px \* var\(--owp-scale\) \* var\(--owp-round\)\)$/.test(radius));
+    // The status and sync dots and the spinner stay round; the poster count, outside the panel, keeps its own.
+    assert.deepEqual([...new Set(others)].sort(), ['border-radius: 0.4em', 'border-radius: 50%']);
+    assert.equal(others.filter(radius => radius === 'border-radius: 50%').length, 4);
+    assert.match(css, /--owp-round: 1;/);
+  });
+
+  it('gives the avatars their own colors, the accent ones by default', () => {
+    assert.match(css, /--owp-avatar-bg: var\(--owp-accent-bg\); --owp-avatar-text: var\(--owp-accent\);/);
+    const avatar = css.slice(css.indexOf('.owp-participant-avatar {'));
+    assert.match(avatar.slice(0, avatar.indexOf('}')), /background: var\(--owp-avatar-bg\); color: var\(--owp-avatar-text\);/);
   });
 
   it('lets each preset set only variables the stylesheet defines', () => {

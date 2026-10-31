@@ -108,7 +108,7 @@
     // the same ranges as the plugin settings.
     APPEARANCE: {
       baseTextSize: 12,
-      presets: ['glass', 'solid', 'light', 'contrast'], // Color presets; the first is the default
+      presets: ['glass', 'solid', 'light', 'contrast', 'jellyfin'], // Color presets; the first is the default
       opacity: { min: 40, max: 100, step: 5, default: 55 },
       textSize: { min: 12, max: 18, step: 1, default: 14 }
     },

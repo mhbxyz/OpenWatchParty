@@ -22,10 +22,13 @@
   // Sizes in the panel and the toasts follow the text size setting: each one
   // is written for the original 12 px text and multiplied by --owp-scale.
   const px = n => `calc(${n}px * var(--owp-scale))`;
+  // Corners follow the text size too, and the preset's roundness (1 in Glass).
+  const round = n => `calc(${n}px * var(--owp-scale) * var(--owp-round))`;
 
-  // The colors of each appearance preset, over the defaults in the stylesheet
-  // (Glass). The opacity stays the setting's: choosing a preset in the plugin
-  // settings only moves it to a suggested value.
+  // The colors (and, for Jellyfin, the corners) of each appearance preset,
+  // over the defaults in the stylesheet (Glass). The opacity stays the
+  // setting's: choosing a preset in the plugin settings only moves it to a
+  // suggested value.
   const PRESET_COLORS = {
     glass: {},
     solid: { '--owp-blur': '0px' },
@@ -51,6 +54,18 @@
       '--owp-good': '#a6ff6e', '--owp-good-bg': '#1d4600', '--owp-warn': '#ffc247',
       '--owp-bad': '#ff9e9e', '--owp-bad-bg': '#6e0000',
       '--owp-field-line': '#ffffff'
+    },
+    // Jellyfin's own dark theme: solid grey, its blue and nearly square corners.
+    jellyfin: {
+      '--owp-blur': '0px', '--owp-round': '0.3', '--owp-surface': '32, 32, 32', '--owp-surface-deep': '24, 24, 24',
+      '--owp-line': 'rgba(255,255,255,0.08)',
+      '--owp-text': '#ffffff', '--owp-text-2': 'rgba(255,255,255,0.8)', '--owp-muted': 'rgba(255,255,255,0.6)',
+      '--owp-faint': 'rgba(255,255,255,0.45)',
+      '--owp-accent': '#00a4dc', '--owp-accent-bg': 'rgba(0,164,220,0.2)', '--owp-accent-bg-hover': 'rgba(0,164,220,0.3)',
+      '--owp-on-accent': '#ffffff', '--owp-accent-fill': 'rgba(0,164,220,0.35)',
+      '--owp-primary': '#00a4dc', '--owp-primary-hover': '#19b4ea',
+      '--owp-good': '#52b54b', '--owp-good-bg': 'rgba(82,181,75,0.18)',
+      '--owp-avatar-bg': '#00a4dc', '--owp-avatar-text': '#ffffff'
     }
   };
 
@@ -82,11 +97,12 @@
     #${PANEL_ID}, .owp-toast-container, .owp-toast-system, .owp-queue-next, .owp-start-float, #owp-emoji-panel, #owp-emoji-autocomplete {
       --owp-scale: ${APPEARANCE.textSize.default / APPEARANCE.baseTextSize};
       --owp-surface-alpha: ${APPEARANCE.opacity.default / 100};
-      --owp-surface: 38, 38, 36; --owp-surface-deep: 20, 20, 20; --owp-ink: 255, 255, 255; --owp-blur: 12px;
+      --owp-surface: 38, 38, 36; --owp-surface-deep: 20, 20, 20; --owp-ink: 255, 255, 255; --owp-blur: 12px; --owp-round: 1;
       --owp-line: rgba(255,255,255,0.14);
       --owp-text: #ecebe6; --owp-text-2: #a6a59f; --owp-muted: #9a9993; --owp-faint: #85847e; --owp-system: #c2c0b6; --owp-text-strong: #fff;
       --owp-accent: #85b7eb; --owp-accent-bg: #0c447c; --owp-accent-bg-hover: #185fa5; --owp-on-accent: #e6f1fb;
       --owp-accent-fill: rgba(12, 68, 124, 0.55); --owp-primary: #1a63ad; --owp-primary-hover: #2274c7;
+      --owp-avatar-bg: var(--owp-accent-bg); --owp-avatar-text: var(--owp-accent);
       --owp-good: #97c459; --owp-good-bg: #27500a; --owp-warn: #ef9f27; --owp-bad: #f09595; --owp-bad-bg: #791f1f; --owp-danger: #a83232;
       --owp-field: #000; --owp-field-line: #444; --owp-field-text: #fff; --owp-syncing: #ffd740; --owp-pending: #ff9800;
     }
@@ -96,7 +112,7 @@
     /* Same look as the room bar: dark grey, soft border, Jellyfin's font */
     #${PANEL_ID} {
       position: fixed; top: 72px; right: 20px; width: ${px(360)}; max-width: calc(100vw - 40px); max-height: min(${px(450)}, calc(100vh - 88px));
-      padding: ${px(10)} ${px(12)}; border-radius: ${px(12)}; background: rgba(var(--owp-surface), var(--owp-surface-alpha));
+      padding: ${px(10)} ${px(12)}; border-radius: ${round(12)}; background: rgba(var(--owp-surface), var(--owp-surface-alpha));
       backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       color: var(--owp-text); font-family: inherit; font-size: ${px(12)}; z-index: 20000;
       border: 1px solid var(--owp-line); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
@@ -144,7 +160,7 @@
     }
     .owp-room-bar {
       display: flex; align-items: center; gap: ${px(4)}; flex-shrink: 0;
-      padding: ${px(5)} ${px(6)} ${px(5)} ${px(10)}; border-radius: ${px(20)};
+      padding: ${px(5)} ${px(6)} ${px(5)} ${px(10)}; border-radius: ${round(20)};
     }
     .owp-room-bar .owp-sync-dot { width: ${px(7)}; height: ${px(7)}; flex-shrink: 0; }
     .owp-room-bar .owp-sync-dot.synced { background: var(--owp-good); }
@@ -163,7 +179,7 @@
     .owp-watch-party-icon svg { display: block; width: 1em; height: 1em; }
     .owp-bar-btn {
       display: inline-flex; align-items: center; gap: ${px(3)}; flex-shrink: 0; height: ${px(24)}; padding: 0 ${px(6)};
-      border: none; border-radius: ${px(12)}; background: transparent; color: var(--owp-text-2);
+      border: none; border-radius: ${round(12)}; background: transparent; color: var(--owp-text-2);
       cursor: pointer; font-family: inherit; font-size: ${px(12)};
     }
     .owp-bar-btn:hover, .owp-bar-btn:focus-visible { background: rgba(var(--owp-ink), 0.08); color: var(--owp-text); }
@@ -175,7 +191,7 @@
     /* As wide as the bar, without widening it: long chat lines wrap instead */
     .owp-room-drop {
       width: 0; min-width: 100%; box-sizing: border-box;
-      min-height: 0; overflow-y: auto; padding: ${px(8)} ${px(10)}; border-radius: ${px(10)};
+      min-height: 0; overflow-y: auto; padding: ${px(8)} ${px(10)}; border-radius: ${round(10)};
     }
     .owp-room-drop[hidden], .owp-room-drop > [hidden] { display: none !important; }
     .owp-leave-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: ${px(8)}; }
@@ -185,7 +201,7 @@
       color: rgba(var(--owp-ink), .6); overflow-wrap: anywhere;
     }
     .owp-pill-btn {
-      height: ${px(24)}; padding: 0 ${px(8)}; border-radius: ${px(12)}; cursor: pointer; font-family: inherit; font-size: ${px(12)};
+      height: ${px(24)}; padding: 0 ${px(8)}; border-radius: ${round(12)}; cursor: pointer; font-family: inherit; font-size: ${px(12)};
     }
     .owp-pill-btn.secondary { background: transparent; border: 1px solid rgba(var(--owp-ink), 0.45); color: var(--owp-text); }
     .owp-pill-btn.danger { background: var(--owp-danger); border: none; color: #fff; }
@@ -199,7 +215,7 @@
     .owp-queue-head { display: flex; align-items: center; gap: ${px(6)}; margin-bottom: ${px(4)}; }
     .owp-queue-title { flex: 1; font-weight: 500; }
     .owp-queue-list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
-    .owp-queue-item { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; padding: ${px(3)} ${px(4)}; border-radius: ${px(6)}; }
+    .owp-queue-item { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; padding: ${px(3)} ${px(4)}; border-radius: ${round(6)}; }
     .owp-queue-mark {
       width: ${px(15)}; display: flex; justify-content: center; flex-shrink: 0;
       color: var(--owp-faint); font-size: ${px(11)}; font-variant-numeric: tabular-nums;
@@ -216,7 +232,7 @@
     /* "Up next": under the bar, or on its own where the bar would be */
     .owp-queue-next {
       position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; gap: ${px(6)} ${px(8)};
-      padding: ${px(6)} ${px(8)} ${px(6)} ${px(10)}; border-radius: ${px(12)}; box-sizing: border-box;
+      padding: ${px(6)} ${px(8)} ${px(6)} ${px(10)}; border-radius: ${round(12)}; box-sizing: border-box;
       background: rgba(var(--owp-surface), var(--owp-surface-alpha)); backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       border: 1px solid var(--owp-line); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
     }
@@ -245,7 +261,7 @@
     /* On its own where the room bar would be, while the panel is closed */
     .owp-start-label.owp-start-float {
       flex: none; position: fixed; top: 72px; right: 20px; z-index: 20000;
-      padding: ${px(8)} ${px(12)}; border-radius: ${px(20)}; font-family: inherit; font-size: ${px(12)};
+      padding: ${px(8)} ${px(12)}; border-radius: ${round(20)}; font-family: inherit; font-size: ${px(12)};
       background: rgba(var(--owp-surface), var(--owp-surface-alpha)); backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       border: 1px solid var(--owp-line); box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35);
     }
@@ -274,7 +290,7 @@
     .owp-label { font-size: ${px(11)}; color: var(--owp-muted); margin-bottom: ${px(6)}; }
     .owp-room-item {
       display: flex; justify-content: space-between; align-items: center; gap: ${px(8)}; cursor: pointer;
-      margin-bottom: ${px(6)}; padding: ${px(8)} ${px(10)}; border-radius: ${px(8)};
+      margin-bottom: ${px(6)}; padding: ${px(8)} ${px(10)}; border-radius: ${round(8)};
       background: rgba(var(--owp-ink), 0.04); border: 1px solid transparent;
       transition: background 0.15s, border-color 0.15s;
     }
@@ -290,7 +306,7 @@
     .owp-card-count .material-icons { font-size: 1.25em; line-height: 1; }
     .owp-card-count-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
     .owp-btn {
-      height: ${px(26)}; padding: 0 ${px(12)}; border: none; border-radius: ${px(13)}; cursor: pointer;
+      height: ${px(26)}; padding: 0 ${px(12)}; border: none; border-radius: ${round(13)}; cursor: pointer;
       background: var(--owp-primary); color: #fff; font-family: inherit; font-size: ${px(12)}; font-weight: 500;
     }
     .owp-btn:hover { background: var(--owp-primary-hover); color: #fff; }
@@ -300,7 +316,7 @@
     /* The lobby help and its "?" button; the button turns blue while it is open */
     .owp-help-btn { width: ${px(24)}; padding: 0; justify-content: center; font-size: ${px(13)}; font-weight: 600; }
     .owp-help {
-      display: flow-root; margin-bottom: ${px(10)}; padding: ${px(8)} ${px(10)}; border-radius: ${px(8)};
+      display: flow-root; margin-bottom: ${px(10)}; padding: ${px(8)} ${px(10)}; border-radius: ${round(8)};
       background: rgba(var(--owp-ink), 0.04); line-height: 1.5; text-align: justify;
       flex-shrink: 0;
     }
@@ -312,7 +328,7 @@
     .owp-participant { display: flex; align-items: center; gap: ${px(6)}; min-width: 0; padding: ${px(4)} 0; }
     .owp-participant-avatar {
       display: flex; align-items: center; justify-content: center; flex-shrink: 0;
-      width: ${px(20)}; height: ${px(20)}; border-radius: 50%; background: var(--owp-accent-bg); color: var(--owp-accent); font-size: ${px(11)};
+      width: ${px(20)}; height: ${px(20)}; border-radius: ${round(10)}; background: var(--owp-avatar-bg); color: var(--owp-avatar-text); font-size: ${px(11)};
     }
     .owp-participant-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     /* With a status: the name and the Host badge on top, the status below */
@@ -332,16 +348,16 @@
     .owp-participant-status.bad { color: var(--owp-bad); }
     .owp-participant-status.idle { color: var(--owp-faint); }
     .owp-host-badge {
-      flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${px(5)};
+      flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${round(5)};
       background: var(--owp-good-bg); color: var(--owp-good); font-size: ${px(11)};
     }
     .owp-input {
-      width: 100%; padding: ${px(12)}; border-radius: ${px(8)}; border: 1px solid var(--owp-field-line);
+      width: 100%; padding: ${px(12)}; border-radius: ${round(8)}; border: 1px solid var(--owp-field-line);
       background: var(--owp-field); color: var(--owp-field-text); box-sizing: border-box; margin-bottom: ${px(10)}; font-size: ${px(14)};
     }
     .owp-footer { font-size: ${px(11)}; color: var(--owp-muted); text-align: center; margin-top: auto; padding-top: ${px(8)}; }
     .owp-select {
-      width: 100%; padding: ${px(8)} ${px(10)}; border-radius: ${px(6)}; border: 1px solid var(--owp-field-line);
+      width: 100%; padding: ${px(8)} ${px(10)}; border-radius: ${round(6)}; border: 1px solid var(--owp-field-line);
       background: var(--owp-field); color: var(--owp-field-text); box-sizing: border-box; font-size: ${px(13)};
       cursor: pointer; appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23888'%3E%3Cpath d='M6 8L2 4h8z'/%3E%3C/svg%3E");
@@ -377,28 +393,28 @@
     /* OWP's own lines (SERVER): a small tag and italic text; errors in red */
     .owp-chat-message.owp-chat-system .owp-chat-username {
       font-size: ${px(9)}; font-weight: 700; letter-spacing: 0.06em; color: var(--owp-system);
-      background: rgba(var(--owp-ink), 0.1); border-radius: ${px(4)}; padding: 0 ${px(4)}; vertical-align: 0.1em;
+      background: rgba(var(--owp-ink), 0.1); border-radius: ${round(4)}; padding: 0 ${px(4)}; vertical-align: 0.1em;
     }
     .owp-chat-message.owp-chat-system .owp-chat-text { color: var(--owp-system); font-style: italic; }
     .owp-chat-message.owp-chat-error .owp-chat-text { color: var(--owp-bad); }
     #owp-chat-input-container { display: flex; gap: ${px(6)}; }
     #owp-chat-messages:not(:empty) + #owp-chat-input-container { margin-top: ${px(6)}; padding-top: ${px(6)}; border-top: 1px solid rgba(var(--owp-ink), 0.1); }
     #owp-chat-input {
-      flex: 1; min-width: 0; padding: ${px(4)} ${px(8)}; border-radius: ${px(6)}; border: 1px solid var(--owp-line);
+      flex: 1; min-width: 0; padding: ${px(4)} ${px(8)}; border-radius: ${round(6)}; border: 1px solid var(--owp-line);
       background: transparent; color: var(--owp-text); font-family: inherit; font-size: ${px(12)};
     }
     #owp-chat-input::placeholder { color: var(--owp-muted); }
     #owp-chat-input:focus { border-color: var(--owp-accent); outline: none; }
     #owp-chat-send {
       display: inline-flex; align-items: center; height: ${px(24)}; padding: 0 ${px(8)};
-      border: none; border-radius: ${px(12)}; background: var(--owp-accent-bg); color: var(--owp-accent); cursor: pointer;
+      border: none; border-radius: ${round(12)}; background: var(--owp-accent-bg); color: var(--owp-accent); cursor: pointer;
     }
     #owp-chat-send:hover { background: var(--owp-accent-bg-hover); color: var(--owp-on-accent); }
-    .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${px(8)}; background: var(--owp-bad-bg); color: var(--owp-bad); font-size: ${px(11)}; line-height: 1.45; }
+    .owp-chat-badge { display: none; padding: 0 ${px(5)}; border-radius: ${round(8)}; background: var(--owp-bad-bg); color: var(--owp-bad); font-size: ${px(11)}; line-height: 1.45; }
     /* Emoji button */
     #owp-emoji-btn {
       flex-shrink: 0; height: ${px(24)}; padding: 0 ${px(6)};
-      border: none; border-radius: ${px(6)}; background: transparent;
+      border: none; border-radius: ${round(6)}; background: transparent;
       color: var(--owp-text); cursor: pointer; font-size: ${px(15)}; line-height: 1;
     }
     #owp-emoji-btn:hover { background: rgba(var(--owp-ink), 0.08); }
@@ -409,7 +425,7 @@
       background: rgba(var(--owp-surface), 0.98);
       backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       border: 1px solid var(--owp-line);
-      border-radius: ${px(8)}; box-shadow: 0 ${px(4)} ${px(14)} rgba(0, 0, 0, 0.5);
+      border-radius: ${round(8)}; box-shadow: 0 ${px(4)} ${px(14)} rgba(0, 0, 0, 0.5);
       padding: ${px(4)} 0; min-width: ${px(170)}; box-sizing: border-box; overflow: hidden;
     }
     .owp-emoji-suggestion {
@@ -433,7 +449,7 @@
       background: rgba(var(--owp-surface), 0.98);
       backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       border: 1px solid var(--owp-line);
-      border-radius: ${px(10)}; box-shadow: 0 ${px(4)} ${px(18)} rgba(0, 0, 0, 0.5);
+      border-radius: ${round(10)}; box-shadow: 0 ${px(4)} ${px(18)} rgba(0, 0, 0, 0.5);
       width: ${px(250)}; box-sizing: border-box;
       display: flex; flex-direction: column; overflow: hidden;
     }
@@ -443,7 +459,7 @@
     }
     .owp-emoji-cat-btn {
       flex: 1; border: none; background: transparent; cursor: pointer;
-      padding: ${px(4)} ${px(2)}; border-radius: ${px(4)}; font-size: ${px(15)}; line-height: 1;
+      padding: ${px(4)} ${px(2)}; border-radius: ${round(4)}; font-size: ${px(15)}; line-height: 1;
     }
     .owp-emoji-cat-btn:hover { background: rgba(var(--owp-ink), 0.1); }
     .owp-emoji-cat-btn.active { background: var(--owp-accent-bg); }
@@ -455,7 +471,7 @@
       height: ${px(32)};
       display: flex; align-items: center; justify-content: center;
       border: none; background: transparent; cursor: pointer;
-      border-radius: ${px(4)}; font-size: ${px(18)}; line-height: 1;
+      border-radius: ${round(4)}; font-size: ${px(18)}; line-height: 1;
     }
     .owp-emoji-item:hover { background: rgba(var(--owp-ink), 0.15); }
     /* Toast styles */
@@ -467,7 +483,7 @@
     .owp-toast {
       background: rgba(var(--owp-surface), var(--owp-surface-alpha)); backdrop-filter: blur(var(--owp-blur)); -webkit-backdrop-filter: blur(var(--owp-blur));
       color: var(--owp-text); padding: ${px(8)} ${px(12)};
-      border-radius: ${px(10)}; font-size: ${px(12)}; max-width: ${px(320)};
+      border-radius: ${round(10)}; font-size: ${px(12)}; max-width: ${px(320)};
       border: 1px solid var(--owp-line);
       box-shadow: 0 ${px(4)} ${px(16)} rgba(0,0,0,0.35); pointer-events: auto; cursor: pointer;
       animation: owp-toast-in 0.3s ease-out;
@@ -481,7 +497,7 @@
     .owp-toast-system {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
       background: rgba(var(--owp-surface-deep), var(--owp-surface-alpha)); color: var(--owp-text-strong); padding: ${px(12)} ${px(20)};
-      border-radius: ${px(8)}; font-size: ${px(13)}; z-index: 30000;
+      border-radius: ${round(8)}; font-size: ${px(13)}; z-index: 30000;
       backdrop-filter: blur(10px); border: 1px solid rgba(var(--owp-ink), 0.1);
       box-shadow: 0 ${px(4)} ${px(20)} rgba(0,0,0,0.5); cursor: pointer;
       animation: owp-toast-system-in 0.3s ease-out;
