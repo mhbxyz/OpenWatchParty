@@ -62,6 +62,8 @@ pub(super) enum ErrorCode {
     ChatMessageEmpty,
     ChatMessageTooLong,
     InvalidQueuePayload,
+    InvalidAccessPayload,
+    RoomApprovalRequired,
 }
 
 pub(super) fn error_message(
@@ -291,6 +293,11 @@ pub(super) async fn client_msg(
         | ClientMessageType::QueueAdvance
         | ClientMessageType::QueueCountdown => handle_queue(client_id, &parsed, state, tasks).await,
         ClientMessageType::Readiness => handle_readiness(client_id, &parsed, state).await,
+        ClientMessageType::SetRoomAccess
+        | ClientMessageType::CancelJoin
+        | ClientMessageType::AnswerJoin => {
+            super::handlers::access::handle_access(client_id, &parsed, state, jwt_config).await;
+        }
         ClientMessageType::StartNow => handle_start_now(client_id, &parsed, state).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
@@ -426,6 +433,8 @@ mod tests {
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
             (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
+            (ErrorCode::InvalidAccessPayload, "INVALID_ACCESS_PAYLOAD"),
+            (ErrorCode::RoomApprovalRequired, "ROOM_APPROVAL_REQUIRED"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

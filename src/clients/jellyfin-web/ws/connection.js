@@ -70,6 +70,12 @@
   const handleAuthenticatedConnection = () => {
     state.connectionPhase = 'authenticated';
     if (OWP.actions?.consumePendingInvite) OWP.actions.consumePendingInvite();
+    if (state.pendingJoin && !state.inRoom) {
+      const roomId = state.pendingJoin.roomId;
+      cancelRoomRejoin(false);
+      actions.joinRoom(roomId);
+      return;
+    }
     if (!state.rejoinPending || !state.desiredRoomId) return;
     const roomId = state.desiredRoomId;
     allowRoomState(roomId);
@@ -102,7 +108,7 @@
     actions.send('ping', { client_ts: utils.nowMs() });
     schedulePing();
     if (!token) handleAuthenticatedConnection();
-    else if (state.rejoinPending && state.desiredRoomId) {
+    else if (!state.pendingJoin && state.rejoinPending && state.desiredRoomId) {
       scheduleRoomRejoinTimeout(state.desiredRoomId, t('reauthFailed'));
     }
     ui.render();
@@ -184,6 +190,10 @@
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
+      case 'room_access': h.handleRoomAccess(msg); break;
+      case 'join_requests': h.handleJoinRequests(msg); break;
+      case 'join_pending': h.handleJoinPending(msg); break;
+      case 'join_rejected': h.handleJoinRejected(msg); break;
       case 'start_state': h.handleStartState(msg); break;
       case 'error': h.handleError(msg); break;
     }
@@ -205,7 +215,7 @@
       return;
     }
     try {
-      if (msg.type === 'room_state') {
+      if (msg.type === 'room_state' && msg.room !== state.cancelledJoinRoomId) {
         if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) {
           console.warn('[OpenWatchParty] Ignoring room_state for unexpected room:', msg.room);
           return;
@@ -215,7 +225,8 @@
           return;
         }
       }
-      if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state') {
+      if (!state.inRoom || msg.room === state.roomId || !msg.room || msg.type === 'room_state' || ['join_pending', 'join_rejected'].includes(msg.type)
+        || (msg.type === 'error' && msg.room === state.pendingJoin?.roomId)) {
         handleMessage(msg);
       }
     } catch (err) {

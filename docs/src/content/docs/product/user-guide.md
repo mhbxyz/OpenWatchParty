@@ -327,3 +327,18 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - The Invite button is unavailable in insecure development mode
 
 For more troubleshooting, see [Troubleshooting Guide](/operations/troubleshooting/).
+
+
+## Private rooms
+
+When creating a room, or later in **People → Room access**, the host can turn
+on **Ask to join** and **Hide from the room list** independently. Both start off.
+Ask to join lets the host accept or reject each guest. Guests select **Ask to
+join**, see a waiting message and can cancel; a rejected request shows a message
+and can be tried again. Leave your current room before asking to join another
+approval room. The host sees requests below the room bar or in People.
+
+Hidden rooms appear neither in the room list nor on the home row. Share the
+existing invite link to bring people in. A valid invite link always enters
+directly, including when approval is required. People using an older version
+cannot ask to join and must update OpenWatchParty or use an invite link.

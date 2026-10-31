@@ -12,29 +12,48 @@
   };
 
   const drawRoomList = (roomList) => {
-    if (state.rooms.length === 0) {
+    const rooms = [...state.rooms];
+    for (const join of [state.joinOutcome, state.pendingJoin]) {
+      if (join && !rooms.some(room => room.id === join.roomId)) {
+        rooms.unshift({ id: join.roomId, name: join.roomName, count: 0, approval: true });
+      }
+    }
+    if (rooms.length === 0) {
       const empty = createElement('div', 'owp-room-empty', t('noActiveRooms'));
       roomList.replaceChildren(empty);
       return;
     }
     roomList.replaceChildren();
-    state.rooms.forEach(room => {
+    rooms.forEach(room => {
       const item = createElement('div', 'owp-room-item');
       const details = createElement('div');
       const name = createElement('div', 'owp-room-title', OWP.i18n.localizeRoomName(room.name));
       const count = createElement('div', 'owp-room-count', t('user', { count: room.count }));
+      const pending = state.pendingJoin?.roomId === room.id;
+      const outcome = state.joinOutcome?.roomId === room.id ? state.joinOutcome : null;
+      if (pending) {
+        count.replaceChildren(createElement('span', 'owp-access-spinner'), document.createTextNode(t('joinWaiting', { host: state.pendingJoin.hostName })));
+      } else if (outcome) {
+        count.classList.add('owp-join-error');
+        count.textContent = t(outcome.reason === 'rejected' ? 'joinRejected' : outcome.reason === 'closed' ? 'roomClosed' : 'joinUnavailable', { host: outcome.hostName });
+      } else if (room.approval) {
+        const lock = createElement('span', 'material-icons', 'lock');
+        lock.setAttribute('aria-hidden', 'true');
+        count.replaceChildren(lock, document.createTextNode(`${t('user', { count: room.count })} · ${t('approvalNeeded')}`));
+      }
       details.append(name, count);
-      if (!room.media_id) {
+      if (!room.media_id && !pending && !outcome) {
         const noMedia = createElement('div', 'owp-room-note', t('noMedia'));
         details.appendChild(noMedia);
       }
-      const join = createElement('button', 'owp-btn secondary', t('join'));
+      const join = createElement('button', 'owp-btn secondary', t(pending ? 'cancel' : room.approval ? 'askToJoin' : 'join'));
       join.dataset.roomId = String(room.id);
       item.append(details, join);
       item.onclick = () => {
+        if (pending) { OWP.actions.cancelJoin(); return; }
         // A room without media has nothing to start here. From the player,
         // joining still syncs whatever is playing.
-        if (!room.media_id && !OWP.utils?.getPlayingItemId?.()) {
+        if (!room.approval && !room.media_id && !OWP.utils?.getPlayingItemId?.()) {
           ui.showToast(t('noMediaJoinHint'));
           return;
         }
@@ -97,11 +116,18 @@
     const count = createElement('div', 'owp-card-count');
     fillCountBadge(count, room.count);
     image.appendChild(count);
+    if (room.approval) {
+      const pill = createElement('div', 'owp-card-approval');
+      const lock = createElement('span', 'material-icons', 'lock');
+      lock.setAttribute('aria-hidden', 'true');
+      pill.append(lock, document.createTextNode(t('approvalNeeded')));
+      image.appendChild(pill);
+    }
 
     const overlay = createElement('div', 'cardOverlayContainer itemAction');
     const join = createElement('button', 'cardOverlayButton cardOverlayButton-hover cardOverlayFab-primary owp-join-btn paper-icon-button-light');
-    join.title = t('join');
-    join.setAttribute('aria-label', t('join'));
+    join.title = t(room.approval ? 'askToJoin' : 'join');
+    join.setAttribute('aria-label', join.title);
     const playIcon = createElement('span', 'material-icons cardOverlayButtonIcon cardOverlayButtonIcon-hover play_arrow');
     playIcon.setAttribute('aria-hidden', 'true');
     join.appendChild(playIcon);
@@ -180,6 +206,11 @@
           ui.showToast(t('noMediaInRoom'));
           return;
         }
+        if (room.approval) {
+          OWP.actions.joinRoom(room.id);
+          ui.showPanel();
+          return;
+        }
         state.pendingJoinRoomId = room.id;
         console.log('[OpenWatchParty] Set pendingJoinRoomId:', room.id);
         const serverId = window.ApiClient?.serverId?.() || window.ApiClient?._serverInfo?.Id || '';
@@ -224,6 +255,7 @@
     card.dataset.index = String(index);
     card.dataset.roomId = String(room.id);
     card.dataset.mediaId = String(room.media_id || '');
+    card.dataset.approval = String(Boolean(room.approval));
     card.dataset.count = String(room.count);
     card.replaceChildren(buildCardContent(room, index));
     attachMediaInfo(card, room.media_id);

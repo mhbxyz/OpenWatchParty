@@ -63,6 +63,7 @@ fn promote_next_host(
         .unwrap_or_default();
     room.host_id = new_host_id.clone();
     room.pending_host_reconnect = None;
+    super::access::host_changed(room, clients);
     crate::room::send_room_capabilities(room, clients);
     Some(host_changed_message(room_id, &new_host_id, &host_name))
 }
@@ -302,6 +303,7 @@ pub(crate) async fn handle_disconnect_if(
             left_room = true;
             send_leave_notification(&notification, "leave notification");
         }
+        super::access::cancel(client_id, rooms, clients);
         let removed = clients.remove(client_id).is_some();
         (
             reconnect_grace.map(|(room_id, generation, _)| (room_id, generation)),

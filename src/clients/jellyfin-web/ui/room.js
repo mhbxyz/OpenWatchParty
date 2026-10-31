@@ -118,6 +118,7 @@
 
 
   const applyRoomSection = () => {
+    ui.updateAccessUI?.();
     const open = state.roomBarSection;
     const drop = document.getElementById('owp-room-drop');
     if (drop) drop.hidden = !open;

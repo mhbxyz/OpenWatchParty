@@ -1,3 +1,4 @@
+pub(crate) mod access;
 mod auth;
 mod chat;
 mod create;

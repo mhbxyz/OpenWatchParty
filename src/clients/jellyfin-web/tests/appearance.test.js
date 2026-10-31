@@ -131,7 +131,7 @@ describe('appearance styles', () => {
 
   it('draws every surface with the opacity setting', () => {
     assert.equal(css.match(/rgba\(38, 38, 36, 0\.97\)/g), null);
-    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 6);
+    assert.equal(css.match(/rgba\(38, 38, 36, var\(--owp-surface-alpha\)\)/g).length, 7);
     assert.match(css, /rgba\(20, 20, 20, var\(--owp-surface-alpha\)\)/);
   });
 });
