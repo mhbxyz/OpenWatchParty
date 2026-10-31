@@ -23,6 +23,7 @@ let sent;
 let toasts;
 let getItem;
 let getJSON;
+let currentUser;
 let timer;
 let cleared;
 const originalSetTimeout = OWP.timers.setTimeout;
@@ -34,7 +35,7 @@ OWP.utils.log = () => {};
 OWP.utils.getVideo = () => null;
 OWP.utils.getPlayingItemId = () => '';
 globalThis.ApiClient = {
-  getCurrentUserId: () => 'user-1',
+  getCurrentUserId: () => currentUser,
   getItem: (...args) => getItem(...args),
   getUrl: (path, params) => ({ path, params }),
   getJSON: (...args) => getJSON(...args)
@@ -62,6 +63,7 @@ const enterRoom = (fields = {}) => Object.assign(OWP.state, OWP.stateFactories.c
 describe('collaborative queue behavior', () => {
   beforeEach(() => {
     sent = [];
+    currentUser = 'user-1';
     toasts = [];
     OWP.actions.send = (type, payload) => sent.push({ type, payload });
     OWP.ui.render = () => {};
@@ -243,6 +245,7 @@ describe('collaborative queue behavior', () => {
   });
 
   it('adds the room item first, falls back to the selected item, and does not prepend an item already queued', async () => {
+    OWP.state.isHost = true;
     getItem = async () => current;
     await OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
     assert.deepEqual(sent.pop(), { type: 'queue_add', payload: { items: [
@@ -263,6 +266,7 @@ describe('collaborative queue behavior', () => {
     OWP.queue.dismiss(IDS.movie);
     OWP.queue.withdraw(IDS.movie);
     OWP.state.queueItems = [{ id: IDS.current, title: 'Pilot' }];
+    OWP.state.isHost = true;
     await OWP.queue.accept({ ...selected, by: 'Ana', mine: false });
     assert.deepEqual(sent, [
       { type: 'queue_suggest', payload: selected },
@@ -270,6 +274,70 @@ describe('collaborative queue behavior', () => {
       { type: 'queue_dismiss', payload: { id: IDS.movie } },
       { type: 'queue_add', payload: { items: [selected] } }
     ]);
+  });
+
+  it('drops a pending add when its room, connection, user, media or host context changes', async () => {
+    const changes = [
+      ['room', () => enterRoom({ roomId: 'room-2', isHost: true })],
+      ['leave', () => { OWP.state.inRoom = false; }],
+      ['rejoin', () => { OWP.queue.resetRoom(); enterRoom({ isHost: true }); }],
+      ['connection', () => { OWP.state.clientId = 'client-2'; }],
+      ['user', () => { currentUser = 'user-2'; }],
+      ['media', () => { OWP.state.roomMediaId = IDS.episode; }],
+      ['host', () => { OWP.state.isHost = false; }],
+      ['feature', () => { OWP.state.serverFeatures = []; }]
+    ];
+    for (const [label, change] of changes) {
+      sent = [];
+      currentUser = 'user-1';
+      enterRoom({ isHost: true });
+      let resolve;
+      getItem = () => new Promise(done => { resolve = done; });
+      const pending = OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
+      change();
+      resolve(current);
+      await pending;
+      assert.deepEqual(sent, [], label);
+    }
+  });
+
+  it('keeps newer availability when an old same-room lookup settles after rejoining', async () => {
+    for (const oldMissing of [true, false]) {
+      sent = [];
+      OWP.queue.resetRoom();
+      enterRoom({ queueItems: [{ id: IDS.movie, title: 'Movie' }] });
+      let resolve;
+      let reject;
+      getItem = () => new Promise((done, fail) => { resolve = done; reject = fail; });
+      OWP.queue.onQueueState();
+      OWP.queue.resetRoom();
+      enterRoom({ clientId: 'client-2', queueItems: [{ id: IDS.movie, title: 'Movie' }] });
+      getItem = async () => {
+        if (!oldMissing) throw Object.assign(new Error('missing'), { status: 404 });
+        return movie;
+      };
+      OWP.queue.onQueueState();
+      await settle();
+      const newerReports = [...sent];
+      if (oldMissing) reject(Object.assign(new Error('old missing'), { status: 404 }));
+      else resolve(movie);
+      await settle();
+      assert.deepEqual(sent, newerReports, 'an older answer must not replace the newer report');
+    }
+  });
+
+  it('checks availability again when the Jellyfin user changes', async () => {
+    enterRoom({ queueItems: [{ id: IDS.movie, title: 'Movie' }] });
+    getItem = async userId => {
+      if (userId === 'user-2') throw Object.assign(new Error('missing'), { status: 404 });
+      return movie;
+    };
+    OWP.queue.onQueueState();
+    await settle();
+    currentUser = 'user-2';
+    OWP.queue.onQueueState();
+    await settle();
+    assert.deepEqual(sent, [{ type: 'queue_availability', payload: { missing: [IDS.movie] } }]);
   });
 
   it('reports only 404 as missing, retries unknown failures, caches by room and reports changes', async () => {

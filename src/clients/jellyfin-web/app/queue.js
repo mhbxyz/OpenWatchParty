@@ -50,6 +50,7 @@
 
   let searchTimer = null;
   let searchRequest = 0;
+  let roomGeneration = 0;
 
   const resolveSeries = async (series, userId) => {
     let result = await window.ApiClient.getJSON(window.ApiClient.getUrl('Shows/NextUp', {
@@ -131,6 +132,12 @@
   };
 
   const add = async (item) => {
+    if (!isQueueHost()) return;
+    const roomId = state.roomId;
+    const clientId = state.clientId;
+    const mediaId = state.roomMediaId;
+    const userId = window.ApiClient.getCurrentUserId();
+    const generation = roomGeneration;
     const selected = {
       id: item.id,
       title: item.title,
@@ -149,6 +156,10 @@
       }
     }
     items.push(selected);
+    // A library response must not add an earlier room's items to a new queue.
+    if (generation !== roomGeneration || !isQueueHost() || state.roomId !== roomId
+        || state.clientId !== clientId || state.roomMediaId !== mediaId
+        || window.ApiClient.getCurrentUserId() !== userId) return;
     send('queue_add', { items });
   };
 
@@ -157,6 +168,7 @@
 
   let availabilityRoom = '';
   let availabilityClient = '';
+  let availabilityUser = '';
   let availability = new Map();
   let availabilityPending = new Set();
   let availabilitySent = null;
@@ -180,25 +192,30 @@
   };
   const checkAvailability = () => {
     if (!state.inRoom || !state.serverFeatures.includes('queue_suggestions') || !window.ApiClient) return;
-    if (availabilityRoom !== state.roomId || availabilityClient !== state.clientId) {
+    const userId = window.ApiClient.getCurrentUserId();
+    if (availabilityRoom !== state.roomId || availabilityClient !== state.clientId || availabilityUser !== userId) {
       availabilityRoom = state.roomId;
       availabilityClient = state.clientId;
+      availabilityUser = userId;
       availability = new Map();
       availabilityPending = new Set();
       availabilitySent = null;
     }
     const roomId = state.roomId;
-    const userId = window.ApiClient.getCurrentUserId();
+    const clientId = state.clientId;
+    const cache = availability;
+    const isCurrent = () => cache === availability && state.inRoom && state.roomId === roomId
+      && state.clientId === clientId && window.ApiClient.getCurrentUserId() === userId;
     availabilityIds().forEach((id) => {
       if (availability.has(id) || availabilityPending.has(id)) return;
       availabilityPending.add(id);
       window.ApiClient.getItem(userId, id).then(() => {
-        if (availabilityRoom !== roomId) return;
+        if (!isCurrent()) return;
         availabilityPending.delete(id);
         availability.set(id, true);
         sendAvailability();
       }).catch((err) => {
-        if (availabilityRoom !== roomId) return;
+        if (!isCurrent()) return;
         availabilityPending.delete(id);
         if (err?.status === 404 || err?.statusCode === 404) availability.set(id, false);
         sendAvailability();
@@ -226,11 +243,13 @@
   };
 
   const resetRoom = () => {
+    roomGeneration++;
     if (searchTimer) OWP.timers.clear(searchTimer);
     searchTimer = null;
     searchRequest++;
     availabilityRoom = '';
     availabilityClient = '';
+    availabilityUser = '';
     availability = new Map();
     availabilityPending = new Set();
     availabilitySent = null;
