@@ -149,7 +149,10 @@ Join an existing room.
 
 ### `leave_room`
 
-Leave the current room.
+Leave the current room. If `room` is supplied, it must match the client's current
+room; a mismatching leave is ignored. This prevents a late cancellation from
+leaving a room the client has since joined or created. Omitting `room` leaves the
+current room as before.
 
 ```json
 {
