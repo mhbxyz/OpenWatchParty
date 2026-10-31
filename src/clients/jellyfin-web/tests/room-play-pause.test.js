@@ -182,6 +182,27 @@ describe('play and pause shared by the room', () => {
       assert.equal(playerEvents().length, 1);
     });
 
+    it('keeps a guest stream restoration seek local until the reload finishes', () => {
+      for (const playing of [false, true]) {
+        sent = [];
+        joinAs('guest', { playing });
+        OWP.state.roomPermissions.seek = true;
+        video.dispatch('timeupdate');
+        video.readyState = 0;
+        video.currentTime = 0;
+        video.dispatch('emptied');
+        video.readyState = 4;
+        video.currentTime = 10;
+        video.dispatch('seeked');
+        assert.deepEqual(playerEvents(), [], 'restoring a track must not seek the room');
+
+        video.dispatch(playing ? 'playing' : 'canplay');
+        video.currentTime = 40;
+        video.dispatch('seeked');
+        assert.deepEqual(playerEvents().map(message => message.payload), [{ action: 'seek', position: 40 }]);
+      }
+    });
+
     it('does not send an allowed seek during suppression, room work, or stream reload', () => {
       OWP.state.roomPermissions.seek = true;
       const realShouldSend = OWP.utils.shouldSend;

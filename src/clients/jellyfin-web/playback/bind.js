@@ -11,7 +11,7 @@
 
   // Jellyfin switches an audio or subtitle track by reloading the stream in
   // place: the video empties (position 0), plays again and seeks back to where
-  // it was. Until it plays again, the host's events describe the reload, not
+  // it was. Until it plays again, each member's events describe the reload, not
   // the room.
   const isReloadingStream = () => Boolean(state.streamReloadUntil && utils.nowMs() < state.streamReloadUntil);
 
@@ -260,10 +260,10 @@
         // A reload already under way (a retry empties again) keeps its limit.
         // OWP opening the room's next item empties the video too: that is no
         // reload, and the room's play must not wait for one.
-        if (!state.isHost || !state.inRoom || state.guestPaused || isReloadingStream() || state.pendingMediaId) return;
+        if (!state.inRoom || state.guestPaused || isReloadingStream() || state.pendingMediaId) return;
         state.streamReloadUntil = utils.nowMs() + STREAM_RELOAD_MAX_MS;
         state.streamReloadResume = state.lastPlayedPlaying;
-        if (!state.streamReloadResume || hasPendingRoomWork()
+        if (!state.isHost || !state.streamReloadResume || hasPendingRoomWork()
             || !OWP.actions || !OWP.actions.send) return;
         utils.log('HOST', { action: 'stream_reload', pos: state.lastPlayedPosition });
         OWP.actions.send('player_event', { action: 'buffering', position: state.lastPlayedPosition });
