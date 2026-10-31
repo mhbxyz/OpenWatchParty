@@ -7,6 +7,7 @@ mod playback;
 mod queue;
 mod start;
 mod status;
+mod tracks;
 
 pub(in crate::ws) use auth::handle_auth;
 pub(in crate::ws) use chat::handle_chat_message;
@@ -20,3 +21,4 @@ pub(in crate::ws) use playback::handle_playback;
 pub(in crate::ws) use queue::handle_queue;
 pub(in crate::ws) use start::{handle_readiness, handle_start_now};
 pub(in crate::ws) use status::handle_participant_status;
+pub(in crate::ws) use tracks::handle_participant_tracks;

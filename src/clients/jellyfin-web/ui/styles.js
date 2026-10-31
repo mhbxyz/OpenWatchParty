@@ -292,6 +292,15 @@
     .owp-participant-status.info { color: #85b7eb; }
     .owp-participant-status.bad { color: #f09595; }
     .owp-participant-status.idle { color: #85847e; }
+    /* A participant's tracks: an arrow at the end of the name line opens them in a box below */
+    .owp-tracks-fold { flex-shrink: 0; width: ${px(22)}; height: ${px(22)}; padding: 0; justify-content: center; margin-inline-start: auto; }
+    .owp-host-badge + .owp-tracks-fold { margin-inline-start: 0; }
+    .owp-tracks {
+      display: grid; grid-template-columns: auto 1fr; gap: ${px(3)} ${px(10)}; align-items: baseline;
+      margin-top: ${px(6)}; padding: ${px(7)} ${px(9)}; border-radius: ${px(8)}; background: rgba(var(--owp-ink), 0.05);
+    }
+    .owp-tracks-label { font-size: ${px(11)}; color: var(--owp-muted); }
+    .owp-tracks-value { min-width: 0; overflow-wrap: anywhere; color: var(--owp-text); }
     .owp-host-badge {
       flex-shrink: 0; padding: 0 ${px(4)}; border-radius: ${px(5)};
       background: #27500a; color: #97c459; font-size: ${px(11)};

@@ -129,6 +129,31 @@ pub fn participant_statuses_message(room: &Room) -> WsMessage {
     }
 }
 
+/// Builds the `participant_tracks` message: each member's last reported audio
+/// and subtitle tracks, or null, in the same order as `participant_list`. It
+/// is sent right after every `participant_statuses` and whenever a member's
+/// tracks change. Clients that do not know it ignore it.
+pub fn participant_tracks_message(room: &Room) -> WsMessage {
+    let tracks: Vec<serde_json::Value> = room
+        .clients
+        .iter()
+        .map(|client_id| {
+            room.tracks
+                .get(client_id)
+                .cloned()
+                .unwrap_or(serde_json::Value::Null)
+        })
+        .collect();
+    WsMessage {
+        msg_type: ServerMessageType::ParticipantTracks,
+        room: Some(room.room_id.clone()),
+        client: None,
+        payload: Some(serde_json::json!({ "tracks": tracks })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -189,6 +214,23 @@ mod tests {
         assert_eq!(
             message.payload.unwrap()["statuses"],
             serde_json::json!(["playing", null, "buffering"])
+        );
+    }
+
+    #[test]
+    fn tracks_follow_the_list_order_with_null_when_unknown() {
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = vec!["host".to_string(), "ana".to_string()];
+        let english = serde_json::json!({ "media_id": "0".repeat(32), "audio": { "title": "English" }, "subtitle": null });
+        room.tracks.insert("ana".to_string(), english.clone());
+
+        let message = participant_tracks_message(&room);
+
+        assert_eq!(message.msg_type, ServerMessageType::ParticipantTracks);
+        assert_eq!(message.room.as_deref(), Some("room"));
+        assert_eq!(
+            message.payload.unwrap()["tracks"],
+            serde_json::json!([null, english])
         );
     }
 }
