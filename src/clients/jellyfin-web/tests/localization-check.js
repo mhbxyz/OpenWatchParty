@@ -107,7 +107,7 @@ const findUnlocalizedSources = sources => {
           }
           const name = callName(node);
           if (['createTextNode', 'showToast', 'confirm', 'alert'].includes(name)) sinks.push(node.arguments[0]);
-          if (name === 'createElement' && !(filename === 'ui/cards.js' && node.arguments[1]?.value === 'material-icons' && node.arguments[2]?.value === 'groups')) sinks.push(node.arguments[2]);
+          if (name === 'createElement' && !(filename === 'ui/cards.js' && node.arguments[1]?.value === 'material-icons' && ['groups', 'lock'].includes(node.arguments[2]?.value))) sinks.push(node.arguments[2]);
           if (name === 'setAttribute' && displayAttributes.has(node.arguments[0]?.value)) sinks.push(node.arguments[1]);
           if (['append', 'prepend', 'replaceChildren'].includes(name)) sinks.push(...node.arguments);
           if (['insertAdjacentHTML', 'insertAdjacentText'].includes(name)) sinks.push(node.arguments[1]);

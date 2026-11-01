@@ -6,8 +6,8 @@ use crate::messaging::{
     broadcast_room_list, collect_room_senders, send_message, send_to_senders, ClientSender,
 };
 use crate::room::{
-    handle_leave_without_transfer, host_changed_message, participant_list_message,
-    participant_statuses_message, send_leave_notification,
+    handle_leave_without_transfer, host_changed_message, participant_statuses_message,
+    send_leave_notification, send_room_participant_list,
 };
 use crate::types::{Client, IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -56,6 +56,9 @@ fn add_client_to_room(
     room.ready_clients.remove(client_id);
     room.not_ready.remove(client_id);
     if let Some(client) = locked_clients.get_mut(client_id) {
+        if !client.user_id.is_empty() {
+            room.admitted_users.insert(client.user_id.clone());
+        }
         client.room_id = Some(room.room_id.clone());
         if let Some(ref name) = payload_name {
             client.user_name = name.clone();
@@ -194,6 +197,16 @@ pub(in crate::ws) async fn handle_join_room(
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
 ) {
+    join_room(client_id, parsed, state, jwt_config, false).await;
+}
+
+pub(super) async fn join_room(
+    client_id: &str,
+    parsed: &IncomingMessage,
+    state: &SharedState,
+    jwt_config: &Arc<JwtConfig>,
+    admitted: bool,
+) {
     if !is_authenticated(client_id, state).await {
         send_error(
             client_id,
@@ -239,12 +252,54 @@ pub(in crate::ws) async fn handle_join_room(
         } else {
             let room = state.rooms.get(room_id).expect("room existence checked");
             let reclaims_host = can_reclaim_pending_host(client_id, room, &state.clients);
+            let has_ticket = parsed
+                .payload
+                .as_ref()
+                .and_then(|p| p.get("invite_ticket"))
+                .is_some();
+            let previously_admitted = state.clients.get(client_id).is_some_and(|client| {
+                !client.user_id.is_empty() && room.admitted_users.contains(&client.user_id)
+            });
+            let blocked = state
+                .clients
+                .get(client_id)
+                .is_some_and(|client| room.blocked_users.contains(&client.user_id));
+            if !blocked
+                && room.access.approval
+                && !previously_admitted
+                && !admitted
+                && !has_ticket
+                && !reclaims_host
+                && !room.clients.iter().any(|id| id == client_id)
+            {
+                super::access::request_join(client_id, room_id, &payload_name, &mut state);
+                return;
+            }
             let reserved_size =
                 room.clients.len() + usize::from(room.pending_host_reconnect.is_some());
             let full = !reclaims_host
                 && !room.clients.iter().any(|id| id == client_id)
                 && reserved_size >= MAX_CLIENTS_PER_ROOM;
-            if full {
+            // Checked under the same lock as the join, so a block that lands
+            // while the join is on its way still holds. It also refuses a
+            // reclaim and an invite ticket.
+            if blocked {
+                let sender = state.clients.get(client_id).map(|c| c.sender.clone());
+                (
+                    (
+                        sender,
+                        error_message(
+                            client_id,
+                            Some(room_id.clone()),
+                            ErrorCode::BlockedFromRoom,
+                            "The host blocked you from this room",
+                        ),
+                        None,
+                    ),
+                    None,
+                    None,
+                )
+            } else if full {
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 (
                     (
@@ -273,8 +328,18 @@ pub(in crate::ws) async fn handle_join_room(
                     None
                 };
                 let crate::types::ServerState { clients, rooms } = &mut *state;
+                crate::room::access::cancel(client_id, rooms, clients);
                 let room = rooms.get_mut(room_id).expect("room existence checked");
                 let reclaimed_host = add_client_to_room(client_id, room, clients, &payload_name);
+                if reclaimed_host
+                    && !clients
+                        .get(client_id)
+                        .is_some_and(|c| c.supports_room_access)
+                {
+                    room.access.approval = false;
+                    crate::room::access::reject_waiting(room, clients, "unavailable");
+                    room.join_requests.clear();
+                }
                 let notifications = prepare_join_notifications(client_id, room, clients);
                 let participants = (
                     collect_room_senders(room, clients, None),
@@ -285,7 +350,6 @@ pub(in crate::ws) async fn handle_join_room(
                             .unwrap_or_default();
                         host_changed_message(room_id, client_id, host_name)
                     }),
-                    participant_list_message(room, clients),
                     participant_statuses_message(room),
                 );
                 if reclaimed_host {
@@ -299,14 +363,18 @@ pub(in crate::ws) async fn handle_join_room(
         }
         enqueue_join_notifications(client_id, notifications);
         let joined = participants.is_some();
-        if let Some((senders, host_changed, list, statuses)) = participants {
+        if let Some((senders, host_changed, statuses)) = participants {
             if let Some(message) = host_changed {
                 send_to_senders(&senders, &message, "host reconnect");
             }
-            send_to_senders(&senders, &list, "participant list");
+            let room = state.rooms.get(room_id).expect("joined room still exists");
+            send_room_participant_list(room, &state.clients);
             send_to_senders(&senders, &statuses, "participant statuses");
         }
         if let Some(room) = state.rooms.get(room_id) {
+            if joined {
+                crate::room::access::send_access(room, &state.clients);
+            }
             crate::room::send_room_capabilities(room, &state.clients);
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
             if joined {
@@ -436,6 +504,17 @@ mod tests {
     }
 
     #[test]
+    fn membership_remembers_only_nonempty_user_ids() {
+        for user_id in ["", "jellyfin-user"] {
+            let (client, _rx) = test_helpers::create_client_with_rx(user_id, "Guest", true);
+            let mut clients = HashMap::from([("guest".to_string(), client)]);
+            let mut room = test_helpers::create_room("room", "host");
+            add_client_to_room("guest", &mut room, &mut clients, &None);
+            assert_eq!(room.admitted_users.contains(user_id), !user_id.is_empty());
+        }
+    }
+
+    #[test]
     fn add_client_to_room_clears_ready() {
         let mut clients = HashMap::new();
         let (client, _rx) = test_helpers::create_client_with_rx("u2", "Guest", true);
@@ -552,6 +631,7 @@ mod tests {
             locked.clients.insert("old-host".to_string(), old_host);
             locked.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room", "old-host");
+            room.access.approval = true;
             room.clients.push("guest".to_string());
             locked.rooms.insert("room".to_string(), room);
         }
@@ -902,6 +982,7 @@ mod tests {
         let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
         let (guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
         host.room_id = Some("room".to_string());
+        host.supports_room_moderation = true;
         {
             let mut locked = state.write().await;
             locked.clients.insert("host".to_string(), host);
@@ -914,10 +995,16 @@ mod tests {
 
         handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
 
-        let expected = serde_json::json!({
+        let legacy = serde_json::json!({
             "participants": [
                 { "name": "Franco", "is_host": true },
                 { "name": "Ana", "is_host": false }
+            ]
+        });
+        let moderation = serde_json::json!({
+            "participants": [
+                { "id": "host", "name": "Franco", "is_host": true },
+                { "id": "guest", "name": "Ana", "is_host": false }
             ]
         });
         assert_eq!(
@@ -926,14 +1013,14 @@ mod tests {
         );
         let guest_list = test_helpers::recv_msg(&mut guest_rx).unwrap();
         assert_eq!(guest_list.msg_type, ServerMessageType::ParticipantList);
-        assert_eq!(guest_list.payload.unwrap(), expected);
+        assert_eq!(guest_list.payload.unwrap(), legacy);
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
             ServerMessageType::ParticipantsUpdate
         );
         let host_list = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(host_list.msg_type, ServerMessageType::ParticipantList);
-        assert_eq!(host_list.payload.unwrap(), expected);
+        assert_eq!(host_list.payload.unwrap(), moderation);
         for rx in [&mut guest_rx, &mut host_rx] {
             let statuses = test_helpers::recv_msg(rx).unwrap();
             assert_eq!(statuses.msg_type, ServerMessageType::ParticipantStatuses);

@@ -57,9 +57,14 @@ describe('localization catalogs', () => {
     assert.equal(localizeServerError('ROOM_FULL', 'Room is full'), 'La sala está llena');
     assert.equal(localizeServerError('AUTHENTICATION_EXPIRED', 'Invite ticket has expired'), 'El enlace de invitación expiró');
     assert.equal(localizeServerError('HOST_PERMISSION_REQUIRED', 'Only the room host can control playback'), 'Solo el anfitrión controla la reproducción');
+    assert.equal(localizeServerError('BLOCKED_FROM_ROOM', 'The host blocked you from this room'), 'El anfitrión no te deja entrar a esta sala');
+    assert.equal(localizeServerError('PARTICIPANT_NOT_FOUND', 'That participant is no longer in the room'), 'Esa persona ya no está en la sala');
+    assert.equal(localizeServerError('INVALID_MODERATION_TARGET', 'You cannot block your own account'), 'No se puede bloquear la propia cuenta');
     assert.equal(localizeServerError('INVALID_JSON', 'Invalid JSON'), 'Invalid JSON');
     assert.equal(localizeServerError('constructor', ''), 'Error desconocido');
     assert.equal(localizeRoomClosedReason('Host left the room'), 'El anfitrión salió de la sala');
+    assert.equal(localizeRoomClosedReason('The host removed you from the room'), 'El anfitrión te quitó de la sala');
+    assert.equal(localizeRoomClosedReason('The host removed you from the room and blocked you from rejoining'), 'El anfitrión te quitó de la sala y no te deja volver a entrar');
     assert.equal(localizeRoomClosedReason('Host left'), 'Host left');
     assert.equal(localizeRoomClosedReason(undefined), 'La sala se cerró');
     document.documentElement.lang = 'en';

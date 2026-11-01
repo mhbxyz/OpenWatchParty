@@ -104,6 +104,14 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | Property | Type | Description |
 |----------|------|-------------|
 | `ws` | WebSocket\|null | WebSocket connection instance |
+| `createAccess` | object | Creation switches `{ approval: false, unlisted: false }`; reset after successful creation |
+| `roomAccess` | object | Current room settings from `room_access`; reset on leave |
+| `joinRequests` | array | Host's ordered pending requests `{ id, name }`; reset on leave |
+| `joinTarget` | string | Last sent join room id; cleared on cancellation, admission or rejection to ignore late replies |
+| `cancelledJoinRoomId` | string | Withdrawn request whose racing admission must be left; remembered until the next join attempt |
+| `createRoomPending` | boolean | Awaiting successful creation; its host `room_state` clears any previous request |
+| `pendingJoin` | object or null | `{ roomId, roomName, hostName }` while waiting; cleared on admission, cancellation, rejection or error |
+| `joinOutcome` | object or null | `{ roomId, roomName, reason, hostName }` after rejection; cleared on retry or admission |
 | `roomId` | string | Current room ID |
 | `clientId` | string | Unique client ID (assigned by server) |
 | `name` | string | User display name |
@@ -130,8 +138,10 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | `joiningItemId` | string | Media ID being loaded |
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
-| `participants` | array | `{ name, isHost, status }` entries from `participant_list` and `participant_statuses`; empty until the server sends one |
+| `participants` | array | `{ id?, name, isHost, status }` entries from `participant_list` and `participant_statuses`; `id` is present only when `room_moderation` was negotiated |
+| `pendingModerations` | array | Host remove/block requests awaiting the matching `client_left`; cleared by an error or room reset |
 | `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'sync'`, `'queue'`, `'leave'` or `''` |
+| `moderationOpenParticipantId` | string | Client id of the one open participant action block, or `''` |
 | `roomMediaId` | string | The room's item from `room_state`; a change in the same room is a move to another queue item |
 | `queueItems` | array | `{ id, title }` entries from `queue_state` |
 | `queueCurrent` | number\|null | Index of the room's item in `queueItems` |
@@ -354,7 +364,7 @@ previous drift-correction status.
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "room_moderation"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
 
 `room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. The host keeps the play and pause it sent (`hostControlAcks`) until their canonical events return, and retires them without applying them again; a newer opposite control supersedes a pending command, and a guest command that changes neither the play state nor the position does not start the syncing lock. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
 
@@ -398,6 +408,9 @@ Leaves the current room. With negotiated host transfer, the host's room-bar conf
 #### `closeRoom() -> void`
 Closes the room when invoked by the host. It sends `close_room` when the server confirmed `host_transfer`; with an older server it sends `leave_room`, which preserves the previous close-on-host-leave behavior. Exiting the player always calls `leaveRoom()`.
 
+#### `removeParticipant(id: string, block: boolean) -> void`
+Sends `remove_participant` for the current room and remembers the participant's id, name and requested action until `client_left` supplies the host's localized removal notice. An error clears pending moderation requests.
+
 #### `connect() -> void`
 Establishes WebSocket connection.
 - **Auto-reconnect**: If `autoReconnect === true`, retries with exponential backoff starting at 1 second and capped at 30 seconds.
@@ -430,7 +443,10 @@ Response to `create_room` or `join_room`:
 Updates participant counter and shows toast for new participant.
 
 #### `participant_list`
-Stores the participants' names for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names. The statuses are cleared until `participant_statuses` follows.
+Stores the participants' names and optional client ids for the current room and shows them instead of the count, one row per name with a separate **Host** badge. Lists for another room are ignored, and joining another room clears the previous names. The statuses are cleared until `participant_statuses` follows. Only a client that negotiated `room_moderation` receives ids.
+
+#### `client_left`
+Updates the count and normally shows the generic participant-left notice. When its client id matches a pending host moderation request, it instead names the removed or blocked participant.
 
 #### `participant_statuses`
 Stores each participant's status, when the list has the same length as the participants, and shows it under the name. It also marks the server as accepting `participant_status`, so `playback.reportStatus()` (run on every sync tick in a room) sends this client's status, from `playback.ownStatus()`, once it has held for `PARTICIPANT_STATUS_HOLD_MS`. The same sends go to a server that declared `participant_status` in its `auth_success` features; a server that does neither receives nothing.
@@ -450,7 +466,7 @@ With a server that acknowledges `chat_history`, joining a room brings its last 5
 Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The existing room bar is updated in place so Invite and the current leave choices change without replacing chat or keyboard focus. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
 
 #### `room_closed`
-Resets state when the room is explicitly closed or host transfer is unavailable.
+Resets state when the room is explicitly closed, host transfer is unavailable, or this client was removed. Removal and block reasons are localized and remain visible for six seconds. A `BLOCKED_FROM_ROOM` join error also resets the attempted membership to the lobby, including invite and reconnect paths.
 
 #### `player_event`
 Playback command received from host:
@@ -517,7 +533,7 @@ Restores the default panel placement, away from the header.
 Enables "Create Room" only while something is playing; otherwise shows a hint.
 
 #### `updateParticipantList() -> void`
-Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server, and updates the count on the bar's participants button.
+Shows the participants' names (`state.participants`) in the room view, or the count when no names were received, for example from an older session server, and updates the count on the bar's participants button. For a host with negotiated moderation, identified non-host rows have an options button that opens Remove and Block actions. One action block stays open by participant id across status redraws; Cancel or Escape closes it and restores focus, and losing the participant or host role closes it.
 
 #### Room bar
 In a room, `render()` draws a single bar (sync dot, latency, room name, then the participants, chat, leave and close buttons) and a drop-down below it. Participants, chat and the leave confirmation open one at a time (`state.roomBarSection`). Guests get Cancel and Leave. A host gets Cancel and Close room when alone or when `host_transfer` was not negotiated; otherwise the host gets Cancel, Leave and Close for everyone, plus the name of the first non-host participant who will take over. Participant lists and host changes update these controls in place. The chat counts as read only while its drop-down is open (`chat.isChatVisible()`). Keyboard: Escape closes the open drop-down and returns focus to its button; if an in-place update removes the focused choice, focus moves to Cancel. The panel is a non-modal `role="dialog"`, and every button that opens it (header and player) carries `aria-controls` and `aria-expanded`. Opened from the keyboard (a `click` with `detail` 0), the panel takes focus on its first control other than the close button; a mouse click leaves focus alone, so the player's shortcuts keep working. A full redraw with focus inside the panel (Create Room or Join changing the view, say) puts focus back on the same control or on the first one (a room list update does the same for the focused room's Join button), and `ui.hidePanel()` (the close button, leaving the room, closing the player) moves focus out of the hidden panel, to the button that opened it when that button is shown.
@@ -528,8 +544,8 @@ Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following 
 #### `applyAppearance() -> void`
 Sets `--owp-scale` (text size / 12) and `--owp-surface-alpha` from `state.appearanceTextSize` and `state.appearanceOpacity` (from `appearance_text_size` and `appearance_opacity` in the token response), and the color variables of `state.appearancePreset` (`appearance_preset`) over Glass's, in its own stylesheet. A missing or out-of-range value falls back to the default.
 
-#### `showToast(message: string) -> void`
-Shows a toast notification.
+#### `showToast(message: string, options?: { duration?: number }) -> void`
+Shows a toast notification for `duration`, or 1.5 seconds by default.
 
 ## Localization
 

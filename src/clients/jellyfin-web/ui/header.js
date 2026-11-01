@@ -450,5 +450,9 @@
     showFirstRunHelp();
   };
 
-  Object.assign(ui, { injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement, closePanelOnPress, applyPlayerControls });
+  Object.assign(ui, { showPanel() {
+    const panel = document.getElementById(PANEL_ID);
+    const button = document.getElementById(MODERN_HEADER_BTN_ID) || document.getElementById(LEGACY_HEADER_BTN_ID);
+    if (panel && button) openPanelFromHeader(panel, button);
+  }, injectHeaderButtons, removeHeaderButtons, resetPanelPlacement, updatePanelPlacement, closePanelOnPress, applyPlayerControls });
 })();

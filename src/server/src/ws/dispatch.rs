@@ -2,7 +2,8 @@ use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
     handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
     handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
-    handle_queue, handle_readiness, handle_ready, handle_start_now, handle_unknown,
+    handle_queue, handle_readiness, handle_ready, handle_remove_participant, handle_start_now,
+    handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -62,6 +63,12 @@ pub(super) enum ErrorCode {
     ChatMessageEmpty,
     ChatMessageTooLong,
     InvalidQueuePayload,
+    InvalidModerationPayload,
+    ParticipantNotFound,
+    InvalidModerationTarget,
+    BlockedFromRoom,
+    InvalidAccessPayload,
+    RoomApprovalRequired,
 }
 
 pub(super) fn error_message(
@@ -274,7 +281,12 @@ pub(super) async fn client_msg(
             handle_join_room(client_id, &parsed, state, jwt_config).await
         }
         ClientMessageType::Ready => handle_ready(client_id, &parsed, state).await,
-        ClientMessageType::LeaveRoom => handle_leave_room(client_id, state).await,
+        ClientMessageType::LeaveRoom => {
+            handle_leave_room(client_id, parsed.room.as_deref(), state).await
+        }
+        ClientMessageType::RemoveParticipant => {
+            handle_remove_participant(client_id, &parsed, state).await
+        }
         ClientMessageType::CloseRoom => handle_close_room(client_id, state).await,
         ClientMessageType::PlayerEvent | ClientMessageType::StateUpdate => {
             handle_playback(client_id, parsed, state, tasks).await
@@ -291,6 +303,11 @@ pub(super) async fn client_msg(
         | ClientMessageType::QueueAdvance
         | ClientMessageType::QueueCountdown => handle_queue(client_id, &parsed, state, tasks).await,
         ClientMessageType::Readiness => handle_readiness(client_id, &parsed, state).await,
+        ClientMessageType::SetRoomAccess
+        | ClientMessageType::CancelJoin
+        | ClientMessageType::AnswerJoin => {
+            super::handlers::access::handle_access(client_id, &parsed, state, jwt_config).await;
+        }
         ClientMessageType::StartNow => handle_start_now(client_id, &parsed, state).await,
         ClientMessageType::Unknown => handle_unknown(client_id, state).await,
     }
@@ -367,6 +384,73 @@ mod tests {
         assert!(bytes <= 25_600, "queued pongs retained {bytes} bytes");
     }
 
+    #[tokio::test]
+    async fn stale_leave_after_cancelled_admission_preserves_the_new_room() {
+        let state = test_helpers::create_state();
+        let (mut client, mut rx) = test_helpers::create_client_with_rx("user", "Host", true);
+        client.room_id = Some("created".to_string());
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("peer".to_string(), client);
+            locked.rooms.insert(
+                "created".to_string(),
+                test_helpers::create_room("created", "peer"),
+            );
+        }
+        let tasks = crate::tasks::AppTasks::new();
+        let config = insecure_jwt_config();
+        let leave = serde_json::json!({
+            "type": "leave_room", "room": "cancelled", "payload": {}, "ts": 0
+        });
+        client_msg(
+            "peer",
+            warp::ws::Message::text(leave.to_string()),
+            &state,
+            &config,
+            &tasks,
+        )
+        .await;
+
+        let locked = state.read().await;
+        assert_eq!(locked.clients["peer"].room_id.as_deref(), Some("created"));
+        assert_eq!(locked.rooms["created"].clients, vec!["peer"]);
+        assert!(test_helpers::recv_msg(&mut rx).is_none());
+    }
+
+    #[tokio::test]
+    async fn matching_and_unspecified_leaves_still_leave_the_current_room() {
+        for room in [Some("created"), None] {
+            let state = test_helpers::create_state();
+            let (mut client, _rx) = test_helpers::create_client_with_rx("user", "Host", true);
+            client.room_id = Some("created".to_string());
+            {
+                let mut locked = state.write().await;
+                locked.clients.insert("peer".to_string(), client);
+                locked.rooms.insert(
+                    "created".to_string(),
+                    test_helpers::create_room("created", "peer"),
+                );
+            }
+            let tasks = crate::tasks::AppTasks::new();
+            let config = insecure_jwt_config();
+            let leave = serde_json::json!({
+                "type": "leave_room", "room": room, "payload": {}, "ts": 0
+            });
+            client_msg(
+                "peer",
+                warp::ws::Message::text(leave.to_string()),
+                &state,
+                &config,
+                &tasks,
+            )
+            .await;
+
+            let locked = state.read().await;
+            assert!(locked.clients["peer"].room_id.is_none());
+            assert!(!locked.rooms.contains_key("created"));
+        }
+    }
+
     #[test]
     fn error_message_has_stable_serialized_payload() {
         let message = error_message(
@@ -426,6 +510,18 @@ mod tests {
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
             (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
+            (
+                ErrorCode::InvalidModerationPayload,
+                "INVALID_MODERATION_PAYLOAD",
+            ),
+            (ErrorCode::ParticipantNotFound, "PARTICIPANT_NOT_FOUND"),
+            (
+                ErrorCode::InvalidModerationTarget,
+                "INVALID_MODERATION_TARGET",
+            ),
+            (ErrorCode::BlockedFromRoom, "BLOCKED_FROM_ROOM"),
+            (ErrorCode::InvalidAccessPayload, "INVALID_ACCESS_PAYLOAD"),
+            (ErrorCode::RoomApprovalRequired, "ROOM_APPROVAL_REQUIRED"),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

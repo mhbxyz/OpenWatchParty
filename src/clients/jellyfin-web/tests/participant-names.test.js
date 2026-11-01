@@ -76,6 +76,14 @@ describe('participant_list schema', () => {
     assert.equal(validate(listMessage([])).valid, true);
   });
 
+  it('accepts optional participant ids and rejects invalid ones', () => {
+    assert.equal(validate(listMessage([{ name: 'Ana', is_host: false, id: 'client-1' }])).valid, true);
+    const invalid = id => assert.equal(validate(listMessage([{ name: 'Ana', is_host: false, id }])).valid, false);
+    invalid('');
+    invalid(42);
+    invalid('x'.repeat(129));
+  });
+
   it('rejects malformed lists', () => {
     const invalid = message => assert.equal(validate(message).valid, false);
     invalid(envelope({ participants: [{ name: 'Ana', is_host: false }] }, { room: undefined }));
@@ -83,7 +91,7 @@ describe('participant_list schema', () => {
     invalid(envelope({ participants: 'Ana' }));
     invalid(listMessage([{ name: 'Ana' }]));
     invalid(listMessage([{ name: 'Ana', is_host: 'no' }]));
-    invalid(listMessage([{ name: 'Ana', is_host: false, id: 'client-1' }]));
+    invalid(listMessage([{ name: 'Ana', is_host: false, id: 'client-1', extra: true }]));
     invalid(listMessage([{ name: 42, is_host: false }]));
     invalid(listMessage([{ name: 'x'.repeat(101), is_host: false }]));
     invalid(listMessage(['Ana']));
@@ -140,6 +148,15 @@ describe('participant names in the room panel', () => {
 
     renderRoomPanel();
     assert.deepEqual(participantChips(), hostAndGuest);
+  });
+
+  it('keeps participant ids in state when the server sends them', () => {
+    renderRoomPanel();
+    h.handleParticipantList(listMessage([
+      { name: 'Franco', is_host: true, id: 'host' },
+      { name: 'Ana', is_host: false, id: 'guest' }
+    ]));
+    assert.deepEqual(OWP.state.participants.map(participant => participant.id), ['host', 'guest']);
   });
 
   it('keeps the names when a count update arrives', () => {

@@ -9,6 +9,8 @@
   const applyRoomState = (msg) => {
     // Names from another room must not show until this room's list arrives.
     if (msg.room !== state.roomId) {
+      state.roomAccess = { approval: false, unlisted: false };
+      state.joinRequests = [];
       state.participants = [];
       state.sharedPlaybackControl = false;
       Object.assign(state, OWP.stateFactories.createQueueState());
@@ -161,9 +163,23 @@
   };
 
   h.handleRoomState = (msg, video) => {
+    if (msg.room === state.cancelledJoinRoomId) {
+      OWP.actions.send('leave_room', {}, msg.room);
+      return;
+    }
     if (state.rejoinPending && state.desiredRoomId && msg.room !== state.desiredRoomId) return;
     const rejoined = state.rejoinPending && msg.room === state.desiredRoomId;
     if (!state.rejoinPending && state.rejectedRejoinRoomIds.includes(msg.room)) return;
+    if (state.createRoomPending && msg.payload.host_id === state.clientId) {
+      state.createRoomPending = false;
+      state.pendingJoin = null;
+      state.joinOutcome = null;
+      state.joinTarget = '';
+    }
+    if (state.joinTarget === msg.room) state.joinTarget = '';
+    if (state.pendingJoin?.roomId === msg.room) state.pendingJoin = null;
+    if (state.joinOutcome?.roomId === msg.room) state.joinOutcome = null;
+    if (msg.payload.host_id === state.clientId) state.createAccess = { approval: false, unlisted: false };
     state.hostControlAcks = [];
     // The room moved from its item to another queue item: everyone, the host
     // too, loads it as on joining and reports ready again.

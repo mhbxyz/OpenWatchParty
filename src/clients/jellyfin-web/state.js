@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -190,12 +190,20 @@
   });
 
   const createRoomState = () => ({
+    roomAccess: { approval: false, unlisted: false },
+    joinRequests: [],
+    joinTarget: '',        // Last join sent; fences replies after cancellation or a different join
+    cancelledJoinRoomId: '', // A racing admission must be left before showing the room
+    createRoomPending: false,
+    pendingJoin: null,
+    joinOutcome: null,
     roomId: '',
     isHost: false,
     inRoom: false,
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    participants: [],      // [{ id, name, isHost, status }] from participant_list and participant_statuses
+    pendingModerations: [], // Host remove/block requests awaiting client_left, by participant id
     lastParticipantCount: 0,
     statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
     statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
@@ -310,10 +318,12 @@
 
   const createRoomUIState = () => ({
     roomBarSection: '',    // Drop-down open under the room bar: 'people', 'chat', 'leave' or ''
+    moderationOpenParticipantId: '', // Participant whose remove/block choices are open
   });
 
   const createUIState = () => ({
     ...createRoomUIState(),
+    createAccess: { approval: false, unlisted: false },
     name: '',
     rooms: [],
     initialized: false,

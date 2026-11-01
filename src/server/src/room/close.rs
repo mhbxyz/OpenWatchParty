@@ -70,6 +70,7 @@ pub(crate) fn close_room_parts(
     rooms: &mut HashMap<String, crate::types::Room>,
 ) -> Option<Vec<ClientSender>> {
     let room = rooms.remove(room_id)?;
+    super::access::reject_waiting(&room, clients, "closed");
     info!("Closing room room_id={room_id}");
     let mut clients_to_notify = room.clients;
     for (client_id, client) in clients.iter() {

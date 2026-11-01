@@ -5,6 +5,38 @@
   const ui = OWP.ui;
   const t = OWP.i18n.t;
 
+  h.handleRoomAccess = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.roomAccess = { ...msg.payload };
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinRequests = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.joinRequests = msg.payload.requests;
+    ui.updateParticipantList();
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinPending = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    if (state.rejoinPending && state.desiredRoomId === msg.room) {
+      OWP.actions.completeRoomRejoin(msg.room);
+    }
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.pendingJoin = { roomId: msg.room, roomName, hostName: msg.payload.host_name };
+    state.joinOutcome = null;
+    ui.updateRoomListUI();
+  };
+  h.handleJoinRejected = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.joinTarget = '';
+    state.pendingJoin = null;
+    state.joinOutcome = { roomId: msg.room, roomName, reason: msg.payload.reason, hostName: msg.payload.host_name };
+    if (!state.inRoom) state.roomId = '';
+    state.desiredRoomId = '';
+    ui.updateRoomListUI();
+  };
+
   h.handleRoomList = (msg) => {
     state.rooms = msg.payload || [];
     if (!state.inRoom) ui.updateRoomListUI();
@@ -21,6 +53,7 @@
   h.handleAuthSuccess = (msg) => {
     state.serverFeatures = msg.payload?.features || [];
     if (!state.serverFeatures.includes('shared_playback_control')) state.sharedPlaybackControl = false;
+    if (state.inRoom && ui.updateParticipantList) ui.updateParticipantList();
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
@@ -48,7 +81,11 @@
       state.participantCount = msg.payload.participant_count;
       if (state.inRoom) {
         ui.updateParticipantList();
-        ui.showToast(t('participantLeft'));
+        const moderation = state.pendingModerations.find(request => request.id === msg.client);
+        state.pendingModerations = state.pendingModerations.filter(request => request.id !== msg.client);
+        ui.showToast(moderation
+          ? t(moderation.block ? 'participantBlocked' : 'participantRemoved', { name: moderation.name })
+          : t('participantLeft'));
       }
       state.lastParticipantCount = state.participantCount;
     }
@@ -79,6 +116,7 @@
     if (!state.inRoom || msg.room !== state.roomId) return;
     // The statuses for this list follow in participant_statuses.
     state.participants = msg.payload.participants.map(participant => ({
+      ...(participant.id ? { id: participant.id } : {}),
       name: participant.name,
       isHost: participant.is_host,
       status: null
@@ -113,6 +151,7 @@
     }
     if (OWP.queue?.refresh) OWP.queue.refresh();
     ui.render();
+    if (ui.updateParticipantList) ui.updateParticipantList();
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
     ui.showToast(becameHost ? t('youAreHost') : t('nowHost', { name: msg.payload.host_name }));
   };
@@ -124,14 +163,25 @@
       state.inRoom = false;
       state.roomId = '';
     }
-    const reason = OWP.i18n.localizeRoomClosedReason(msg.payload?.reason);
-    ui.showToast(reason);
+    const rawReason = msg.payload?.reason;
+    const reason = OWP.i18n.localizeRoomClosedReason(rawReason);
+    const moderationNotice = OWP.i18n.isModerationRoomClosedReason(rawReason);
+    if (moderationNotice) ui.showToast(reason, { duration: 6000 });
+    else ui.showToast(reason);
     ui.render();
   };
 
   h.handleError = (msg) => {
+    if (state.pendingJoin && (!msg.room || msg.room === state.pendingJoin.roomId)) {
+      state.joinTarget = '';
+      state.pendingJoin = null;
+      if (!state.inRoom) state.roomId = '';
+      state.desiredRoomId = '';
+      ui.updateRoomListUI();
+    }
     const message = OWP.i18n.localizeServerError(msg.payload?.code, msg.payload?.message);
     console.error('[OpenWatchParty] Server error:', msg.payload?.code, msg.payload?.message);
+    state.pendingModerations = [];
     if (state.inviteJoinPending) {
       // A bad or expired invite must fall back to the normal room list.
       state.inviteJoinPending = false;
@@ -142,6 +192,12 @@
     }
     if (state.rejoinPending && OWP.actions?.failRoomRejoin) {
       OWP.actions.failRoomRejoin(message);
+      return;
+    }
+    if (msg.payload?.code === 'BLOCKED_FROM_ROOM') {
+      if (OWP.actions?.resetRoomState) OWP.actions.resetRoomState();
+      ui.showToast(message);
+      ui.render();
       return;
     }
     ui.showToast(message);

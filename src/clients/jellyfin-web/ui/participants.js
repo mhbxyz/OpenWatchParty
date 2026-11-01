@@ -25,7 +25,154 @@
   };
 
 
+  const canModerate = participant => state.isHost
+    && state.serverFeatures.includes('room_moderation')
+    && participant.id
+    && participant.id !== state.clientId;
+
+
+  const moderationButton = (className, label, action) => {
+    const button = createElement('button', className, label);
+    button.type = 'button';
+    button.dataset.moderationAction = action;
+    return button;
+  };
+
+
+  const closeModeration = (list, participantId) => {
+    state.moderationOpenParticipantId = '';
+    fillParticipantList(list);
+    const button = Array.from(list.querySelectorAll('.owp-mod-more'))
+      .find(candidate => candidate.dataset.participantId === participantId);
+    if (button) button.focus({ preventScroll: true });
+  };
+
+
+  const createModerationControls = (list, participant, name) => {
+    const open = state.moderationOpenParticipantId === participant.id;
+    const more = createElement('button', 'owp-bar-btn owp-mod-more');
+    more.type = 'button';
+    more.dataset.participantId = participant.id;
+    more.dataset.moderationAction = 'options';
+    more.title = t('participantOptions', { name });
+    more.setAttribute('aria-label', more.title);
+    more.setAttribute('aria-expanded', String(open));
+    more.appendChild(views.createIcon('more'));
+    more.onclick = () => {
+      state.moderationOpenParticipantId = open ? '' : participant.id;
+      fillParticipantList(list);
+    };
+    if (!open) return [more];
+
+    const actions = createElement('div', 'owp-mod-actions');
+    const hint = createElement('div', 'owp-mod-hint', t('moderationHint'));
+    const buttons = createElement('div', 'owp-mod-buttons');
+    const cancel = moderationButton('owp-pill-btn secondary owp-mod-cancel', t('cancel'), 'cancel');
+    const remove = moderationButton('owp-pill-btn secondary owp-mod-remove', t('removeParticipant'), 'remove');
+    const block = moderationButton('owp-pill-btn danger owp-mod-block', t('blockParticipant'), 'block');
+    cancel.onclick = () => closeModeration(list, participant.id);
+    remove.onclick = () => {
+      OWP.actions?.removeParticipant?.(participant.id, false);
+      closeModeration(list, participant.id);
+    };
+    block.onclick = () => {
+      OWP.actions?.removeParticipant?.(participant.id, true);
+      closeModeration(list, participant.id);
+    };
+    actions.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeModeration(list, participant.id);
+    });
+    buttons.append(cancel, remove, block);
+    actions.append(hint, buttons);
+    return [more, actions];
+  };
+
+
+  const createAccessControls = (creating = false) => {
+    const group = createElement('div', creating ? 'owp-access owp-access-create' : 'owp-access');
+    if (!creating) group.appendChild(createElement('div', 'owp-access-title', t('roomAccess')));
+    for (const key of ['approval', 'unlisted']) {
+      const value = creating ? state.createAccess : state.roomAccess;
+      const row = createElement('div', 'owp-access-row');
+      const text = createElement('span', 'owp-access-text');
+      const label = key === 'approval' ? 'accessApproval' : 'accessUnlisted';
+      text.append(createElement('span', 'owp-access-label', t(label)), createElement('span', 'owp-access-hint', t(`${label}Hint`)));
+      const button = createElement('button', 'owp-switch');
+      button.type = 'button';
+      button.setAttribute('role', 'switch');
+      button.setAttribute('aria-label', t(label));
+      button.setAttribute('aria-checked', String(value[key]));
+      button.onclick = () => {
+        if (creating) {
+          state.createAccess[key] = !state.createAccess[key];
+          button.setAttribute('aria-checked', String(state.createAccess[key]));
+        } else {
+          OWP.actions.setRoomAccess(key === 'approval' ? !value.approval : value.approval, key === 'unlisted' ? !value.unlisted : value.unlisted);
+        }
+      };
+      row.append(text, button);
+      group.appendChild(row);
+    }
+    return group;
+  };
+
+  const requestRow = (request, card = false) => {
+    const row = createElement('div', 'owp-participant owp-request-row');
+    const avatar = createElement('span', 'owp-participant-avatar', Array.from(request.name || t('guest'))[0].toUpperCase());
+    avatar.setAttribute('aria-hidden', 'true');
+    const text = createElement('span', 'owp-participant-main');
+    if (card) {
+      const sentence = t('joinRequest', { name: request.name });
+      const start = sentence.indexOf(request.name);
+      text.append(document.createTextNode(sentence.slice(0, start)), createElement('strong', '', request.name), document.createTextNode(sentence.slice(start + request.name.length)));
+    } else {
+      text.append(createElement('span', 'owp-participant-name', request.name), createElement('span', 'owp-participant-status warn', t('wantsToJoin')));
+    }
+    const buttons = createElement('div', 'owp-request-buttons');
+    for (const admit of [false, true]) {
+      const button = createElement('button', `owp-pill-btn ${admit ? 'primary' : 'secondary'}`, t(admit ? 'letIn' : 'reject'));
+      button.type = 'button';
+      button.onclick = () => OWP.actions.answerJoin(request.id, admit);
+      buttons.appendChild(button);
+    }
+    row.append(avatar, text, buttons);
+    return row;
+  };
+
+  const updateAccessUI = () => {
+    document.getElementById('owp-access-controls')?.remove();
+    document.getElementById('owp-request-card')?.remove();
+    document.getElementById('owp-request-badge')?.remove();
+    if (!state.inRoom || !state.isHost || !state.serverFeatures.includes('room_access')) return;
+    const people = document.getElementById('owp-people-section');
+    if (people) {
+      const controls = createAccessControls();
+      controls.id = 'owp-access-controls';
+      people.appendChild(controls);
+    }
+    if (!state.joinRequests.length || state.roomBarSection === 'people') return;
+    const badge = createElement('span', 'owp-request-badge', state.joinRequests.length);
+    badge.id = 'owp-request-badge';
+    badge.setAttribute('aria-label', t('joinWaitingCount', { count: state.joinRequests.length }));
+    document.getElementById('owp-btn-people')?.appendChild(badge);
+    const card = createElement('div', 'owp-request-card');
+    card.id = 'owp-request-card';
+    card.appendChild(requestRow(state.joinRequests[0], true));
+    if (state.joinRequests.length > 1) card.appendChild(createElement('div', 'owp-access-hint', t('moreWaiting', { count: state.joinRequests.length - 1 })));
+    document.getElementById(OWP.constants.PANEL_ID)?.appendChild(card);
+  };
+
   const fillParticipantList = (list) => {
+    if (!state.participants.some(participant => canModerate(participant)
+        && participant.id === state.moderationOpenParticipantId)) {
+      state.moderationOpenParticipantId = '';
+    }
+    const active = document.activeElement;
+    const focusedAction = active && list.contains(active) ? active.dataset?.moderationAction : '';
+    const focusedParticipantId = active && list.contains(active) ? active.dataset?.participantId : '';
     if (!state.participants.length) {
       list.replaceChildren(document.createTextNode(t('onlineCount', { count: state.participantCount || 1 })));
       return;
@@ -38,9 +185,12 @@
       const nameEl = createElement('span', 'owp-participant-name', name);
       const badge = participant.isHost ? createElement('span', 'owp-host-badge', t('host')) : null;
       const status = PARTICIPANT_STATUS[participant.status];
+      const moderation = canModerate(participant) ? createModerationControls(list, participant, name) : [];
+      if (moderation.length > 1) item.classList.add('owp-mod-row');
       if (!status) {
         item.append(avatar, nameEl);
         if (badge) item.appendChild(badge);
+        item.append(...moderation);
         return item;
       }
       item.classList.add('owp-has-status');
@@ -49,9 +199,18 @@
       if (badge) line.appendChild(badge);
       const main = createElement('span', 'owp-participant-main');
       main.append(line, createElement('span', `owp-participant-status ${status.tone}`, t(`status_${participant.status}`)));
-      item.append(avatar, main);
+      item.append(avatar, main, ...moderation);
       return item;
     }));
+    if (focusedAction) {
+      const replacement = Array.from(list.querySelectorAll('button')).find(button =>
+        button.dataset.moderationAction === focusedAction
+        && (!focusedParticipantId || button.dataset.participantId === focusedParticipantId));
+      if (replacement) replacement.focus({ preventScroll: true });
+    }
+    if (state.isHost && state.serverFeatures.includes('room_access')) {
+      for (const request of state.joinRequests) list.appendChild(requestRow(request));
+    }
   };
 
 
@@ -73,5 +232,5 @@
   };
 
   Object.assign(views, { fillParticipantList, participantTotal, peopleLabel });
-  Object.assign(ui, { updateParticipantList });
+  Object.assign(ui, { updateParticipantList, createAccessControls, updateAccessUI });
 })();

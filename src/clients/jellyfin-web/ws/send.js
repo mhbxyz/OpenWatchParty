@@ -83,20 +83,34 @@
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
       || 'Anonymous';
+    state.createRoomPending = true;
     send('create_room', {
       start_pos: v ? v.currentTime : 0,
       media_id: mediaId,
-      user_name: userName
+      user_name: userName,
+      ...(state.serverFeatures.includes('room_access') ? { access: { ...state.createAccess } } : {})
     });
   };
 
   const joinRoom = (id, isReconnect = false, inviteTicket = '') => {
+    if (state.inRoom && !isReconnect && !inviteTicket && state.rooms.some(room => room.id === id && room.approval)) {
+      OWP.ui?.showToast?.(t('leaveToAskToJoin'));
+      return;
+    }
+    state.cancelledJoinRoomId = '';
     // An invite join without a connection keeps its ticket: the next
     // authentication consumes it again.
     if (inviteTicket && !connected()) {
       state.pendingInviteTicket = inviteTicket;
       return;
     }
+    const room = state.rooms.find(room => room.id === id);
+    const previous = [state.pendingJoin, state.joinOutcome].find(join => join?.roomId === id);
+    state.joinOutcome = null;
+    state.pendingJoin = !inviteTicket && (previous || (state.serverFeatures.includes('room_access') && room?.approval))
+      ? { roomId: id, roomName: room?.name || previous?.roomName || t('unknown'), hostName: previous?.hostName || t('host') }
+      : null;
+    OWP.ui?.updateRoomListUI?.();
     state.guestPaused = false;
     state.sharedPlaybackControl = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
@@ -106,13 +120,14 @@
     // waits for the next authentication, as a rejoin does, instead of being lost.
     const deferred = !connected();
     state.rejoinPending = isReconnect || deferred;
-    state.roomId = id;
+    if (!state.inRoom || !state.pendingJoin) state.roomId = id;
     if (deferred) return;
     const userName = state.userName
       || window.ApiClient?._currentUser?.Name
       || 'Anonymous';
     const payload = { user_name: userName };
     if (inviteTicket) payload.invite_ticket = inviteTicket;
+    state.joinTarget = id;
     send('join_room', payload, id);
   };
 
@@ -148,7 +163,34 @@
     }
   };
 
+  const removeParticipant = (id, block) => {
+    const participant = state.participants.find(member => member.id === id);
+    state.pendingModerations = state.pendingModerations.filter(request => request.id !== id);
+    state.pendingModerations.push({
+      id,
+      name: participant?.name || t('guest'),
+      block
+    });
+    send('remove_participant', { id, block });
+  };
+
   Object.assign(actions, {
+    setRoomAccess(approval, unlisted) {
+      if (state.serverFeatures.includes('room_access')) send('set_room_access', { approval, unlisted });
+    },
+    cancelJoin() {
+      if (state.joinTarget) state.cancelledJoinRoomId = state.joinTarget;
+      if (state.serverFeatures.includes('room_access')) send('cancel_join');
+      if (actions.cancelRoomRejoin) actions.cancelRoomRejoin();
+      state.joinTarget = '';
+      state.pendingJoin = null;
+      state.desiredRoomId = '';
+      if (!state.inRoom) state.roomId = '';
+      OWP.ui?.updateRoomListUI?.();
+    },
+    answerJoin(id, admit) {
+      if (state.serverFeatures.includes('room_access')) send('answer_join', { id, admit });
+    },
     send,
     normalizePlaybackRate,
     resetDriftCorrection,
@@ -159,6 +201,7 @@
     createRoom,
     joinRoom,
     leaveRoom,
-    closeRoom
+    closeRoom,
+    removeParticipant
   });
 })();

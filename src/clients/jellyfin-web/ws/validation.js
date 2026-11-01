@@ -36,7 +36,8 @@
     if (!Array.isArray(message.payload)) return 'payload must be an array';
     for (const room of message.payload) {
       if (!object(room)) return 'room_list entries must be objects';
-      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id'])) return 'room_list entry has unknown fields';
+      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval'])) return 'room_list entry has unknown fields';
+      if (!optional(room.approval, value => typeof value === 'boolean')) return 'approval is invalid';
       if (!string(room.id, MAX_ID_LENGTH)) return 'room_list entry id is invalid';
       if (!string(room.name, MAX_ROOM_NAME_LENGTH)) return 'room_list entry name is invalid';
       if (!count(room.count)) return 'room_list entry count is invalid';
@@ -92,9 +93,10 @@
     if (!Array.isArray(participants) || participants.length > MAX_PARTICIPANTS) return 'participants is invalid';
     for (const participant of participants) {
       if (!object(participant)) return 'participant entries must be objects';
-      if (!onlyKeys(participant, ['name', 'is_host'])) return 'participant entry has unknown fields';
+      if (!onlyKeys(participant, ['name', 'is_host', 'id'])) return 'participant entry has unknown fields';
       if (!string(participant.name, MAX_NAME_LENGTH, true)) return 'participant name is invalid';
       if (typeof participant.is_host !== 'boolean') return 'participant is_host is invalid';
+      if (!optional(participant.id, value => string(value, MAX_ID_LENGTH))) return 'participant id is invalid';
     }
     return null;
   };
@@ -218,6 +220,17 @@
   };
 
   const validators = {
+    room_access: message => payloadObject(message) && onlyKeys(message.payload, ['approval', 'unlisted'])
+      && typeof message.payload.approval === 'boolean' && typeof message.payload.unlisted === 'boolean' ? null : 'room_access is invalid',
+    join_requests: message => payloadObject(message) && onlyKeys(message.payload, ['requests'])
+      && Array.isArray(message.payload.requests) && message.payload.requests.length <= 20
+      && message.payload.requests.every(request => object(request) && onlyKeys(request, ['id', 'name'])
+        && string(request.id, MAX_ID_LENGTH) && string(request.name, MAX_NAME_LENGTH, true)) ? null : 'join_requests is invalid',
+    join_pending: message => payloadObject(message) && onlyKeys(message.payload, ['host_name'])
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_pending is invalid',
+    join_rejected: message => payloadObject(message) && onlyKeys(message.payload, ['reason', 'host_name'])
+      && ['rejected', 'closed', 'unavailable'].includes(message.payload.reason)
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_rejected is invalid',
     room_list: validateRoomList,
     client_hello: validateClientHello,
     auth_success: validateAuthSuccess,
@@ -240,6 +253,7 @@
     error: validateError
   };
   const roomRequired = new Set([
+    'room_access', 'join_requests', 'join_pending', 'join_rejected',
     'room_state',
     'room_capabilities',
     'participants_update',

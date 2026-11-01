@@ -704,14 +704,14 @@ mod tests {
         handle_playback("host", player_event("play"), &state, &tasks).await;
         drain_all(&mut rx);
 
-        handle_leave_room("pablo", &state).await;
+        handle_leave_room("pablo", None, &state).await;
         let states = start_states(&mut rx[0]);
         assert_eq!(awaited(&states[0]), named(&[("Ana", "loading")]));
         assert!(!state.read().await.rooms["r1"]
             .not_ready
             .contains_key("pablo"));
 
-        handle_leave_room("ana", &state).await;
+        handle_leave_room("ana", None, &state).await;
         let messages = drain(&mut rx[0]);
         assert_eq!(of_type(&messages, ServerMessageType::PlayerEvent).len(), 1);
         assert_eq!(
@@ -742,7 +742,7 @@ mod tests {
         .await;
         drain_all(&mut rx);
 
-        handle_leave_room("host", &state).await;
+        handle_leave_room("host", None, &state).await;
 
         assert!(state.read().await.rooms["r1"].pending_play.is_none());
         let messages = drain(&mut rx[1]);
