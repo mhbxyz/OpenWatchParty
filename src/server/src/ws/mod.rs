@@ -123,7 +123,7 @@ mod concurrency_tests {
         let leave_state = state.clone();
         let leave = tokio::spawn(async move {
             for _ in 0..40 {
-                handle_leave_room("leaver", &leave_state).await;
+                handle_leave_room("leaver", None, &leave_state).await;
                 tokio::task::yield_now().await;
             }
         });

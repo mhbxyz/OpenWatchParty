@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::time::Instant;
@@ -28,13 +28,35 @@ pub struct Client {
     pub supports_room_moderation: bool,
     pub supports_media_queue: bool,
     pub supports_start_when_ready: bool,
+    pub supports_chat_history: bool,
+    pub supports_room_access: bool,
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RoomAccess {
+    pub approval: bool,
+    pub unlisted: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct JoinRequest {
+    pub id: String,
+    pub client_id: String,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Room {
+    pub access: RoomAccess,
+    #[serde(skip)]
+    pub join_requests: Vec<JoinRequest>,
+    /// Admission survives transport reconnects for the life of the room.
+    #[serde(skip)]
+    pub admitted_users: HashSet<String>,
     pub room_id: String,
     pub name: String,
     pub host_id: String,
@@ -71,6 +93,9 @@ pub struct Room {
     pub guest_command_until: Option<Instant>,
     #[serde(skip)]
     pub queue: crate::room::MediaQueue,
+    /// The room's last chat messages, oldest first, for members who join later.
+    #[serde(skip)]
+    pub chat_history: VecDeque<ChatEntry>,
     /// Why members with `start_when_ready` say they can't play yet, by client
     /// id (see `readiness`). A member is ready once it is in `ready_clients`
     /// and not here.
@@ -98,6 +123,18 @@ impl NotReadyReason {
     pub fn ends_with_ready(self) -> bool {
         matches!(self, Self::Loading | Self::Transcoding)
     }
+}
+
+/// A chat message kept in the room's history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChatEntry {
+    pub client: String,
+    /// The sender's user (JWT subject), never sent: it tells a joiner which
+    /// messages are its own from an earlier connection.
+    pub user_id: String,
+    pub username: String,
+    pub text: String,
+    pub server_ts: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -179,6 +216,10 @@ pub(crate) fn next_host_reconnect_generation() -> u64 {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientMessageType {
+    SetRoomAccess,
+    CancelJoin,
+    AnswerJoin,
+
     Auth,
     ListRooms,
     CreateRoom,
@@ -209,6 +250,10 @@ impl ClientMessageType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Auth => "auth",
+            Self::SetRoomAccess => "set_room_access",
+            Self::CancelJoin => "cancel_join",
+            Self::AnswerJoin => "answer_join",
+
             Self::ListRooms => "list_rooms",
             Self::CreateRoom => "create_room",
             Self::JoinRoom => "join_room",
@@ -238,6 +283,11 @@ impl ClientMessageType {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ServerMessageType {
+    RoomAccess,
+    JoinRequests,
+    JoinPending,
+    JoinRejected,
+
     RoomCapabilities,
     ParticipantList,
     ParticipantStatuses,
@@ -256,12 +306,18 @@ pub enum ServerMessageType {
     ChatMessage,
     QueueState,
     StartState,
+    ChatHistory,
 }
 
 impl ServerMessageType {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::RoomCapabilities => "room_capabilities",
+            Self::RoomAccess => "room_access",
+            Self::JoinRequests => "join_requests",
+            Self::JoinPending => "join_pending",
+            Self::JoinRejected => "join_rejected",
+
             Self::ClientHello => "client_hello",
             Self::AuthSuccess => "auth_success",
             Self::Error => "error",
@@ -279,6 +335,7 @@ impl ServerMessageType {
             Self::ParticipantStatuses => "participant_statuses",
             Self::QueueState => "queue_state",
             Self::StartState => "start_state",
+            Self::ChatHistory => "chat_history",
         }
     }
 }

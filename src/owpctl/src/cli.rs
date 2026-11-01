@@ -27,6 +27,7 @@ pub enum Command {
     Install(ApplyArgs),
     Configure(ConfigureArgs),
     Doctor(DiagnosticArgs),
+    Ui(UiArgs),
     Status(DiagnosticArgs),
     Logs(LogsArgs),
     Upgrade(ApplyArgs),
@@ -85,6 +86,16 @@ pub struct DiagnosticArgs {
     /// Write a redacted support bundle (report, configuration and state) to this file.
     #[arg(long)]
     pub bundle: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct UiArgs {
+    /// Read a Jellyfin administrator API token from this file for deep checks.
+    #[arg(long)]
+    pub api_token_file: Option<PathBuf>,
+    /// Print the dashboard URL without opening a browser.
+    #[arg(long)]
+    pub no_open: bool,
 }
 
 #[derive(Debug, Args)]
@@ -185,5 +196,25 @@ mod tests {
             arguments.bundle.as_deref(),
             Some(std::path::Path::new("/tmp/owp-bundle.json"))
         );
+    }
+
+    #[test]
+    fn ui_accepts_a_token_file_and_no_open() {
+        let cli = Cli::try_parse_from([
+            "owpctl",
+            "ui",
+            "--api-token-file",
+            "/tmp/jellyfin-token",
+            "--no-open",
+        ])
+        .expect("parses");
+        let Command::Ui(arguments) = cli.command else {
+            panic!("expected the ui command");
+        };
+        assert_eq!(
+            arguments.api_token_file.as_deref(),
+            Some(std::path::Path::new("/tmp/jellyfin-token"))
+        );
+        assert!(arguments.no_open);
     }
 }

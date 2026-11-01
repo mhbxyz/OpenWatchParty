@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `room_moderation`, `media_queue` and `start_when_ready`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `room_moderation`, `media_queue`, `start_when_ready`, `chat_history` and `room_access`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000
 }
@@ -76,10 +76,11 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `room_moderation`, `media_queue` and `start_when_ready` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `room_moderation`, `media_queue`, `start_when_ready`, `chat_history` and `room_access` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
-Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets participant ids only when it declared `room_moderation`. It gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
+Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, gets participant ids only when it declared `room_moderation`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
+A joining client gets the last 50 chat messages only when it declared `chat_history`; history is sent before `start_state` so loading it does not replace the new SERVER lines.
 
 ### `list_rooms`
 
@@ -145,11 +146,15 @@ Join an existing room.
 - Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
 - Send the new client `queue_state` if it negotiated `media_queue`
+- Send the new client `chat_history` if it negotiated `chat_history` and the room has messages
 - Broadcast `room_list` to all clients, with the room's new count (and the previous room's, when the client moved)
 
 ### `leave_room`
 
-Leave the current room.
+Leave the current room. If `room` is supplied, it must match the client's current
+room; a mismatching leave is ignored. This prevents a late cancellation from
+leaving a room the client has since joined or created. Omitting `room` leaves the
+current room as before.
 
 ```json
 {
@@ -197,7 +202,8 @@ may be removed without blocking.
 
 Removed clients receive `room_closed` with reason "The host removed you from the
 room"; blocked clients receive "The host removed you from the room and blocked you
-from rejoining". A blocked user's `join_room` is refused with `BLOCKED_FROM_ROOM`,
+from rejoining". Blocking also revokes the account's previous room admission and
+prevents it from requesting approval again. A blocked user's `join_room` is refused with `BLOCKED_FROM_ROOM`,
 with a valid invite ticket and as a host reclaim too. Rooms that block the authenticated user are omitted from every
 `room_list` sent to that user.
 
@@ -349,6 +355,7 @@ Send a text message to the room.
 
 **Effects:**
 - Message broadcast to all clients in the room (including sender)
+- The room keeps its last 50 messages for members who join later (`chat_history`); they go with the room when it closes
 - Rate limited by existing 30 msg/sec limit
 
 **Error responses:**
@@ -468,7 +475,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "room_moderation", "media_queue", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -825,6 +832,32 @@ Chat message broadcast from server.
 2. If chat panel not visible, increment unread badge
 3. Render message in chat UI
 
+### `chat_history`
+
+The room's last chat messages (up to 50, oldest first), sent once to a member that declared `chat_history`, right after it joins (after `room_state`, the participant list and statuses, `room_capabilities` and `queue_state`). Not sent when the room has none.
+
+```json
+{
+  "type": "chat_history",
+  "room": "uuid-room-id",
+  "payload": {
+    "messages": [
+      { "client": "uuid-client-id", "username": "Franco", "text": "Starting in a minute", "server_ts": 1678899990000, "own": false }
+    ]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Entry Field | Type | Description |
+|-------------|------|-------------|
+| `client` | string | The sender's client id when it sent the message (a reconnection gives it a new one) |
+| `username` | string | The sender's name, as in `chat_message` |
+| `text` | string | The message |
+| `server_ts` | number | When the server relayed it |
+| `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids without sending them) |
+
 ### `error`
 
 Error response.
@@ -994,3 +1027,56 @@ https://jellyfin.example/web/?owp_invite=<ticket>
 ```
 
 The client reads `owp_invite` on load, waits for the WebSocket authentication to finish, then sends `join_room` for the room named in the ticket and removes the parameter from the URL. Invalid or expired tickets show a toast and leave the client on the normal room list.
+
+## Room access (`room_access`)
+
+Clients advertise `room_access` in `auth.features`; supporting servers echo it in
+`auth_success.features`. Both settings default to false and are independent.
+Access settings are never logged. This extension adds these client payloads:
+
+| Message | Payload | Authorization |
+| --- | --- | --- |
+| `create_room` | Existing fields, optional `access: {"approval": true, "unlisted": false}` | Authenticated; access ignored without negotiation |
+| `set_room_access` | `{"approval": true, "unlisted": false}` | Negotiated host |
+| `cancel_join` | `{}` | Negotiated requester, withdraws its request anywhere |
+| `answer_join` | `{"id": "request UUID", "admit": true}` | Negotiated host; unknown id ignored |
+
+Both access keys must be booleans, both are required, and no other access keys
+are accepted. Invalid create access creates no room. Invalid access settings
+return `INVALID_ACCESS_PAYLOAD`; non-host updates return
+`HOST_PERMISSION_REQUIRED`, and updates outside a room return `NOT_IN_ROOM`.
+The three new request types are ignored without negotiation.
+
+| Server message | Payload | Recipient |
+| --- | --- | --- |
+| `room_access` | `{"approval": true, "unlisted": false}` | Negotiated members |
+| `join_requests` | `{"requests": [{"id": "UUID v4", "name": "Guest"}]}` | Negotiated host only, including empty lists |
+| `join_pending` | `{"host_name": "Host"}` | Requester |
+| `join_rejected` | `{"reason": "rejected", "host_name": "Host"}` | Requester |
+
+All four messages have the room id in the envelope's `room` field.
+`room_access` follows `room_state` on create/join, and is also sent on changes
+and host changes. Hosts receive `join_requests` on create, promotion, reclaim,
+and every request list change. Requests remain in arrival order, at most 20;
+repeat joins resend `join_pending` without duplicating. A request in another
+room is withdrawn first. Names use the sanitized join name or stored user name.
+Too many waiting requests return `ROOM_FULL`.
+
+Approval defers membership until admitted. The room remembers the non-empty
+Jellyfin user id of everyone who becomes a member for its lifetime. Returning
+admitted users, existing members, valid invite tickets and reclaiming hosts
+bypass approval. Empty user ids are never remembered. Legacy clients receive
+`ROOM_APPROVAL_REQUIRED`: "This room asks the host's approval to join. Update
+OpenWatchParty to ask to join." Admission uses normal joining, including
+capacity checks, leaving an earlier room and normal join messages. Turning
+off approval admits the waiting list in order; overflow receives `ROOM_FULL`.
+Rejection removes the request and sends reason `rejected`. Closing a room by
+any path sends reason `closed`; disconnecting requesters are removed. When a
+host without this feature takes over, approval turns off, waiting requests get
+reason `unavailable`, and members receive updated access. Unlisted stays set.
+
+Room lists exclude unlisted rooms for everyone, including members. An unlisted
+room can still be joined by id. Lists are built per negotiated recipient group:
+feature clients receive an extra boolean `approval` on each entry; legacy
+clients receive exactly the previous schema. Only authenticated clients receive
+lists. Changes to room access rebroadcast lists, including appearance/removal.

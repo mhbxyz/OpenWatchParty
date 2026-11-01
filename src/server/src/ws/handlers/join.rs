@@ -56,6 +56,9 @@ fn add_client_to_room(
     room.ready_clients.remove(client_id);
     room.not_ready.remove(client_id);
     if let Some(client) = locked_clients.get_mut(client_id) {
+        if !client.user_id.is_empty() {
+            room.admitted_users.insert(client.user_id.clone());
+        }
         client.room_id = Some(room.room_id.clone());
         if let Some(ref name) = payload_name {
             client.user_name = name.clone();
@@ -194,6 +197,16 @@ pub(in crate::ws) async fn handle_join_room(
     state: &SharedState,
     jwt_config: &Arc<JwtConfig>,
 ) {
+    join_room(client_id, parsed, state, jwt_config, false).await;
+}
+
+pub(super) async fn join_room(
+    client_id: &str,
+    parsed: &IncomingMessage,
+    state: &SharedState,
+    jwt_config: &Arc<JwtConfig>,
+    admitted: bool,
+) {
     if !is_authenticated(client_id, state).await {
         send_error(
             client_id,
@@ -239,6 +252,24 @@ pub(in crate::ws) async fn handle_join_room(
         } else {
             let room = state.rooms.get(room_id).expect("room existence checked");
             let reclaims_host = can_reclaim_pending_host(client_id, room, &state.clients);
+            let has_ticket = parsed
+                .payload
+                .as_ref()
+                .and_then(|p| p.get("invite_ticket"))
+                .is_some();
+            let previously_admitted = state.clients.get(client_id).is_some_and(|client| {
+                !client.user_id.is_empty() && room.admitted_users.contains(&client.user_id)
+            });
+            if room.access.approval
+                && !previously_admitted
+                && !admitted
+                && !has_ticket
+                && !reclaims_host
+                && !room.clients.iter().any(|id| id == client_id)
+            {
+                super::access::request_join(client_id, room_id, &payload_name, &mut state);
+                return;
+            }
             let reserved_size =
                 room.clients.len() + usize::from(room.pending_host_reconnect.is_some());
             let full = !reclaims_host
@@ -296,8 +327,18 @@ pub(in crate::ws) async fn handle_join_room(
                     None
                 };
                 let crate::types::ServerState { clients, rooms } = &mut *state;
+                crate::room::access::cancel(client_id, rooms, clients);
                 let room = rooms.get_mut(room_id).expect("room existence checked");
                 let reclaimed_host = add_client_to_room(client_id, room, clients, &payload_name);
+                if reclaimed_host
+                    && !clients
+                        .get(client_id)
+                        .is_some_and(|c| c.supports_room_access)
+                {
+                    room.access.approval = false;
+                    crate::room::access::reject_waiting(room, clients, "unavailable");
+                    room.join_requests.clear();
+                }
                 let notifications = prepare_join_notifications(client_id, room, clients);
                 let participants = (
                     collect_room_senders(room, clients, None),
@@ -330,8 +371,15 @@ pub(in crate::ws) async fn handle_join_room(
             send_to_senders(&senders, &statuses, "participant statuses");
         }
         if let Some(room) = state.rooms.get(room_id) {
+            if joined {
+                crate::room::access::send_access(room, &state.clients);
+            }
             crate::room::send_room_capabilities(room, &state.clients);
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
+            if joined {
+                super::chat::send_chat_history(room, &state.clients, client_id);
+            }
+            // History replaces the chat, so send it before new SERVER lines.
             // A play that waits now waits for the new member too.
             super::super::pending_play::send_waiting(room, &state.clients);
         }
@@ -455,6 +503,17 @@ mod tests {
     }
 
     #[test]
+    fn membership_remembers_only_nonempty_user_ids() {
+        for user_id in ["", "jellyfin-user"] {
+            let (client, _rx) = test_helpers::create_client_with_rx(user_id, "Guest", true);
+            let mut clients = HashMap::from([("guest".to_string(), client)]);
+            let mut room = test_helpers::create_room("room", "host");
+            add_client_to_room("guest", &mut room, &mut clients, &None);
+            assert_eq!(room.admitted_users.contains(user_id), !user_id.is_empty());
+        }
+    }
+
+    #[test]
     fn add_client_to_room_clears_ready() {
         let mut clients = HashMap::new();
         let (client, _rx) = test_helpers::create_client_with_rx("u2", "Guest", true);
@@ -571,6 +630,7 @@ mod tests {
             locked.clients.insert("old-host".to_string(), old_host);
             locked.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room", "old-host");
+            room.access.approval = true;
             room.clients.push("guest".to_string());
             locked.rooms.insert("room".to_string(), room);
         }
@@ -807,6 +867,112 @@ mod tests {
                 assert_eq!(payload["last_added"], "b".repeat(32));
             }
         }
+    }
+
+    #[tokio::test]
+    async fn join_sends_the_chat_history_to_a_joiner_that_negotiated_it() {
+        for (supports_history, kept) in [(true, 2), (false, 2), (true, 0)] {
+            let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+            {
+                let mut locked = state.write().await;
+                let guest_user = locked.clients["guest"].user_id.clone();
+                locked
+                    .clients
+                    .get_mut("guest")
+                    .unwrap()
+                    .supports_chat_history = supports_history;
+                let room = locked.rooms.get_mut("room").unwrap();
+                for i in 0..kept {
+                    room.chat_history.push_back(crate::types::ChatEntry {
+                        client: "host".to_string(),
+                        // The second one is the guest's own, from an earlier connection.
+                        user_id: if i == 1 {
+                            guest_user.clone()
+                        } else {
+                            "u1".to_string()
+                        },
+                        username: "Franco".to_string(),
+                        text: format!("hi {i}"),
+                        server_ts: 1_700_000_000_000 + i,
+                    });
+                }
+            }
+
+            handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+            let messages: Vec<_> =
+                std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+            let history: Vec<_> = messages
+                .iter()
+                .filter(|msg| msg.msg_type == ServerMessageType::ChatHistory)
+                .collect();
+            assert_eq!(history.len(), usize::from(supports_history && kept > 0));
+            if let Some(history) = history.first() {
+                assert_eq!(history.room.as_deref(), Some("room"));
+                assert_eq!(
+                    history.payload.as_ref().unwrap()["messages"],
+                    serde_json::json!([
+                        { "client": "host", "username": "Franco", "text": "hi 0", "server_ts": 1_700_000_000_000_u64, "own": false },
+                        { "client": "host", "username": "Franco", "text": "hi 1", "server_ts": 1_700_000_000_001_u64, "own": true }
+                    ])
+                );
+                // After the room state: the joiner knows the room first.
+                let state_at = messages
+                    .iter()
+                    .position(|msg| msg.msg_type == ServerMessageType::RoomState)
+                    .unwrap();
+                let history_at = messages
+                    .iter()
+                    .position(|msg| msg.msg_type == ServerMessageType::ChatHistory)
+                    .unwrap();
+                assert!(state_at < history_at);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn join_sends_chat_history_before_the_pending_start_state() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        {
+            let mut locked = state.write().await;
+            let guest = locked.clients.get_mut("guest").unwrap();
+            guest.supports_chat_history = true;
+            guest.supports_start_when_ready = true;
+            let room = locked.rooms.get_mut("room").unwrap();
+            room.chat_history.push_back(crate::types::ChatEntry {
+                client: "host".into(),
+                user_id: "user-host".into(),
+                username: "Host".into(),
+                text: "hello".into(),
+                server_ts: crate::utils::now_ms(),
+            });
+            room.pending_play = Some(crate::types::PendingPlay {
+                initiator_id: "host".into(),
+                position: 0.0,
+                generation: 1,
+                position_ts: crate::utils::now_ms(),
+                deadline_server_ts: crate::utils::now_ms() + 20_000,
+                shows_start: true,
+            });
+        }
+
+        handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+        let messages: Vec<_> =
+            std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+        let history_at = messages
+            .iter()
+            .position(|msg| msg.msg_type == ServerMessageType::ChatHistory)
+            .expect("the joiner gets history");
+        let start_at = messages
+            .iter()
+            .position(|msg| msg.msg_type == ServerMessageType::StartState)
+            .expect("the joiner gets the pending start");
+        assert!(history_at < start_at, "history must not erase SERVER lines");
+        assert_eq!(
+            messages[start_at].payload.as_ref().unwrap()["state"],
+            "waiting"
+        );
     }
 
     #[tokio::test]

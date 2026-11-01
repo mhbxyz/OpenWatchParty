@@ -45,6 +45,7 @@ The client modules live in `src/clients/jellyfin-web`; MSBuild embeds those Java
 | `HideNativeSyncPlayButton` | `false` | Controls whether Jellyfin's built-in SyncPlay header controls are hidden in the web client. |
 | `ShowSyncNudgeButton` | `false` | Enables the guest-only local sync adjustment control. |
 | `AppearanceOpacity`, `AppearanceTextSize` | `55`, `14` | Opacity is clamped and rounded to 40–100 by 5; text size is clamped to 12–18 px. These values style the room bar, its menus, lobby panel, up-next strip and toasts. |
+| `AppearancePreset` | `"glass"` | The colors of the same elements: `glass`, `solid`, `light` or `contrast`; any other value is stored as `glass`. |
 
 The admin page reads and saves these fields through Jellyfin's standard plugin configuration API. Its configuration read includes `JwtSecret` so the page can populate the password field; that API response is not a redaction boundary. The dedicated diagnostics responses do not serialize the configuration or secret. The signing key endpoint is separate from `PluginConfiguration`: its private key is kept in the plugin data folder, and the public JWK and activation state are exposed only to administrators.
 

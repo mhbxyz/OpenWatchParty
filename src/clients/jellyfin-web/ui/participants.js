@@ -91,6 +91,80 @@
   };
 
 
+  const createAccessControls = (creating = false) => {
+    const group = createElement('div', creating ? 'owp-access owp-access-create' : 'owp-access');
+    if (!creating) group.appendChild(createElement('div', 'owp-access-title', t('roomAccess')));
+    for (const key of ['approval', 'unlisted']) {
+      const value = creating ? state.createAccess : state.roomAccess;
+      const row = createElement('div', 'owp-access-row');
+      const text = createElement('span', 'owp-access-text');
+      const label = key === 'approval' ? 'accessApproval' : 'accessUnlisted';
+      text.append(createElement('span', 'owp-access-label', t(label)), createElement('span', 'owp-access-hint', t(`${label}Hint`)));
+      const button = createElement('button', 'owp-switch');
+      button.type = 'button';
+      button.setAttribute('role', 'switch');
+      button.setAttribute('aria-label', t(label));
+      button.setAttribute('aria-checked', String(value[key]));
+      button.onclick = () => {
+        if (creating) {
+          state.createAccess[key] = !state.createAccess[key];
+          button.setAttribute('aria-checked', String(state.createAccess[key]));
+        } else {
+          OWP.actions.setRoomAccess(key === 'approval' ? !value.approval : value.approval, key === 'unlisted' ? !value.unlisted : value.unlisted);
+        }
+      };
+      row.append(text, button);
+      group.appendChild(row);
+    }
+    return group;
+  };
+
+  const requestRow = (request, card = false) => {
+    const row = createElement('div', 'owp-participant owp-request-row');
+    const avatar = createElement('span', 'owp-participant-avatar', Array.from(request.name || t('guest'))[0].toUpperCase());
+    avatar.setAttribute('aria-hidden', 'true');
+    const text = createElement('span', 'owp-participant-main');
+    if (card) {
+      const sentence = t('joinRequest', { name: request.name });
+      const start = sentence.indexOf(request.name);
+      text.append(document.createTextNode(sentence.slice(0, start)), createElement('strong', '', request.name), document.createTextNode(sentence.slice(start + request.name.length)));
+    } else {
+      text.append(createElement('span', 'owp-participant-name', request.name), createElement('span', 'owp-participant-status warn', t('wantsToJoin')));
+    }
+    const buttons = createElement('div', 'owp-request-buttons');
+    for (const admit of [false, true]) {
+      const button = createElement('button', `owp-pill-btn ${admit ? 'primary' : 'secondary'}`, t(admit ? 'letIn' : 'reject'));
+      button.type = 'button';
+      button.onclick = () => OWP.actions.answerJoin(request.id, admit);
+      buttons.appendChild(button);
+    }
+    row.append(avatar, text, buttons);
+    return row;
+  };
+
+  const updateAccessUI = () => {
+    document.getElementById('owp-access-controls')?.remove();
+    document.getElementById('owp-request-card')?.remove();
+    document.getElementById('owp-request-badge')?.remove();
+    if (!state.inRoom || !state.isHost || !state.serverFeatures.includes('room_access')) return;
+    const people = document.getElementById('owp-people-section');
+    if (people) {
+      const controls = createAccessControls();
+      controls.id = 'owp-access-controls';
+      people.appendChild(controls);
+    }
+    if (!state.joinRequests.length || state.roomBarSection === 'people') return;
+    const badge = createElement('span', 'owp-request-badge', state.joinRequests.length);
+    badge.id = 'owp-request-badge';
+    badge.setAttribute('aria-label', t('joinWaitingCount', { count: state.joinRequests.length }));
+    document.getElementById('owp-btn-people')?.appendChild(badge);
+    const card = createElement('div', 'owp-request-card');
+    card.id = 'owp-request-card';
+    card.appendChild(requestRow(state.joinRequests[0], true));
+    if (state.joinRequests.length > 1) card.appendChild(createElement('div', 'owp-access-hint', t('moreWaiting', { count: state.joinRequests.length - 1 })));
+    document.getElementById(OWP.constants.PANEL_ID)?.appendChild(card);
+  };
+
   const fillParticipantList = (list) => {
     if (!state.participants.some(participant => canModerate(participant)
         && participant.id === state.moderationOpenParticipantId)) {
@@ -134,6 +208,9 @@
         && (!focusedParticipantId || button.dataset.participantId === focusedParticipantId));
       if (replacement) replacement.focus({ preventScroll: true });
     }
+    if (state.isHost && state.serverFeatures.includes('room_access')) {
+      for (const request of state.joinRequests) list.appendChild(requestRow(request));
+    }
   };
 
 
@@ -155,5 +232,5 @@
   };
 
   Object.assign(views, { fillParticipantList, participantTotal, peopleLabel });
-  Object.assign(ui, { updateParticipantList });
+  Object.assign(ui, { updateParticipantList, createAccessControls, updateAccessUI });
 })();

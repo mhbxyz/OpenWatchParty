@@ -29,7 +29,9 @@ pub fn create_client_with_rx(
         supports_shared_playback_control: false,
         supports_room_moderation: false,
         supports_media_queue: false,
+        supports_room_access: false,
         supports_start_when_ready: false,
+        supports_chat_history: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -46,6 +48,9 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         clients: vec![host_id.to_string()],
         ready_clients: HashSet::from([host_id.to_string()]),
         pending_play: None,
+        access: Default::default(),
+        join_requests: Vec::new(),
+        admitted_users: HashSet::new(),
         pending_host_reconnect: None,
         blocked_users: HashSet::new(),
         state: PlaybackState {
@@ -63,6 +68,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         queue: Default::default(),
         not_ready: HashMap::new(),
         countdown_pending: false,
+        chat_history: Default::default(),
     }
 }
 

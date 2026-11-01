@@ -36,7 +36,8 @@
     if (!Array.isArray(message.payload)) return 'payload must be an array';
     for (const room of message.payload) {
       if (!object(room)) return 'room_list entries must be objects';
-      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id'])) return 'room_list entry has unknown fields';
+      if (!onlyKeys(room, ['id', 'name', 'count', 'media_id', 'approval'])) return 'room_list entry has unknown fields';
+      if (!optional(room.approval, value => typeof value === 'boolean')) return 'approval is invalid';
       if (!string(room.id, MAX_ID_LENGTH)) return 'room_list entry id is invalid';
       if (!string(room.name, MAX_ROOM_NAME_LENGTH)) return 'room_list entry name is invalid';
       if (!count(room.count)) return 'room_list entry count is invalid';
@@ -195,6 +196,22 @@
     return 'start state is invalid';
   };
 
+  // The room's last chat messages, oldest first, for a member that just joined.
+  const MAX_CHAT_HISTORY = 50;
+  const validateChatHistory = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['messages'])) return 'chat_history has unknown fields';
+    const { messages } = message.payload;
+    if (!Array.isArray(messages) || messages.length > MAX_CHAT_HISTORY) return 'messages is invalid';
+    for (const entry of messages) {
+      if (!object(entry) || !onlyKeys(entry, ['client', 'username', 'text', 'server_ts', 'own'])) return 'chat history entry is invalid';
+      if (typeof entry.own !== 'boolean') return 'chat history entry is invalid';
+      if (!string(entry.client, MAX_ID_LENGTH) || !string(entry.username, MAX_NAME_LENGTH, true)) return 'chat history entry is invalid';
+      if (!string(entry.text, MAX_CHAT_LENGTH) || !timestamp(entry.server_ts)) return 'chat history entry is invalid';
+    }
+    return null;
+  };
+
   const validateError = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['code', 'message'])) return 'error has unknown fields';
@@ -203,6 +220,17 @@
   };
 
   const validators = {
+    room_access: message => payloadObject(message) && onlyKeys(message.payload, ['approval', 'unlisted'])
+      && typeof message.payload.approval === 'boolean' && typeof message.payload.unlisted === 'boolean' ? null : 'room_access is invalid',
+    join_requests: message => payloadObject(message) && onlyKeys(message.payload, ['requests'])
+      && Array.isArray(message.payload.requests) && message.payload.requests.length <= 20
+      && message.payload.requests.every(request => object(request) && onlyKeys(request, ['id', 'name'])
+        && string(request.id, MAX_ID_LENGTH) && string(request.name, MAX_NAME_LENGTH, true)) ? null : 'join_requests is invalid',
+    join_pending: message => payloadObject(message) && onlyKeys(message.payload, ['host_name'])
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_pending is invalid',
+    join_rejected: message => payloadObject(message) && onlyKeys(message.payload, ['reason', 'host_name'])
+      && ['rejected', 'closed', 'unavailable'].includes(message.payload.reason)
+      && string(message.payload.host_name, MAX_NAME_LENGTH, true) ? null : 'join_rejected is invalid',
     room_list: validateRoomList,
     client_hello: validateClientHello,
     auth_success: validateAuthSuccess,
@@ -221,9 +249,11 @@
     chat_message: validateChat,
     queue_state: validateQueueState,
     start_state: validateStartState,
+    chat_history: validateChatHistory,
     error: validateError
   };
   const roomRequired = new Set([
+    'room_access', 'join_requests', 'join_pending', 'join_rejected',
     'room_state',
     'room_capabilities',
     'participants_update',
@@ -236,7 +266,8 @@
     'state_update',
     'chat_message',
     'queue_state',
-    'start_state'
+    'start_state',
+    'chat_history'
   ]);
   const envelopeKeys = ['type', 'room', 'client', 'payload', 'ts', 'server_ts'];
 

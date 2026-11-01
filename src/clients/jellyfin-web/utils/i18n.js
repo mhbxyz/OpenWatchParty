@@ -2,6 +2,27 @@
   const OWP = window.OpenWatchParty = window.OpenWatchParty || {};
 
   const en = {
+    leaveToAskToJoin: "Leave your room to ask to join another one",
+    accessApproval: "Ask to join",
+    accessApprovalHint: "The host decides who comes in",
+    accessUnlisted: "Hide from the room list",
+    accessUnlistedHint: "Hidden from the room list. Anyone with the room ID can still request to join.",
+    roomAccess: "Room access",
+    wantsToJoin: "Wants to join",
+    reject: "Reject",
+    letIn: "Let in",
+    joinRequest: "{name} wants to join the room",
+    moreWaiting_one: "and 1 more waiting",
+    moreWaiting_other: "and {count} more waiting",
+    approvalNeeded: "Approval needed",
+    askToJoin: "Ask to join",
+    joinWaiting: "Waiting for {host} to let you in…",
+    joinRejected: "{host} didn't let you in",
+    joinUnavailable: "This room can't take requests right now",
+    joinWaitingCount: "{count} waiting to join",
+    errorApprovalRequired: "This room asks the host’s approval to join. Update OpenWatchParty to ask to join.",
+    errorAccessPayload: "Invalid room access settings",
+
     unavailable: 'Unavailable',
     hostOnlySeek: 'Only the host can seek',
     guestResumed: 'A guest resumed playback', guestPaused: 'A guest paused playback', waitingForHost: 'Waiting for the host…',
@@ -48,6 +69,27 @@
   };
 
   const es = {
+    leaveToAskToJoin: "Salí de tu sala para pedir entrar a otra",
+    accessApproval: "Pedir aprobación para entrar",
+    accessApprovalHint: "El anfitrión decide quién entra",
+    accessUnlisted: "Ocultar de la lista",
+    accessUnlistedHint: "No aparece en la lista de salas. Quien tenga el ID puede intentar entrar.",
+    roomAccess: "Acceso a la sala",
+    wantsToJoin: "Quiere entrar",
+    reject: "Rechazar",
+    letIn: "Dejar pasar",
+    joinRequest: "{name} quiere entrar a la sala",
+    moreWaiting_one: "y 1 más esperando",
+    moreWaiting_other: "y {count} más esperando",
+    approvalNeeded: "Con aprobación",
+    askToJoin: "Pedir entrar",
+    joinWaiting: "Esperando que {host} te deje pasar…",
+    joinRejected: "{host} no te dejó entrar",
+    joinUnavailable: "Esta sala no acepta solicitudes ahora",
+    joinWaitingCount: "{count} esperando para entrar",
+    errorApprovalRequired: "Esta sala requiere la aprobación del anfitrión. Actualizá OpenWatchParty para pedir entrar.",
+    errorAccessPayload: "Configuración de acceso inválida",
+
     unavailable: 'No disponible',
     hostOnlySeek: 'Solo el anfitrión puede adelantar o atrasar',
     guestResumed: 'Un invitado reanudó la reproducción', guestPaused: 'Un invitado pausó la reproducción', waitingForHost: 'Esperando al anfitrión…',
@@ -93,6 +135,27 @@
   };
 
   const fr = {
+    leaveToAskToJoin: "Quittez votre salle pour demander à en rejoindre une autre",
+    accessApproval: "Demander à rejoindre",
+    accessApprovalHint: "L’hôte décide qui peut entrer",
+    accessUnlisted: "Masquer dans la liste des salles",
+    accessUnlistedHint: "Masquée dans la liste des salles. Toute personne connaissant son identifiant peut demander à entrer.",
+    roomAccess: "Accès à la salle",
+    wantsToJoin: "Souhaite rejoindre",
+    reject: "Refuser",
+    letIn: "Accepter",
+    joinRequest: "{name} souhaite rejoindre la salle",
+    moreWaiting_one: "et 1 autre personne en attente",
+    moreWaiting_other: "et {count} autres personnes en attente",
+    approvalNeeded: "Approbation requise",
+    askToJoin: "Demander à rejoindre",
+    joinWaiting: "En attente de l’accord de {host}…",
+    joinRejected: "{host} n’a pas accepté votre demande",
+    joinUnavailable: "Cette salle ne peut pas recevoir de demandes actuellement",
+    joinWaitingCount: "{count} en attente pour rejoindre",
+    errorApprovalRequired: "Cette salle nécessite l’accord de l’hôte. Mettez OpenWatchParty à jour pour demander à rejoindre.",
+    errorAccessPayload: "Paramètres d’accès invalides",
+
     unavailable: 'Indisponible',
     hostOnlySeek: "Seul l'hôte peut changer la position",
     guestResumed: "Un invité a repris la lecture", guestPaused: "Un invité a mis en pause", waitingForHost: "En attente de l'hôte…",
@@ -138,6 +201,27 @@
   };
 
   const de = {
+    leaveToAskToJoin: "Verlasse deinen Raum, um den Beitritt zu einem anderen anzufragen",
+    accessApproval: "Beitritt anfragen",
+    accessApprovalHint: "Der Gastgeber entscheidet, wer beitritt",
+    accessUnlisted: "In der Raumliste ausblenden",
+    accessUnlistedHint: "In der Raumliste verborgen. Wer die Raum-ID kennt, kann weiterhin den Beitritt anfragen.",
+    roomAccess: "Raumzugang",
+    wantsToJoin: "Möchte beitreten",
+    reject: "Ablehnen",
+    letIn: "Zulassen",
+    joinRequest: "{name} möchte dem Raum beitreten",
+    moreWaiting_one: "und 1 weitere Person wartet",
+    moreWaiting_other: "und {count} weitere Personen warten",
+    approvalNeeded: "Genehmigung erforderlich",
+    askToJoin: "Beitritt anfragen",
+    joinWaiting: "Warten auf die Genehmigung von {host}…",
+    joinRejected: "{host} hat dich nicht zugelassen",
+    joinUnavailable: "Dieser Raum kann gerade keine Anfragen annehmen",
+    joinWaitingCount: "{count} warten auf den Beitritt",
+    errorApprovalRequired: "Dieser Raum erfordert die Zustimmung des Gastgebers. Aktualisiere OpenWatchParty, um den Beitritt anzufragen.",
+    errorAccessPayload: "Ungültige Zugangseinstellungen",
+
     unavailable: 'Nicht verfügbar',
     hostOnlySeek: 'Nur der Host kann die Position ändern',
     guestResumed: 'Ein Gast hat die Wiedergabe fortgesetzt', guestPaused: 'Ein Gast hat die Wiedergabe pausiert', waitingForHost: 'Warten auf den Host…',
@@ -219,7 +303,7 @@
   // Known error codes and reasons are shown in the viewer's language; anything
   // else is shown as the server wrote it.
   const SERVER_ERROR_KEYS = {
-    ROOM_NOT_FOUND: 'errorRoomNotFound',
+    INVALID_ACCESS_PAYLOAD: 'errorAccessPayload', ROOM_APPROVAL_REQUIRED: 'errorApprovalRequired', ROOM_NOT_FOUND: 'errorRoomNotFound',
     ROOM_FULL: 'errorRoomFull',
     RATE_LIMITED: 'errorRateLimited',
     HOST_PERMISSION_REQUIRED: 'errorHostOnly',

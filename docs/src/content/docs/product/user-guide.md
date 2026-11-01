@@ -157,7 +157,7 @@ Shared controls require a compatible server and host. With an older host or serv
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
-Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light or High contrast), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
 ![Close-up of the room bar with its chat composer open](/assets/images/watch-party-panel-closeup.png)
 
@@ -229,11 +229,12 @@ The chat feature allows you to communicate with other watch party participants i
 - **Timestamps** - Hover a message to see when it was sent
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
 - **SERVER lines** - OpenWatchParty's own notes about [starting together](#starting-together), with a tag and in italics; only "Started without…" counts as unread
+- **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 - **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
 
 ### Notes
-- Chat history is not saved; late joiners won't see previous messages
+- The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
 - The chat input doesn't interfere with video player controls
 
 ## Sync Indicator
@@ -335,3 +336,18 @@ When the chat is closed, incoming messages appear as toasts in the bottom-right 
 - The Invite button is unavailable in insecure development mode
 
 For more troubleshooting, see [Troubleshooting Guide](/operations/troubleshooting/).
+
+
+## Private rooms
+
+When creating a room, or later in **People → Room access**, the host can turn
+on **Ask to join** and **Hide from the room list** independently. Both start off.
+Ask to join lets the host accept or reject each guest. Guests select **Ask to
+join**, see a waiting message and can cancel; a rejected request shows a message
+and can be tried again. Leave your current room before asking to join another
+approval room. The host sees requests below the room bar or in People.
+
+Hidden rooms appear neither in the room list nor on the home row. Share the
+existing invite link to bring people in. A valid invite link always enters
+directly, including when approval is required. People using an older version
+cannot ask to join and must update OpenWatchParty or use an invite link.

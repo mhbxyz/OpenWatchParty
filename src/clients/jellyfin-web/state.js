@@ -108,12 +108,13 @@
     // the same ranges as the plugin settings.
     APPEARANCE: {
       baseTextSize: 12,
+      presets: ['glass', 'solid', 'light', 'contrast'], // Color presets; the first is the default
       opacity: { min: 40, max: 100, step: 5, default: 55 },
       textSize: { min: 12, max: 18, step: 1, default: 14 }
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'room_moderation'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -189,6 +190,13 @@
   });
 
   const createRoomState = () => ({
+    roomAccess: { approval: false, unlisted: false },
+    joinRequests: [],
+    joinTarget: '',        // Last join sent; fences replies after cancellation or a different join
+    cancelledJoinRoomId: '', // A racing admission must be left before showing the room
+    createRoomPending: false,
+    pendingJoin: null,
+    joinOutcome: null,
     roomId: '',
     isHost: false,
     inRoom: false,
@@ -222,6 +230,7 @@
     pendingMediaId: '',
     mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
     pendingMediaUntil: 0,
+    heardRoomState: null,  // A guest's latest room command or state update, for the room state a loading item syncs to
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     guestPaused: false,
     ownCommandUntil: 0,
@@ -314,6 +323,7 @@
 
   const createUIState = () => ({
     ...createRoomUIState(),
+    createAccess: { approval: false, unlisted: false },
     name: '',
     rooms: [],
     initialized: false,
@@ -341,6 +351,7 @@
     showSyncNudge: false,       // The plugin offers guests the sync adjustment in the room bar
     appearanceOpacity: OWP.constants.APPEARANCE.opacity.default,   // Surface opacity in percent
     appearanceTextSize: OWP.constants.APPEARANCE.textSize.default, // Base text size in px
+    appearancePreset: OWP.constants.APPEARANCE.presets[0],         // Color preset
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
   });
 

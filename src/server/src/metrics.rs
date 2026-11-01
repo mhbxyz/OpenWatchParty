@@ -11,7 +11,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 22] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 25] = [
+    "set_room_access",
+    "cancel_join",
+    "answer_join",
     "auth",
     "list_rooms",
     "create_room",
@@ -37,7 +40,11 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 22] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 18] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 23] = [
+    "room_access",
+    "join_requests",
+    "join_pending",
+    "join_rejected",
     "client_hello",
     "auth_success",
     "error",
@@ -55,11 +62,12 @@ pub const SERVER_MESSAGE_TYPES: [&str; 18] = [
     "chat_message",
     "queue_state",
     "start_state",
+    "chat_history",
     "other",
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 27] = [
+pub const ERROR_CODES: [&str; 29] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -86,6 +94,8 @@ pub const ERROR_CODES: [&str; 27] = [
     "PARTICIPANT_NOT_FOUND",
     "INVALID_MODERATION_TARGET",
     "BLOCKED_FROM_ROOM",
+    "INVALID_ACCESS_PAYLOAD",
+    "ROOM_APPROVAL_REQUIRED",
     "other",
 ];
 
@@ -594,6 +604,29 @@ mod tests {
         }
         for private in ["Host", "Guest", "u1", "u2", "room-1", "host's room"] {
             assert!(!text.contains(private), "leaked {private}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod room_access_tests {
+    use super::*;
+
+    #[test]
+    fn room_access_wire_names_are_counted() {
+        for name in ["set_room_access", "cancel_join", "answer_join"] {
+            assert!(CLIENT_MESSAGE_TYPES.contains(&name));
+        }
+        for name in [
+            "room_access",
+            "join_requests",
+            "join_pending",
+            "join_rejected",
+        ] {
+            assert!(SERVER_MESSAGE_TYPES.contains(&name));
+        }
+        for code in ["INVALID_ACCESS_PAYLOAD", "ROOM_APPROVAL_REQUIRED"] {
+            assert!(ERROR_CODES.contains(&code));
         }
     }
 }

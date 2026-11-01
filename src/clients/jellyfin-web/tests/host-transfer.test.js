@@ -179,6 +179,11 @@ describe('host transfer client support', () => {
       connectionPhase: 'disconnected',
       desiredRoomId: '',
       rejoinPending: false,
+      joinTarget: '',
+      cancelledJoinRoomId: '',
+      createRoomPending: false,
+      pendingJoin: null,
+      joinOutcome: null,
       rejectedRejoinRoomIds: [],
       currentVideoElement: null,
       bound: false,
@@ -236,7 +241,7 @@ describe('host transfer client support', () => {
     socket.open();
 
     const auth = socket.sent.find(message => message.type === 'auth');
-    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'room_moderation']);
+    assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access']);
     socket.receive({
       type: 'auth_success',
       payload: { user_name: 'Guest', features: ['host_transfer'] }
@@ -257,7 +262,7 @@ describe('host transfer client support', () => {
       const socket = sockets[0];
       socket.open();
       const auth = socket.sent.find(message => message.type === 'auth');
-      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'room_moderation']);
+      assert.deepEqual(auth.payload.features, ['host_transfer', 'participant_status', 'shared_playback_control', 'room_moderation', 'media_queue', 'start_when_ready', 'chat_history', 'room_access']);
       assert.equal(auth.payload.token, undefined);
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
@@ -294,6 +299,191 @@ describe('host transfer client support', () => {
     } finally {
       OWP.actions.fetchAuthToken = originalFetchAuthToken;
     }
+  });
+
+  it('turns a timed approval rejoin into ordinary waiting', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    Object.assign(OWP.state, { desiredRoomId: 'room-1', rejoinPending: true });
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    assert.ok(OWP.state.roomRejoinTimer);
+    socket.receive({ type: 'join_pending', room: 'room-1', payload: { host_name: 'Host' } });
+    assert.equal(OWP.state.roomRejoinTimer, null);
+    assert.equal(OWP.state.rejoinPending, false);
+    context.mock.timers.tick(OWP.constants.ROOM_REJOIN_TIMEOUT_MS + 1);
+    assert.deepEqual(OWP.state.pendingJoin, { roomId: 'room-1', roomName: OWP.i18n.t('roomName', { name: 'Host' }), hostName: 'Host' });
+    assert.equal(OWP.state.desiredRoomId, 'room-1');
+    assert.deepEqual(toasts, []);
+  });
+
+  it('recreates a waiting request after the socket reconnects without a rejoin timeout', async (context) => {
+    context.mock.timers.enable({ apis: ['setTimeout'] });
+    await OWP.actions.connect();
+    let socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    OWP.state.rooms = [{ id: 'approval', name: 'Private screening', approval: true }];
+    OWP.actions.joinRoom('approval');
+    socket.receive({ type: 'join_pending', room: 'approval', payload: { host_name: 'Host' } });
+    const waiting = { ...OWP.state.pendingJoin };
+    OWP.state.autoReconnect = false;
+    socket.onclose({ code: 1006 });
+    assert.deepEqual(OWP.state.pendingJoin, waiting);
+    // The host may hide the room before authentication finishes.
+    OWP.state.rooms = [];
+    await OWP.actions.connect();
+    socket = sockets[1];
+    socket.open();
+    assert.deepEqual(OWP.state.pendingJoin, waiting);
+    assert.equal(socket.sent.filter(message => message.type === 'join_room').length, 0);
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    const joins = socket.sent.filter(message => message.type === 'join_room');
+    assert.equal(joins.length, 1);
+    assert.equal(joins[0].room, 'approval');
+    assert.equal(OWP.state.joinTarget, 'approval');
+    assert.deepEqual(OWP.state.pendingJoin, waiting);
+    assert.equal(OWP.state.rejoinPending, false);
+    assert.equal(OWP.state.roomRejoinTimer, null);
+    context.mock.timers.tick(OWP.constants.ROOM_REJOIN_TIMEOUT_MS + 1);
+    assert.deepEqual(OWP.state.pendingJoin, waiting);
+    socket.receive({ type: 'join_pending', room: 'approval', payload: { host_name: 'Host' } });
+    assert.deepEqual(OWP.state.pendingJoin, waiting);
+  });
+
+  it('does not recreate a cancelled request on the next authentication', async () => {
+    await OWP.actions.connect();
+    let socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    OWP.state.rooms = [{ id: 'approval', name: 'Room', approval: true }];
+    OWP.actions.joinRoom('approval');
+    OWP.state.autoReconnect = false;
+    socket.onclose({ code: 1006 });
+    OWP.actions.cancelJoin();
+    await OWP.actions.connect();
+    socket = sockets[1];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    assert.equal(socket.sent.filter(message => message.type === 'join_room').length, 0);
+    assert.equal(OWP.state.joinTarget, '');
+    assert.equal(OWP.state.pendingJoin, null);
+  });
+
+  it('immediately leaves an admission that races cancellation without showing or playing it', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    OWP.state.rooms = [{ id: 'room-1', name: 'Room', approval: true }];
+    const video = new FakeVideo({ currentTime: 5 });
+    OWP.state.currentVideoElement = video;
+    for (const timedRejoin of [false, true]) {
+      OWP.actions.joinRoom('room-1', timedRejoin);
+      assert.equal(OWP.state.cancelledJoinRoomId, '');
+      OWP.actions.cancelJoin();
+      assert.equal(OWP.state.cancelledJoinRoomId, 'room-1');
+      const renderCount = renders;
+      socket.receive(roomState('room-media', 20));
+      assert.equal(socket.sent.at(-1).type, 'leave_room');
+      assert.equal(socket.sent.at(-1).room, 'room-1');
+      assert.equal(socket.sent.some(message => message.type === 'close_room'), false);
+      assert.equal(OWP.state.inRoom, false);
+      assert.equal(OWP.state.roomId, '');
+      assert.equal(OWP.state.pendingMediaId, '');
+      assert.equal(OWP.state.roomMediaId, '');
+      assert.equal(renders, renderCount);
+      assert.equal(video.currentTime, 5);
+      assert.equal(video.playCalls, 0);
+    }
+  });
+
+  it('targets the cancelled room when its admission arrives after Create was sent', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features: ['room_access'] } });
+    OWP.state.rooms = [{ id: 'room-1', name: 'Other room', approval: true }];
+    OWP.actions.joinRoom('room-1');
+    socket.receive({ type: 'join_pending', room: 'room-1', payload: { host_name: 'Host' } });
+    OWP.actions.cancelJoin();
+    currentMediaId = 'own-media';
+    const video = new FakeVideo();
+    OWP.state.currentVideoElement = video;
+    OWP.actions.createRoom();
+    assert.equal(socket.sent.at(-1).type, 'create_room');
+
+    socket.receive(roomState('other-media'));
+    assert.equal(socket.sent.at(-1).type, 'leave_room');
+    assert.equal(socket.sent.at(-1).room, 'room-1');
+    assert.equal(OWP.state.createRoomPending, true);
+    assert.equal(video.playCalls, 0);
+
+    const created = roomState('own-media');
+    created.room = 'created';
+    created.payload.host_id = OWP.state.clientId;
+    socket.receive(created);
+    assert.equal(OWP.state.inRoom, true);
+    assert.equal(OWP.state.isHost, true);
+    assert.equal(OWP.state.roomId, 'created');
+    assert.equal(OWP.state.createRoomPending, false);
+    assert.equal(OWP.state.pendingJoin, null);
+  });
+
+  it('clears the previous request after creating and rejoins the created room on reconnect', async () => {
+    await OWP.actions.connect();
+    let socket = sockets[0];
+    socket.open();
+    const features = ['room_access', 'host_transfer'];
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features } });
+    OWP.state.rooms = [{ id: 'approval', name: 'Other room', approval: true }];
+    OWP.actions.joinRoom('approval');
+    socket.receive({ type: 'join_pending', room: 'approval', payload: { host_name: 'Host' } });
+    currentMediaId = 'own-media';
+    OWP.state.currentVideoElement = new FakeVideo();
+    OWP.actions.createRoom();
+    assert.equal(socket.sent.at(-1).type, 'create_room');
+    assert.ok(OWP.state.pendingJoin);
+    OWP.state.joinOutcome = { roomId: 'approval', roomName: 'Other room', reason: 'rejected', hostName: 'Host' };
+    const created = roomState('own-media');
+    created.room = 'created';
+    created.payload.host_id = OWP.state.clientId;
+    socket.receive(created);
+    assert.equal(OWP.state.createRoomPending, false);
+    assert.equal(OWP.state.pendingJoin, null);
+    assert.equal(OWP.state.joinOutcome, null);
+    assert.equal(OWP.state.joinTarget, '');
+    assert.equal(OWP.state.inRoom, true);
+    assert.equal(OWP.state.isHost, true);
+    assert.equal(OWP.state.roomId, 'created');
+    OWP.state.autoReconnect = false;
+    socket.onclose({ code: 1006 });
+    await OWP.actions.connect();
+    socket = sockets[1];
+    socket.open();
+    socket.receive({ type: 'auth_success', payload: { user_name: 'Guest', features } });
+    const joins = socket.sent.filter(message => message.type === 'join_room');
+    assert.equal(joins.length, 1);
+    assert.equal(joins[0].room, 'created');
+  });
+
+  it('delivers errors for a pending room while preserving current membership', async () => {
+    await OWP.actions.connect();
+    const socket = sockets[0];
+    socket.open();
+    Object.assign(OWP.state, {
+      inRoom: true, roomId: 'current',
+      pendingJoin: { roomId: 'requested', hostName: 'Host' }
+    });
+    socket.receive({ type: 'error', room: 'unrelated', payload: { code: 'ROOM_FULL', message: 'Room is full' } });
+    assert.deepEqual(toasts, []);
+    assert.ok(OWP.state.pendingJoin);
+    socket.receive({ type: 'error', room: 'requested', payload: { code: 'ROOM_FULL', message: 'Room is full' } });
+    assert.deepEqual(toasts, ['Room is full']);
+    assert.equal(OWP.state.pendingJoin, null);
+    assert.equal(OWP.state.inRoom, true);
+    assert.equal(OWP.state.roomId, 'current');
   });
 
   it('clears stale server features when a new connection opens', async () => {
@@ -842,6 +1032,65 @@ describe('host transfer client support', () => {
       assert.equal(OWP.state.pendingActionTimer, null);
       assert.equal(OWP.state.pendingPlayUntil, 0);
       assert.notEqual(OWP.state.syncStatus, 'pending_play');
+    } finally {
+      OWP.utils.nowMs = originalNowMs;
+      OWP.utils.getServerNow = originalGetServerNow;
+      OWP.utils.scheduleAt = originalScheduleAt;
+      OWP.timers.setTimeout = originalSetTimeout;
+    }
+  });
+
+  it('clears the pending action once a retried guest room sync applies', () => {
+    const originalNowMs = OWP.utils.nowMs;
+    const originalGetServerNow = OWP.utils.getServerNow;
+    const originalScheduleAt = OWP.utils.scheduleAt;
+    const originalSetTimeout = OWP.timers.setTimeout;
+    let now = 1000;
+    let applyAtTarget = null;
+    let retry = null;
+    OWP.utils.nowMs = () => now;
+    OWP.utils.getServerNow = () => now;
+    OWP.utils.scheduleAt = (target, callback) => {
+      applyAtTarget = callback;
+      OWP.state.pendingActionTimer = { target };
+    };
+    OWP.timers.setTimeout = (callback) => {
+      retry = callback;
+      return { retry: true };
+    };
+    try {
+      Object.assign(OWP.state, {
+        inRoom: false,
+        roomId: '',
+        isHost: false,
+        currentVideoElement: null
+      });
+      OWP._wsHandlers.handleRoomState({
+        type: 'room_state',
+        room: 'room-1',
+        client: 'client-1',
+        server_ts: now,
+        payload: {
+          name: 'Room',
+          host_id: 'client-2',
+          participant_count: 2,
+          media_id: '',
+          state_server_ts: now,
+          target_server_ts: 1100,
+          state: { position: 10, play_state: 'paused' }
+        }
+      }, null);
+
+      now = 1100;
+      applyAtTarget();
+      assert.deepEqual(OWP.state.pendingActionTimer, { retry: true });
+
+      const video = new FakeVideo({ currentTime: 0, readyState: 4 });
+      OWP.state.currentVideoElement = video;
+      now = 1200;
+      retry();
+      assert.equal(video.currentTime, 10);
+      assert.equal(OWP.state.pendingActionTimer, null);
     } finally {
       OWP.utils.nowMs = originalNowMs;
       OWP.utils.getServerNow = originalGetServerNow;

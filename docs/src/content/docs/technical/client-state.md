@@ -27,7 +27,7 @@ existing state, constants and timer registry keep their identity and work.
 | Room UI | `roomBarSection` | Room UI and connection | `resetRoomUI()` uses `createRoomUIState()` |
 | Application/UI registries | `name`, `rooms`, `initialized`, `logBuffer`, `logBufferMax`, `homeRoomCache`, `lobbyHelpOpen`, `intervals` | UI, diagnostics, room-list handler and lifecycle modules | Room reset preserves these; full cleanup releases tracked work and sets `initialized` false |
 | Invite work | `pendingInviteTicket`, `inviteJoinPending` | `app/invite.js`, send and room handlers | Room reset uses `createInviteWorkState()` |
-| Preferences | `followHost`, `hideNativeSyncPlayButton`, `showSyncNudge`, `appearanceOpacity`, `appearanceTextSize`, `inviteTtlSeconds` | UI, auth configuration and invite code | Preserved across room reset, reconnect and cleanup |
+| Preferences | `followHost`, `hideNativeSyncPlayButton`, `showSyncNudge`, `appearanceOpacity`, `appearanceTextSize`, `appearancePreset`, `inviteTtlSeconds` | UI, auth configuration and invite code | Preserved across room reset, reconnect and cleanup |
 
 ## Transition rules
 

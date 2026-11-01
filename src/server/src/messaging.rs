@@ -70,13 +70,23 @@ struct RoomListEntry<'a> {
     name: &'a str,
     count: usize,
     media_id: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    approval: Option<bool>,
 }
 
-fn build_room_list_msg(rooms: &HashMap<String, Room>, user_id: Option<&str>) -> WsMessage {
+fn build_room_list_msg(
+    rooms: &HashMap<String, Room>,
+    user_id: Option<&str>,
+    access: bool,
+) -> WsMessage {
     let list: Vec<_> = rooms
         .values()
-        .filter(|room| user_id.is_none_or(|user_id| !room.blocked_users.contains(user_id)))
+        .filter(|room| {
+            !room.access.unlisted
+                && user_id.is_none_or(|user_id| !room.blocked_users.contains(user_id))
+        })
         .map(|r| RoomListEntry {
+            approval: access.then_some(r.access.approval),
             id: &r.room_id,
             name: &r.name,
             count: r.clients.len(),
@@ -95,9 +105,16 @@ fn build_room_list_msg(rooms: &HashMap<String, Room>, user_id: Option<&str>) -> 
 
 pub async fn send_room_list(client_id: &str, state: &SharedState) {
     let state = state.read().await;
-    let client = state.clients.get(client_id);
+    let client = state
+        .clients
+        .get(client_id)
+        .filter(|client| client.authenticated);
     let sender = client.map(|client| client.sender.clone());
-    let msg = build_room_list_msg(&state.rooms, client.map(|client| client.user_id.as_str()));
+    let msg = build_room_list_msg(
+        &state.rooms,
+        client.map(|client| client.user_id.as_str()),
+        client.is_some_and(|client| client.supports_room_access),
+    );
     send_message(sender, &msg, Some(client_id));
 }
 
@@ -106,7 +123,8 @@ pub async fn broadcast_room_list(state: &SharedState) {
     // Only authenticated clients may learn about rooms, matching the gate on
     // `list_rooms` and on the initial room list. In insecure mode every client
     // is marked authenticated, so that deployment keeps its behaviour.
-    let unfiltered = build_room_list_msg(&state.rooms, None);
+    let legacy = build_room_list_msg(&state.rooms, None, false);
+    let access = build_room_list_msg(&state.rooms, None, true);
     for (client_id, client) in state
         .clients
         .iter()
@@ -117,10 +135,22 @@ pub async fn broadcast_room_list(state: &SharedState) {
             .values()
             .any(|room| room.blocked_users.contains(&client.user_id))
         {
-            let msg = build_room_list_msg(&state.rooms, Some(&client.user_id));
+            let msg = build_room_list_msg(
+                &state.rooms,
+                Some(&client.user_id),
+                client.supports_room_access,
+            );
             send_message(Some(client.sender.clone()), &msg, Some(client_id));
         } else {
-            send_message(Some(client.sender.clone()), &unfiltered, Some(client_id));
+            send_message(
+                Some(client.sender.clone()),
+                if client.supports_room_access {
+                    &access
+                } else {
+                    &legacy
+                },
+                Some(client_id),
+            );
         }
     }
 }
@@ -207,7 +237,7 @@ mod tests {
     #[test]
     fn build_room_list_msg_empty() {
         let rooms = HashMap::new();
-        let msg = build_room_list_msg(&rooms, None);
+        let msg = build_room_list_msg(&rooms, None, false);
         assert_eq!(msg.msg_type, ServerMessageType::RoomList);
         let payload = msg.payload.unwrap();
         let list = payload.as_array().unwrap();
@@ -227,6 +257,9 @@ mod tests {
                 clients: vec!["a".to_string(), "b".to_string()],
                 ready_clients: HashSet::new(),
                 pending_play: None,
+                access: Default::default(),
+                join_requests: Vec::new(),
+                admitted_users: HashSet::new(),
                 pending_host_reconnect: None,
                 blocked_users: HashSet::new(),
                 state: PlaybackState {
@@ -244,6 +277,7 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                chat_history: Default::default(),
             },
         );
         rooms.insert(
@@ -256,6 +290,9 @@ mod tests {
                 clients: vec!["c".to_string()],
                 ready_clients: HashSet::new(),
                 pending_play: None,
+                access: Default::default(),
+                join_requests: Vec::new(),
+                admitted_users: HashSet::new(),
                 pending_host_reconnect: None,
                 blocked_users: HashSet::new(),
                 state: PlaybackState {
@@ -273,9 +310,10 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                chat_history: Default::default(),
             },
         );
-        let msg = build_room_list_msg(&rooms, None);
+        let msg = build_room_list_msg(&rooms, None, false);
         let list = msg.payload.unwrap();
         let arr = list.as_array().unwrap();
         assert_eq!(arr.len(), 2);
@@ -517,5 +555,35 @@ mod tests {
 
         disconnect.changed().await.unwrap();
         assert!(*disconnect.borrow());
+    }
+}
+
+#[cfg(test)]
+mod access_tests {
+    use super::*;
+    use crate::test_helpers;
+
+    #[test]
+    fn room_lists_hide_unlisted_and_keep_legacy_entries_unchanged() {
+        let mut public = test_helpers::create_room("public", "host");
+        public.access.approval = true;
+        let mut hidden = test_helpers::create_room("hidden", "host");
+        hidden.access.unlisted = true;
+        let rooms = HashMap::from([
+            ("public".to_string(), public),
+            ("hidden".to_string(), hidden),
+        ]);
+        for feature in [false, true] {
+            let msg = build_room_list_msg(&rooms, None, feature);
+            let payload = msg.payload.unwrap();
+            let entries = payload.as_array().unwrap();
+            assert_eq!(entries.len(), 1);
+            assert_eq!(entries[0]["id"], "public");
+            assert_eq!(entries[0].get("approval").is_some(), feature);
+            assert_eq!(
+                entries[0].as_object().unwrap().len(),
+                if feature { 5 } else { 4 }
+            );
+        }
     }
 }
