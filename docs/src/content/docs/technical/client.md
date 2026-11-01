@@ -171,8 +171,9 @@ separate nested state objects.
 On an unexpected socket close, the client remembers the room in
 `desiredRoomId`, normalizes playback rate and clears active membership. It
 reconnects with capped exponential backoff (1s, 2s, 4s, 8s, 16s, then 30s),
-resetting the counter when a socket opens. After authentication, it rejoins the
-remembered room; authentication/rejoin waits time out after 5s. A failed rejoin
+resetting the counter once the connection authenticates, so a rejected token
+keeps backing off. After authentication, it rejoins the remembered room;
+authentication/rejoin waits time out after 5s. A failed rejoin
 resets room state and rejects late room-state replies. An older server without
 host transfer closes the room on host disconnect, so the host does not attempt
 room recovery in that case.
