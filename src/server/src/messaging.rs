@@ -233,6 +233,7 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                chat_history: Default::default(),
             },
         );
         rooms.insert(
@@ -262,6 +263,7 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                chat_history: Default::default(),
             },
         );
         let msg = build_room_list_msg(&rooms);

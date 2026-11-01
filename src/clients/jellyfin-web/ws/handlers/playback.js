@@ -113,6 +113,9 @@
       return true;
     }
     const changed = playing === video.paused;
+    // A start the room waited for plays the held video at this same time
+    // (app/start.js), maybe first: this play still resumed the room.
+    const resumedByStart = playing && Boolean(OWP.start?.resumedFor?.(msg.payload.target_server_ts));
     const position = msg.payload.position;
     const threshold = playing ? SEEK_THRESHOLD : PAUSED_SEEK_THRESHOLD;
     // One target for both the decision and the seek: a playing projection
@@ -129,7 +132,7 @@
     if (changed && playing) OWP.playback.safePlay(video, seek ? 'guest seek command' : 'guest play command');
     else if (changed) video.pause();
     // Scheduled play retains its initiator; only guest actions get this toast.
-    if (changed && !seek && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
+    if (((changed && !seek) || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;
   };
 
@@ -199,6 +202,9 @@
     }
     utils.startSyncing();
     if (!msg.payload) return;
+    const action = msg.payload.action;
+    const playing = action === 'play' || (action === 'seek' && msg.payload.play_state === 'playing');
+    if (h.hearRoomState) h.hearRoomState(msg, playing ? 'playing' : 'paused', action === 'buffering');
     state.ownCommandUntil = 0;
     state.ownCommandPlayState = '';
     const targetTs = msg.payload.target_server_ts || msg.server_ts || utils.getServerNow();
@@ -212,6 +218,8 @@
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
     const applyScheduledEvent = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      // The timer that ran this one has fired: a retry sets a new one.
+      state.pendingActionTimer = null;
       utils.startSyncing();
       if (!applyPlayerEvent(msg, video)) {
         if (utils.nowMs() < retryDeadline) {
