@@ -210,6 +210,7 @@
     readyRoomId: '',
     lastReactionSent: 0,
     roomReactionsEnabled: true,
+    showReactionsOverlay: true,
     ...createQueueState(),
     ...createStartState(),
   });
@@ -342,7 +343,6 @@
     appearanceOpacity: OWP.constants.APPEARANCE.opacity.default,   // Surface opacity in percent
     appearanceTextSize: OWP.constants.APPEARANCE.textSize.default, // Base text size in px
     inviteTtlSeconds: 3600,      // Lifetime requested for new invite tickets
-    showReactionsOverlay: typeof localStorage !== 'undefined' ? localStorage.getItem('owp_show_reactions_overlay') !== 'false' : true,
   });
 
   const createState = () => ({

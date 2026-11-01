@@ -20,7 +20,7 @@ pub(super) const MIN_STATE_UPDATE_INTERVAL_MS: u64 = 500;
 pub(super) const POSITION_JITTER_THRESHOLD: f64 = 0.5;
 pub(super) const COMMAND_COOLDOWN_MS: u64 = 2000;
 pub(super) const REACTION_RATE_LIMIT_MS: u64 = 1000;
-pub(super) const ALLOWED_REACTIONS: &[&str] = &["👍", "❤️", "😂", "😮", "😢", "👏", "🎉", "🔥"];
+pub(super) const ALLOWED_REACTIONS: &[&str] = &["❤️", "😂", "🔥", "😮", "🤯", "😳", "😢", "😭"];
 
 // Rate limiting constants
 pub(super) const RATE_LIMIT_MESSAGES: u32 = 30; // Max messages per window

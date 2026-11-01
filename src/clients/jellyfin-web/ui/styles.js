@@ -445,6 +445,23 @@
     .owp-reaction-control-btn.active { color: #f59e0b; }
     .owp-reaction-control-btn.muted { color: #888888; }
     .owp-bar-btn.owp-reactions-disabled { opacity: 0.5; }
+    .owp-bar-btn.owp-reactions-muted {
+      position: relative;
+      opacity: 0.7;
+    }
+    .owp-bar-btn.owp-reactions-muted::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: ${px(16)};
+      height: ${px(2)};
+      background: #f09595;
+      transform: translate(-50%, -50%) rotate(-45deg);
+      border-radius: ${px(1)};
+      pointer-events: none;
+      box-shadow: 0 0 ${px(2)} rgba(0, 0, 0, 0.6);
+    }
     @media (prefers-reduced-motion: reduce) {
       .owp-reaction-btn { transition: none; }
       .owp-reaction-btn:hover { transform: none; }

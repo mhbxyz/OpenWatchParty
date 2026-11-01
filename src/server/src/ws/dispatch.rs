@@ -431,6 +431,22 @@ mod tests {
             (ErrorCode::ChatMessageEmpty, "CHAT_MESSAGE_EMPTY"),
             (ErrorCode::ChatMessageTooLong, "CHAT_MESSAGE_TOO_LONG"),
             (ErrorCode::InvalidQueuePayload, "INVALID_QUEUE_PAYLOAD"),
+            (
+                ErrorCode::InvalidReactionPayload,
+                "INVALID_REACTION_PAYLOAD",
+            ),
+            (
+                ErrorCode::InvalidReactionEmoji,
+                "INVALID_REACTION_EMOJI",
+            ),
+            (
+                ErrorCode::ReactionRateLimited,
+                "REACTION_RATE_LIMITED",
+            ),
+            (
+                ErrorCode::ReactionsDisabled,
+                "REACTIONS_DISABLED",
+            ),
         ];
         for (code, expected) in cases {
             assert_eq!(serde_json::to_value(code).unwrap(), expected);

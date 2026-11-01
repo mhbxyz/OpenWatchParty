@@ -188,6 +188,28 @@ pub(in crate::ws) async fn handle_reaction(
     }
 }
 
+pub(crate) fn send_reactions_enabled_to_client(
+    room_id: &str,
+    client_id: &str,
+    clients: &std::collections::HashMap<String, crate::types::Client>,
+    enabled: bool,
+) {
+    if let Some(client) = clients.get(client_id) {
+        let msg = WsMessage {
+            msg_type: ServerMessageType::Reaction,
+            room: Some(room_id.to_string()),
+            client: Some(client_id.to_string()),
+            payload: Some(serde_json::json!({
+                "action": "toggle",
+                "enabled": enabled
+            })),
+            ts: now_ms(),
+            server_ts: Some(now_ms()),
+        };
+        send_to_senders(std::slice::from_ref(&client.sender), &msg, "join reaction state");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,7 +237,7 @@ mod tests {
         let (client, mut rx) = test_helpers::create_client_with_rx("u1", "User", true);
         state.write().await.clients.insert("c1".to_string(), client);
 
-        let msg = reaction_message(None, Some(serde_json::json!({ "emoji": "👍" })));
+        let msg = reaction_message(None, Some(serde_json::json!({ "emoji": "❤️" })));
         handle_reaction("c1", &msg, &state).await;
 
         assert_error_code(
@@ -262,7 +284,7 @@ mod tests {
         let room = test_helpers::create_room("r1", "host");
         state.write().await.rooms.insert("r1".to_string(), room);
 
-        let msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "👍" })));
+        let msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "❤️" })));
         handle_reaction("c1", &msg, &state).await;
 
         assert_error_code(
@@ -306,7 +328,7 @@ mod tests {
         let room = test_helpers::create_room("r1", "c1");
         state.write().await.rooms.insert("r1".to_string(), room);
 
-        let msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "👍" })));
+        let msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "❤️" })));
 
         // First reaction succeeds
         handle_reaction("c1", &msg, &state).await;
@@ -365,7 +387,7 @@ mod tests {
         assert_eq!(guest_notif.payload.unwrap()["enabled"], false);
 
         // Now emoji reactions are rejected with REACTIONS_DISABLED
-        let emoji_msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "👍" })));
+        let emoji_msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "❤️" })));
         handle_reaction("c2", &emoji_msg, &state).await;
         let disabled_err = test_helpers::recv_msg(&mut guest_rx).unwrap();
         assert_error_code(disabled_err, "REACTIONS_DISABLED");

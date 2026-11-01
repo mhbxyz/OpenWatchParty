@@ -34,7 +34,7 @@
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
 
-  const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥'];
+  const ALLOWED_REACTIONS = ['❤️', '😂', '🔥', '😮', '🤯', '😳', '😢', '😭'];
   const REACTIONS_OVERLAY_ID = 'owp-reactions-overlay';
 
   const getOrCreateReactionsOverlay = () => {
@@ -104,13 +104,24 @@
   const updateReactionControls = () => {
     const reactBtn = document.getElementById('owp-btn-react');
     const isRoomEnabled = state.roomReactionsEnabled !== false;
+    const isViewerEnabled = state.showReactionsOverlay !== false;
     if (reactBtn) {
-      if (!isRoomEnabled && !state.isHost) {
+      if (!isRoomEnabled) {
         reactBtn.classList.add('owp-reactions-disabled');
+        reactBtn.classList.remove('owp-reactions-muted');
         reactBtn.title = t('reactionsDisabled');
+        reactBtn.setAttribute('aria-label', reactBtn.title);
+      } else if (!isViewerEnabled) {
+        reactBtn.classList.remove('owp-reactions-disabled');
+        reactBtn.classList.add('owp-reactions-muted');
+        const hiddenLabel = `${t('reactions')} (${t('reactionsHidden')})`;
+        reactBtn.title = hiddenLabel;
+        reactBtn.setAttribute('aria-label', hiddenLabel);
       } else {
         reactBtn.classList.remove('owp-reactions-disabled');
+        reactBtn.classList.remove('owp-reactions-muted');
         reactBtn.title = t('reactions');
+        reactBtn.setAttribute('aria-label', t('reactions'));
       }
     }
 
@@ -118,9 +129,14 @@
     if (tray) {
       const buttons = tray.querySelectorAll('.owp-reaction-btn');
       buttons.forEach(btn => {
-        if (!isRoomEnabled && !state.isHost) btn.classList.add('owp-disabled');
+        if (!isRoomEnabled) btn.classList.add('owp-disabled');
         else btn.classList.remove('owp-disabled');
       });
+
+      const divider = tray.querySelector('.owp-react-divider');
+      if (divider) {
+        divider.style.display = (!isRoomEnabled && !state.isHost) ? 'none' : '';
+      }
 
       let hostBtn = document.getElementById('owp-btn-react-host-toggle');
       if (state.isHost && !hostBtn) {
@@ -151,8 +167,9 @@
       }
 
       const viewerBtn = document.getElementById('owp-btn-react-viewer-toggle');
-      const isViewerEnabled = state.showReactionsOverlay !== false;
       if (viewerBtn) {
+        viewerBtn.style.display = isRoomEnabled ? '' : 'none';
+        const isViewerEnabled = state.showReactionsOverlay !== false;
         viewerBtn.replaceChildren(createIcon(isViewerEnabled ? 'eye' : 'eyeOff'));
         viewerBtn.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
         viewerBtn.setAttribute('aria-label', viewerBtn.title);
@@ -217,7 +234,7 @@
       btn.type = 'button';
       btn.title = emoji;
       btn.setAttribute('aria-label', emoji);
-      if (!isRoomEnabled && !state.isHost) {
+      if (!isRoomEnabled) {
         btn.classList.add('owp-disabled');
       }
       btn.onclick = () => {
@@ -230,11 +247,17 @@
     });
 
     const divider = createElement('div', 'owp-react-divider');
+    if (!isRoomEnabled && !state.isHost) {
+      divider.style.display = 'none';
+    }
     section.appendChild(divider);
 
     const viewerToggle = createElement('button', 'owp-reaction-control-btn');
     viewerToggle.id = 'owp-btn-react-viewer-toggle';
     viewerToggle.type = 'button';
+    if (!isRoomEnabled) {
+      viewerToggle.style.display = 'none';
+    }
     const isViewerEnabled = state.showReactionsOverlay !== false;
     viewerToggle.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
     viewerToggle.setAttribute('aria-label', viewerToggle.title);
@@ -243,9 +266,6 @@
     viewerToggle.onclick = (e) => {
       e.stopPropagation();
       state.showReactionsOverlay = !state.showReactionsOverlay;
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem('owp_show_reactions_overlay', String(state.showReactionsOverlay));
-      }
       if (!state.showReactionsOverlay) {
         const overlay = document.getElementById(REACTIONS_OVERLAY_ID);
         if (overlay) overlay.remove();

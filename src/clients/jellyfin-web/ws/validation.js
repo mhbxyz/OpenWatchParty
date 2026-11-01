@@ -145,7 +145,7 @@
     return timestamp(message.payload.client_ts) ? null : 'client_ts is invalid';
   };
 
-  const ALLOWED_REACTIONS = new Set(['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥']);
+  const ALLOWED_REACTIONS = new Set(['❤️', '😂', '🔥', '😮', '🤯', '😳', '😢', '😭']);
 
   const validateReaction = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
