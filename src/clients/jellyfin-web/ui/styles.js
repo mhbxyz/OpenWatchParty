@@ -55,6 +55,36 @@
   };
 
   const CSS_STYLES = `
+    .owp-access { margin-top: ${px(8)}; padding-top: ${px(8)}; border-top: 1px solid rgba(var(--owp-ink), 0.1); }
+    .owp-access-create { margin-top: 0; padding-top: 0; border-top: none; margin-bottom: ${px(8)}; }
+    .owp-access-title { font-size: ${px(11)}; color: var(--owp-muted); margin-bottom: ${px(2)}; }
+    .owp-access-row { display: flex; align-items: center; gap: ${px(10)}; padding: ${px(5)} 0; }
+    .owp-access-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+    .owp-access-label { color: var(--owp-text); }
+    .owp-access-hint { font-size: ${px(11)}; color: var(--owp-muted); }
+    .owp-switch { position: relative; flex-shrink: 0; width: ${px(30)}; height: ${px(17)}; padding: 0; border: none;
+      border-radius: 999px; background: rgba(var(--owp-ink), 0.18); cursor: pointer; }
+    .owp-switch::after { content: ''; position: absolute; top: ${px(2)}; left: ${px(2)}; width: ${px(13)}; height: ${px(13)};
+      border-radius: 50%; background: var(--owp-text); }
+    .owp-switch[aria-checked="true"] { background: var(--owp-primary); }
+    .owp-switch[aria-checked="true"]::after { left: ${px(15)}; }
+    .owp-switch:focus-visible { outline: ${px(2)} solid var(--owp-accent); outline-offset: ${px(2)}; }
+    [dir="rtl"] .owp-switch::after { left: auto; right: ${px(2)}; }
+    [dir="rtl"] .owp-switch[aria-checked="true"]::after { left: auto; right: ${px(15)}; }
+    .owp-request-row { flex-wrap: wrap; }
+    .owp-request-buttons { display: flex; gap: ${px(6)}; margin-left: auto; }
+    .owp-request-card { box-sizing: border-box; width: ${px(320)}; max-width: 100%; align-self: flex-end; margin-left: auto;
+      padding: ${px(12)}; border-radius: ${px(8)}; background: rgba(var(--owp-surface), var(--owp-surface-alpha)); }
+    .owp-request-card .owp-request-buttons { width: 100%; justify-content: flex-end; }
+    .owp-request-badge { background: var(--owp-warn); color: rgb(var(--owp-surface)); border-radius: 999px; padding: 0 ${px(4)}; font-size: ${px(10)}; }
+    .owp-card-approval { position: absolute; top: 8px; left: 8px; display: flex; align-items: center; gap: 4px;
+      background: rgba(0,0,0,.75); color: #fff; border-radius: 999px; padding: 4px 8px; font-size: 12px; }
+    .owp-card-approval .material-icons, .owp-room-count .material-icons { font-size: 1em; vertical-align: middle; }
+    .owp-join-error { color: var(--owp-bad); }
+    .owp-access-spinner { display: inline-block; width: ${px(9)}; height: ${px(9)}; border: 1px solid var(--owp-muted);
+      border-top-color: transparent; border-radius: 50%; margin-right: ${px(5)}; animation: owp-access-spin 1s linear infinite; }
+    @keyframes owp-access-spin { to { transform: rotate(360deg); } }
+
     html.owp-guest-locked .videoOsdBottom .btnPreviousTrack,
     html.owp-guest-locked .videoOsdBottom .btnNextTrack,
     html.owp-guest-locked .videoOsdBottom .btnPreviousChapter,

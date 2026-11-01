@@ -104,6 +104,14 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | Property | Type | Description |
 |----------|------|-------------|
 | `ws` | WebSocket\|null | WebSocket connection instance |
+| `createAccess` | object | Creation switches `{ approval: false, unlisted: false }`; reset after successful creation |
+| `roomAccess` | object | Current room settings from `room_access`; reset on leave |
+| `joinRequests` | array | Host's ordered pending requests `{ id, name }`; reset on leave |
+| `joinTarget` | string | Last sent join room id; cleared on cancellation, admission or rejection to ignore late replies |
+| `cancelledJoinRoomId` | string | Withdrawn request whose racing admission must be left; remembered until the next join attempt |
+| `createRoomPending` | boolean | Awaiting successful creation; its host `room_state` clears any previous request |
+| `pendingJoin` | object or null | `{ roomId, roomName, hostName }` while waiting; cleared on admission, cancellation, rejection or error |
+| `joinOutcome` | object or null | `{ roomId, roomName, reason, hostName }` after rejection; cleared on retry or admission |
 | `roomId` | string | Current room ID |
 | `clientId` | string | Unique client ID (assigned by server) |
 | `name` | string | User display name |

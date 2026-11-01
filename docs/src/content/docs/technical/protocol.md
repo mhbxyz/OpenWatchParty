@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready`, `chat_history` and `room_access`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000
 }
@@ -76,7 +76,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready`, `chat_history` and `room_access` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
 Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
@@ -151,7 +151,10 @@ Join an existing room.
 
 ### `leave_room`
 
-Leave the current room.
+Leave the current room. If `room` is supplied, it must match the client's current
+room; a mismatching leave is ignored. This prevents a late cancellation from
+leaving a room the client has since joined or created. Omitting `room` leaves the
+current room as before.
 
 ```json
 {
@@ -441,7 +444,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history", "room_access"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -980,3 +983,56 @@ https://jellyfin.example/web/?owp_invite=<ticket>
 ```
 
 The client reads `owp_invite` on load, waits for the WebSocket authentication to finish, then sends `join_room` for the room named in the ticket and removes the parameter from the URL. Invalid or expired tickets show a toast and leave the client on the normal room list.
+
+## Room access (`room_access`)
+
+Clients advertise `room_access` in `auth.features`; supporting servers echo it in
+`auth_success.features`. Both settings default to false and are independent.
+Access settings are never logged. This extension adds these client payloads:
+
+| Message | Payload | Authorization |
+| --- | --- | --- |
+| `create_room` | Existing fields, optional `access: {"approval": true, "unlisted": false}` | Authenticated; access ignored without negotiation |
+| `set_room_access` | `{"approval": true, "unlisted": false}` | Negotiated host |
+| `cancel_join` | `{}` | Negotiated requester, withdraws its request anywhere |
+| `answer_join` | `{"id": "request UUID", "admit": true}` | Negotiated host; unknown id ignored |
+
+Both access keys must be booleans, both are required, and no other access keys
+are accepted. Invalid create access creates no room. Invalid access settings
+return `INVALID_ACCESS_PAYLOAD`; non-host updates return
+`HOST_PERMISSION_REQUIRED`, and updates outside a room return `NOT_IN_ROOM`.
+The three new request types are ignored without negotiation.
+
+| Server message | Payload | Recipient |
+| --- | --- | --- |
+| `room_access` | `{"approval": true, "unlisted": false}` | Negotiated members |
+| `join_requests` | `{"requests": [{"id": "UUID v4", "name": "Guest"}]}` | Negotiated host only, including empty lists |
+| `join_pending` | `{"host_name": "Host"}` | Requester |
+| `join_rejected` | `{"reason": "rejected", "host_name": "Host"}` | Requester |
+
+All four messages have the room id in the envelope's `room` field.
+`room_access` follows `room_state` on create/join, and is also sent on changes
+and host changes. Hosts receive `join_requests` on create, promotion, reclaim,
+and every request list change. Requests remain in arrival order, at most 20;
+repeat joins resend `join_pending` without duplicating. A request in another
+room is withdrawn first. Names use the sanitized join name or stored user name.
+Too many waiting requests return `ROOM_FULL`.
+
+Approval defers membership until admitted. The room remembers the non-empty
+Jellyfin user id of everyone who becomes a member for its lifetime. Returning
+admitted users, existing members, valid invite tickets and reclaiming hosts
+bypass approval. Empty user ids are never remembered. Legacy clients receive
+`ROOM_APPROVAL_REQUIRED`: "This room asks the host's approval to join. Update
+OpenWatchParty to ask to join." Admission uses normal joining, including
+capacity checks, leaving an earlier room and normal join messages. Turning
+off approval admits the waiting list in order; overflow receives `ROOM_FULL`.
+Rejection removes the request and sends reason `rejected`. Closing a room by
+any path sends reason `closed`; disconnecting requesters are removed. When a
+host without this feature takes over, approval turns off, waiting requests get
+reason `unavailable`, and members receive updated access. Unlisted stays set.
+
+Room lists exclude unlisted rooms for everyone, including members. An unlisted
+room can still be joined by id. Lists are built per negotiated recipient group:
+feature clients receive an extra boolean `approval` on each entry; legacy
+clients receive exactly the previous schema. Only authenticated clients receive
+lists. Changes to room access rebroadcast lists, including appearance/removal.

@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history', 'room_access'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -190,6 +190,13 @@
   });
 
   const createRoomState = () => ({
+    roomAccess: { approval: false, unlisted: false },
+    joinRequests: [],
+    joinTarget: '',        // Last join sent; fences replies after cancellation or a different join
+    cancelledJoinRoomId: '', // A racing admission must be left before showing the room
+    createRoomPending: false,
+    pendingJoin: null,
+    joinOutcome: null,
     roomId: '',
     isHost: false,
     inRoom: false,
@@ -314,6 +321,7 @@
 
   const createUIState = () => ({
     ...createRoomUIState(),
+    createAccess: { approval: false, unlisted: false },
     name: '',
     rooms: [],
     initialized: false,

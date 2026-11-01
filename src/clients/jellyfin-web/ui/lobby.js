@@ -20,6 +20,14 @@
     if (!button) return;
     const enabled = canCreateRoom();
     button.disabled = !enabled;
+    const create = document.getElementById('owp-create-access');
+    const showAccess = enabled && state.serverFeatures.includes('room_access');
+    if (create) create.hidden = !showAccess;
+    else if (showAccess && ui.createAccessControls) {
+      const controls = ui.createAccessControls(true);
+      controls.id = 'owp-create-access';
+      button.parentNode.insertBefore(controls, button);
+    }
     const hint = document.getElementById(CREATE_ROOM_HINT_ID);
     if (hint) hint.hidden = enabled;
   };

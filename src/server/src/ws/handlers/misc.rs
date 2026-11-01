@@ -183,11 +183,19 @@ pub(in crate::ws) async fn handle_ready(
     }
 }
 
-pub(in crate::ws) async fn handle_leave_room(client_id: &str, state: &SharedState) {
+pub(in crate::ws) async fn handle_leave_room(
+    client_id: &str,
+    expected_room: Option<&str>,
+    state: &SharedState,
+) {
     let left = {
         let mut state = state.write().await;
         let crate::types::ServerState { clients, rooms } = &mut *state;
         let room_id = clients.get(client_id).and_then(|c| c.room_id.clone());
+        // A cancelled admission can arrive after the client has moved to another room.
+        if expected_room.is_some() && room_id.as_deref() != expected_room {
+            return;
+        }
         info!(
             "Client leaving room client_id={client_id} room_id={}",
             room_id.as_deref().unwrap_or("-")
@@ -422,7 +430,7 @@ mod tests {
             .clients
             .insert("guest".to_string(), client);
 
-        handle_leave_room("guest", &state).await;
+        handle_leave_room("guest", None, &state).await;
 
         assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "NOT_IN_ROOM");
     }

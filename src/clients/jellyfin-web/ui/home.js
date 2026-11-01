@@ -56,7 +56,7 @@
     });
     rooms.forEach((room, index) => {
       const existing = existingCards.get(room.id);
-      if (existing && existing.dataset.mediaId !== String(room.media_id || '')) {
+      if (existing && (existing.dataset.mediaId !== String(room.media_id || '') || existing.dataset.approval !== String(Boolean(room.approval)))) {
         // The room moved to another queue item: a new card, in the same place,
         // shows its art and opens it.
         itemsContainer.insertBefore(ui.createRoomCard(room, index), existing);

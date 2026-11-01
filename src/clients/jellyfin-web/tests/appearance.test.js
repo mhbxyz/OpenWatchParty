@@ -153,7 +153,7 @@ describe('appearance styles', () => {
   });
 
   it('draws every surface with the opacity setting', () => {
-    assert.equal(css.match(/rgba\(var\(--owp-surface\), var\(--owp-surface-alpha\)\)/g).length, 6);
+    assert.equal(css.match(/rgba\(var\(--owp-surface\), var\(--owp-surface-alpha\)\)/g).length, 7);
     assert.match(css, /rgba\(var\(--owp-surface-deep\), var\(--owp-surface-alpha\)\)/);
   });
 
@@ -165,6 +165,18 @@ describe('appearance styles', () => {
     const fixed = /rgba\(0, ?0, ?0, ?0\.\d+\)|color: #fff;|\.owp-card-count \{[^}]*\}|#1565c0|#aaa|#388e3c|#69f0ae/g;
     const rules = panel.slice(defaults.length).replace(fixed, '');
     assert.deepEqual(rules.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\d[^)]*\)/g), null);
+  });
+
+  it('uses preset colors for access controls, waiting requests and errors', () => {
+    const selectors = ['.owp-access-title', '.owp-access-label', '.owp-access-hint', '.owp-switch',
+      '.owp-switch::after', '.owp-switch[aria-checked="true"]', '.owp-switch:focus-visible',
+      '.owp-request-card', '.owp-request-badge', '.owp-join-error', '.owp-access-spinner'];
+    for (const selector of selectors) {
+      const start = css.indexOf(`${selector} {`);
+      assert.notEqual(start, -1, selector);
+      const rule = css.slice(start, css.indexOf('}', start));
+      assert.equal(rule.match(/#[0-9a-fA-F]{3,8}\b|rgba?\(\d[^)]*\)/g), null, selector);
+    }
   });
 
   it('lets each preset set only variables the stylesheet defines', () => {

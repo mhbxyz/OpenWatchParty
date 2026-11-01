@@ -5,6 +5,38 @@
   const ui = OWP.ui;
   const t = OWP.i18n.t;
 
+  h.handleRoomAccess = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.roomAccess = { ...msg.payload };
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinRequests = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || !state.inRoom || msg.room !== state.roomId) return;
+    state.joinRequests = msg.payload.requests;
+    ui.updateParticipantList();
+    ui.updateAccessUI?.();
+  };
+  h.handleJoinPending = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    if (state.rejoinPending && state.desiredRoomId === msg.room) {
+      OWP.actions.completeRoomRejoin(msg.room);
+    }
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.pendingJoin = { roomId: msg.room, roomName, hostName: msg.payload.host_name };
+    state.joinOutcome = null;
+    ui.updateRoomListUI();
+  };
+  h.handleJoinRejected = (msg) => {
+    if (!state.serverFeatures.includes('room_access') || state.joinTarget !== msg.room) return;
+    const roomName = state.pendingJoin?.roomName || state.rooms.find(room => room.id === msg.room)?.name || t('roomName', { name: msg.payload.host_name });
+    state.joinTarget = '';
+    state.pendingJoin = null;
+    state.joinOutcome = { roomId: msg.room, roomName, reason: msg.payload.reason, hostName: msg.payload.host_name };
+    if (!state.inRoom) state.roomId = '';
+    state.desiredRoomId = '';
+    ui.updateRoomListUI();
+  };
+
   h.handleRoomList = (msg) => {
     state.rooms = msg.payload || [];
     if (!state.inRoom) ui.updateRoomListUI();
@@ -130,6 +162,13 @@
   };
 
   h.handleError = (msg) => {
+    if (state.pendingJoin && (!msg.room || msg.room === state.pendingJoin.roomId)) {
+      state.joinTarget = '';
+      state.pendingJoin = null;
+      if (!state.inRoom) state.roomId = '';
+      state.desiredRoomId = '';
+      ui.updateRoomListUI();
+    }
     const message = OWP.i18n.localizeServerError(msg.payload?.code, msg.payload?.message);
     console.error('[OpenWatchParty] Server error:', msg.payload?.code, msg.payload?.message);
     if (state.inviteJoinPending) {
