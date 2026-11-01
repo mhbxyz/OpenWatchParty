@@ -162,6 +162,9 @@ jobs:
       - name: Verify least-privilege workflow permissions
         run: infra/scripts/verify-workflow-permissions.py
 
+      - name: Test pull request rerun command
+        run: infra/scripts/tests/rerun-pr-checks.test.sh
+
       - name: Verify immutable dependency pins
         run: infra/scripts/verify-pins.sh
 

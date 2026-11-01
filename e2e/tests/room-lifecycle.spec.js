@@ -198,10 +198,9 @@ test('a guest Leave and another guest transport loss leave the host alone in the
     (await helpers.owpState(guest.page)).clientId,
     (await helpers.owpState(third.page)).clientId,
   ].sort();
-  await helpers.ensureRoomBarVisible(guest.page);
-  await guest.page.locator('#owp-btn-leave').click();
+  await helpers.clickRoomBar(guest.page, '#owp-btn-leave');
   await Promise.all([
-    guest.page.locator('#owp-btn-confirm-leave').click(),
+    helpers.clickRoomBar(guest.page, '#owp-btn-confirm-leave'),
     third.page.evaluate(() => {
       window.OpenWatchParty.state.autoReconnect = false;
       window.OpenWatchParty.state.ws.close();

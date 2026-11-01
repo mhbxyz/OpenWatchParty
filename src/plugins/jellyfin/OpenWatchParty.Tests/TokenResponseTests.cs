@@ -91,7 +91,8 @@ public sealed class TokenResponseTests
             JwtSecret = insecure ? string.Empty : ValidSecret,
             SessionServerUrl = "wss://session.example/ws",
             AppearanceOpacity = 80,
-            AppearanceTextSize = 17
+            AppearanceTextSize = 17,
+            AppearancePreset = "contrast"
         };
 
         using var defaultResponse = GetTokenResponse(defaulted);
@@ -101,6 +102,8 @@ public sealed class TokenResponseTests
         Assert.Equal(14, defaultResponse.RootElement.GetProperty("appearance_text_size").GetInt32());
         Assert.Equal(80, customResponse.RootElement.GetProperty("appearance_opacity").GetInt32());
         Assert.Equal(17, customResponse.RootElement.GetProperty("appearance_text_size").GetInt32());
+        Assert.Equal("glass", defaultResponse.RootElement.GetProperty("appearance_preset").GetString());
+        Assert.Equal("contrast", customResponse.RootElement.GetProperty("appearance_preset").GetString());
     }
 
     [Fact]

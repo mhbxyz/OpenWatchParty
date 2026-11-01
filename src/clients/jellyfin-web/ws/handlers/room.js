@@ -70,6 +70,11 @@
     if (OWP.start?.onStartState) OWP.start.onStartState(msg.payload);
   };
 
+  h.handleChatHistory = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    if (OWP.chat?.loadHistory) OWP.chat.loadHistory(msg.payload.messages);
+  };
+
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
     // The statuses for this list follow in participant_statuses.

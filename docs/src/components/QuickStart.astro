@@ -2,14 +2,29 @@
 import { withBase } from '../lib/paths';
 ---
 <section class="section how-section" id="how-it-works" aria-labelledby="how-title">
-      <div class="section-heading">
-        <div><p class="section-kicker">Start watching together</p><h2 id="how-title">Three steps to movie night.</h2></div>
-        <p>Already have Jellyfin? Your administrator sets up OpenWatchParty once. Then everyone joins from Jellyfin Web.</p>
-      </div>
-      <div class="steps">
-        <article class="step"><span class="step-number">01</span><div><h3>Set up the party</h3><p>Install the plugin and session server. The guided setup walks your Jellyfin administrator through it.</p><a href={withBase('/product/first-watch-party/#path-b-existing-jellyfin')}>See setup instructions <span aria-hidden="true">↗</span></a></div></article>
-        <article class="step"><span class="step-number">02</span><div><h3>Start a video</h3><p>Open a film or episode in Jellyfin Web, select <strong>Watch Party</strong>, and create a room.</p><a href={withBase('/product/first-watch-party/#host-create-a-room')}>See the host steps <span aria-hidden="true">↗</span></a></div></article>
-        <article class="step"><span class="step-number">03</span><div><h3>Bring your people in</h3><p>Friends sign in to the same Jellyfin server and join your room or open your invite link. Playback lines up automatically.</p><a href={withBase('/product/first-watch-party/#guest-find-and-join-the-room')}>See the guest steps <span aria-hidden="true">↗</span></a></div></article>
-      </div>
-      <p class="steps-note">Everyone needs a Jellyfin account and access to the same media. Each person streams from Jellyfin on their own device.</p>
-    </section>
+  <div class="section-heading">
+    <div><p class="kicker">Start watching together</p><h2 id="how-title">Three steps to movie night.</h2></div>
+    <p>Already have Jellyfin? Your administrator sets up OpenWatchParty once. Then everyone joins from Jellyfin Web.</p>
+  </div>
+  <div class="steps">
+    <a class="step" style="--accent:#27c8f7" href={withBase('/product/first-watch-party/#path-b-existing-jellyfin')}>
+      <span class="step-number">01 — Admin</span>
+      <h3>Set up the party</h3>
+      <p>Install the plugin and session server. The guided setup walks your Jellyfin administrator through it.</p>
+      <span class="step-link">Setup instructions <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="step" style="--accent:#8fa6f8" href={withBase('/product/first-watch-party/#host-create-a-room')}>
+      <span class="step-number">02 — Host</span>
+      <h3>Start a video</h3>
+      <p>Open a film or episode in Jellyfin Web, select <strong>Watch Party</strong>, and create a room.</p>
+      <span class="step-link">Host steps <span aria-hidden="true">→</span></span>
+    </a>
+    <a class="step" style="--accent:#c29bff" href={withBase('/product/first-watch-party/#guest-find-and-join-the-room')}>
+      <span class="step-number">03 — Guests</span>
+      <h3>Bring your people in</h3>
+      <p>Friends sign in to the same Jellyfin server and join your room or open your invite link. Playback lines up automatically.</p>
+      <span class="step-link">Guest steps <span aria-hidden="true">→</span></span>
+    </a>
+  </div>
+  <p class="steps-note">Everyone needs a Jellyfin account and access to the same media. Each person streams from Jellyfin on their own device.</p>
+</section>

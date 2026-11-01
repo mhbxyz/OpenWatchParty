@@ -13,6 +13,7 @@ public class PluginConfiguration : BasePluginConfiguration
     private int _inviteTtlSeconds = 3600;
     private int _appearanceOpacity = 55;
     private int _appearanceTextSize = 14;
+    private string _appearancePreset = "glass";
 
     /// <summary>
     /// Gets or sets the JWT secret. A value is required unless insecure development mode is explicit.
@@ -104,5 +105,15 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         get => _appearanceTextSize;
         set => _appearanceTextSize = Math.Clamp(value, 12, 18);
+    }
+
+    /// <summary>
+    /// Gets or sets the color preset of the same elements: "glass" (the default), "solid", "light"
+    /// or "contrast". Any other value is "glass".
+    /// </summary>
+    public string AppearancePreset
+    {
+        get => _appearancePreset;
+        set => _appearancePreset = value is "glass" or "solid" or "light" or "contrast" ? value : "glass";
     }
 }

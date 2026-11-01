@@ -1,9 +1,35 @@
 ---
 import ProductPreviews from './ProductPreviews.astro';
 import { withBase } from '../lib/paths';
+
+const tabs = [
+  { id: 'sync', num: '01', accent: '#27c8f7', title: 'Play and pause together', body: 'Everyone shares play and pause. Clients correct drift automatically, so the room stays on the same frame.' },
+  { id: 'chat', num: '02', accent: '#8fa6f8', title: 'Talk while you watch', body: 'Room chat sits beside the player. React to the twist without reaching for another app.' },
+  { id: 'queue', num: '03', accent: '#ad7aff', title: 'Keep the next episode ready', body: 'A shared series queue and an up-next countdown carry the whole room into the next episode.' },
+];
 ---
-<section class="feature-section section" id="features" aria-labelledby="features-title">
-      <div class="section-heading feature-heading"><div><p class="section-kicker">The good parts of watching together</p><h2 id="features-title">A room that feels shared.</h2></div><a class="section-link" href={withBase('/product/features/')}>Explore every feature <span aria-hidden="true">↗</span></a></div>
-      <p class="preview-intro">A few familiar controls. A lot of shared moments. Try the interactive previews below.</p>
+<section class="feature-section" id="features" aria-labelledby="features-title">
+  <div class="section">
+    <div class="section-heading">
+      <div><p class="kicker">The good parts of watching together</p><h2 id="features-title">A room that feels shared.</h2></div>
+    </div>
+    <div class="feature-tabs" data-feature-tabs>
+      <div class="feature-tablist" role="tablist" aria-label="Room features" aria-orientation="vertical">
+        {tabs.map((tab, index) => (
+          <button class="feature-tab" type="button" role="tab" id={`feature-tab-${tab.id}`} aria-controls={`feature-panel-${tab.id}`} aria-selected={index === 0 ? 'true' : 'false'} tabindex={index === 0 ? 0 : -1} style={`--accent:${tab.accent}`}>
+            <span class="tab-rule" aria-hidden="true"></span>
+            <span class="tab-num">{tab.num}</span>
+            <span class="tab-title">{tab.title}</span>
+            <span class="tab-body">{tab.body}</span>
+          </button>
+        ))}
+        <a class="section-link" href={withBase('/product/features/')}>Explore every feature <span aria-hidden="true">→</span></a>
+      </div>
       <ProductPreviews />
-    </section>
+    </div>
+  </div>
+</section>
+<script>
+  import { initializeFeatureTabs } from '../scripts/feature-tabs.js';
+  document.querySelectorAll('[data-feature-tabs]').forEach(root => initializeFeatureTabs(root));
+</script>

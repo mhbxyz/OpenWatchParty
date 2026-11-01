@@ -26,7 +26,7 @@ Near an episode's outro, or near its end when no outro segment is available, the
 - Watch Party is available in the Jellyfin app bar beside SyncPlay and Cast, and in the video player's controls beside Cast. The player control is available while media is playing.
 - The slide-out panel lists active rooms and contains the room bar, chat, participant list, queue and invite controls when applicable.
 - First-run help appears once per browser and can be reopened from the panel's **?** control.
-- Administrators can hide Jellyfin's native SyncPlay control and adjust the room interface's opacity (40 to 100 percent, default 55) and base text size (12 to 18 px, default 14) under **Web Client** in plugin settings. Changes apply after Jellyfin Web reloads. If the operating system requests reduced transparency, the interface stays opaque.
+- Administrators can hide Jellyfin's native SyncPlay control and choose the room interface's theme (Glass, Solid dark, Light or High contrast) and adjust its opacity (40 to 100 percent, default 55) and base text size (12 to 18 px, default 14) under **Web Client** in plugin settings. Changes apply after Jellyfin Web reloads. If the operating system requests reduced transparency, the interface stays opaque.
 - Controls have accessible names, and the participant, chat, queue and leave sections can be operated with the keyboard. The panel follows the Jellyfin display language; English, Spanish, French and German are included.
 
 ## Compatibility
