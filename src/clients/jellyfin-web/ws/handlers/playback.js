@@ -207,6 +207,8 @@
     if (ui.updateSyncIndicator) ui.updateSyncIndicator();
     const applyScheduledEvent = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      // The timer that ran this one has fired: a retry sets a new one.
+      state.pendingActionTimer = null;
       utils.startSyncing();
       if (!applyPlayerEvent(msg, video)) {
         if (utils.nowMs() < retryDeadline) {

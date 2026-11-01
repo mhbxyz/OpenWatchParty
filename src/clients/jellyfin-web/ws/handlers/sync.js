@@ -89,6 +89,8 @@
       + VIDEO_ACTION_MAX_WAIT_MS;
     const apply = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId) return;
+      // The timer that ran this one has fired: a retry sets a new one.
+      state.pendingActionTimer = null;
       if (state.isHost && !acceptedAsGuest) {
         syncToRoom(msg, null, acceptedAsGuest);
         return;

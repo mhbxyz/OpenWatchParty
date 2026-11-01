@@ -328,6 +328,37 @@ describe('play and pause shared by the room', () => {
 
       assert.deepEqual(toasts, ['A guest paused playback', 'A guest resumed playback', 'Host paused playback']);
     });
+
+    it('clears the pending action once a retried room command applies', async () => {
+      const oldVideo = video;
+      oldVideo.isConnected = false;
+      video = null;
+      OWP.state.currentVideoElement = null;
+      h.handlePlayerEvent(playerEvent('pause', 12), oldVideo);
+      assert.ok(OWP.state.pendingActionTimer);
+      video = new FakeVideo();
+      OWP.state.currentVideoElement = video;
+      await new Promise(resolve => setTimeout(resolve, OWP.constants.VIDEO_ACTION_RETRY_MS + 20));
+      assert.equal(video.paused, true);
+      assert.equal(OWP.state.pendingActionTimer, null);
+    });
+
+    it('lets the sync adjustment work again after a retried room play', async () => {
+      const oldVideo = video;
+      oldVideo.isConnected = false;
+      video = null;
+      OWP.state.currentVideoElement = null;
+      h.handlePlayerEvent(playerEvent('play', 10), oldVideo);
+      video = new FakeVideo();
+      video.paused = true;
+      OWP.state.currentVideoElement = video;
+      await new Promise(resolve => setTimeout(resolve, OWP.constants.VIDEO_ACTION_RETRY_MS + 20));
+      assert.equal(video.paused, false);
+      // The startSyncing window ends on its own a moment later.
+      OWP.state.isSyncing = false;
+      OWP.state.syncCooldownUntil = 0;
+      assert.notEqual(OWP.playback.nudgeState().kind, 'busy');
+    });
   });
 
   describe('the host', () => {

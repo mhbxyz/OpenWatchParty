@@ -850,6 +850,65 @@ describe('host transfer client support', () => {
     }
   });
 
+  it('clears the pending action once a retried guest room sync applies', () => {
+    const originalNowMs = OWP.utils.nowMs;
+    const originalGetServerNow = OWP.utils.getServerNow;
+    const originalScheduleAt = OWP.utils.scheduleAt;
+    const originalSetTimeout = OWP.timers.setTimeout;
+    let now = 1000;
+    let applyAtTarget = null;
+    let retry = null;
+    OWP.utils.nowMs = () => now;
+    OWP.utils.getServerNow = () => now;
+    OWP.utils.scheduleAt = (target, callback) => {
+      applyAtTarget = callback;
+      OWP.state.pendingActionTimer = { target };
+    };
+    OWP.timers.setTimeout = (callback) => {
+      retry = callback;
+      return { retry: true };
+    };
+    try {
+      Object.assign(OWP.state, {
+        inRoom: false,
+        roomId: '',
+        isHost: false,
+        currentVideoElement: null
+      });
+      OWP._wsHandlers.handleRoomState({
+        type: 'room_state',
+        room: 'room-1',
+        client: 'client-1',
+        server_ts: now,
+        payload: {
+          name: 'Room',
+          host_id: 'client-2',
+          participant_count: 2,
+          media_id: '',
+          state_server_ts: now,
+          target_server_ts: 1100,
+          state: { position: 10, play_state: 'paused' }
+        }
+      }, null);
+
+      now = 1100;
+      applyAtTarget();
+      assert.deepEqual(OWP.state.pendingActionTimer, { retry: true });
+
+      const video = new FakeVideo({ currentTime: 0, readyState: 4 });
+      OWP.state.currentVideoElement = video;
+      now = 1200;
+      retry();
+      assert.equal(video.currentTime, 10);
+      assert.equal(OWP.state.pendingActionTimer, null);
+    } finally {
+      OWP.utils.nowMs = originalNowMs;
+      OWP.utils.getServerNow = originalGetServerNow;
+      OWP.utils.scheduleAt = originalScheduleAt;
+      OWP.timers.setTimeout = originalSetTimeout;
+    }
+  });
+
   it('keeps a media load and applies its room state after promotion', async () => {
     const sent = [];
     currentMediaId = 'old-media';
