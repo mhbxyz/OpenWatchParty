@@ -29,6 +29,9 @@
   const cleanup = () => {
     const lc = OWP._lifecycle;
     OWP.timers.clearAll();
+    if (typeof document !== 'undefined' && typeof document.getElementById === 'function') {
+      document.getElementById('owp-reactions-overlay')?.remove();
+    }
     state.pendingActionTimer = null;
     state.tokenRefreshTimer = null;
     state.reconnectTimer = null;

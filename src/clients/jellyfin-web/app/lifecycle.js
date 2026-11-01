@@ -19,6 +19,9 @@
 
   const onVideoPlayerExit = () => {
     console.log('[OpenWatchParty] Video player closed, cleaning up...');
+    if (typeof document !== 'undefined' && typeof document.getElementById === 'function') {
+      document.getElementById('owp-reactions-overlay')?.remove();
+    }
     if (ui.hidePanel) {
       ui.hidePanel();
     } else {

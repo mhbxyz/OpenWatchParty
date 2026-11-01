@@ -28,10 +28,68 @@
   const ROOM_SECTIONS = [
     { name: 'people', sectionId: 'owp-people-section', buttonId: 'owp-btn-people' },
     { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
+    { name: 'react', sectionId: 'owp-react-section', buttonId: 'owp-btn-react' },
     { name: 'sync', sectionId: 'owp-sync-section', buttonId: 'owp-btn-sync' },
     { name: 'queue', sectionId: 'owp-queue-section', buttonId: 'owp-btn-queue' },
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
+
+  const ALLOWED_REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥'];
+  const REACTIONS_OVERLAY_ID = 'owp-reactions-overlay';
+
+  const getOrCreateReactionsOverlay = () => {
+    let overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+    if (!overlay) {
+      overlay = createElement('div');
+      overlay.id = REACTIONS_OVERLAY_ID;
+      document.body.appendChild(overlay);
+    }
+    return overlay;
+  };
+
+  const showFloatingReaction = (emoji) => {
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    const overlay = getOrCreateReactionsOverlay();
+    const el = createElement('span', 'owp-floating-reaction', emoji);
+
+    // Randomize starting X position along bottom right/center (68% to 88% across viewport)
+    const startXPercent = 68 + (Math.random() * 20);
+    el.style.left = `${startXPercent}%`;
+
+    // Drift path for organic motion
+    const drift = (Math.random() - 0.5) * 80;
+    el.style.setProperty('--owp-drift-x', `${Math.round(drift)}px`);
+
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      if (el.parentNode) el.remove();
+      if (overlay.childElementCount === 0) overlay.remove();
+    };
+
+    el.addEventListener('animationend', remove);
+    const fallbackTimer = OWP.timers?.setTimeout?.(remove, 2200) || setTimeout(remove, 2200);
+    el._timer = fallbackTimer;
+    overlay.appendChild(el);
+  };
+
+  const createReactSection = () => {
+    const section = createElement('div');
+    section.id = 'owp-react-section';
+    ALLOWED_REACTIONS.forEach((emoji) => {
+      const btn = createElement('button', 'owp-reaction-btn', emoji);
+      btn.type = 'button';
+      btn.title = emoji;
+      btn.setAttribute('aria-label', emoji);
+      btn.onclick = () => {
+        // Trigger local animation for visual testing (dummy click without server communication)
+        showFloatingReaction(emoji);
+      };
+      section.appendChild(btn);
+    });
+    return section;
+  };
 
 
   // The sync adjustment: offered to guests when the plugin enables it. The
@@ -318,13 +376,16 @@
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
+    const reactBtn = createBarButton('owp-btn-react', t('reactions'), 'mood', 'owp-react-section');
+    reactBtn.onclick = () => toggleRoomSection('react');
+
     // Leaving always asks first; compatible hosts can pass the room on or close it.
     const leaveBtn = createBarButton('owp-btn-leave', t('leaveRoom'), 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
     // Invite links are minted by the host: guests get no button at all.
-    const roomActions = [peopleBtn, chatBtn];
+    const roomActions = [peopleBtn, chatBtn, reactBtn];
     if (offersSyncNudge()) {
       const syncBtn = createBarButton('owp-btn-sync', t('syncAdjustment'), 'refresh', 'owp-sync-section');
       syncBtn.onclick = () => toggleRoomSection('sync');
@@ -385,7 +446,7 @@
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
-    drop.append(peopleSection, chatSection);
+    drop.append(peopleSection, chatSection, createReactSection());
     if (offersSyncNudge()) drop.appendChild(createSyncSection());
     drop.appendChild(confirm);
 
@@ -424,6 +485,8 @@
     }
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
+
+  OWP.reactions = { showReaction: showFloatingReaction, ALLOWED_REACTIONS };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
   Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });

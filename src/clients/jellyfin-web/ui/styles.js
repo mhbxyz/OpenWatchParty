@@ -421,6 +421,72 @@
       border-radius: ${px(4)}; font-size: ${px(18)}; line-height: 1;
     }
     .owp-emoji-item:hover { background: rgba(255, 255, 255, 0.15); }
+    /* Reactions tray (in the room bar drop-down) */
+    #owp-react-section {
+      display: flex; align-items: center; justify-content: space-around; gap: ${px(2)}; padding: ${px(2)} 0;
+    }
+    .owp-reaction-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: ${px(32)}; height: ${px(32)}; border: none; border-radius: ${px(8)};
+      background: transparent; cursor: pointer; font-size: ${px(18)}; line-height: 1;
+      transition: transform 0.12s ease, background 0.15s;
+    }
+    .owp-reaction-btn:hover { background: rgba(255, 255, 255, 0.12); transform: scale(1.2); }
+    .owp-reaction-btn:active { transform: scale(0.95); }
+    @media (prefers-reduced-motion: reduce) {
+      .owp-reaction-btn { transition: none; }
+      .owp-reaction-btn:hover { transform: none; }
+      .owp-reaction-btn:active { transform: none; }
+    }
+    /* Floating reactions overlay */
+    #owp-reactions-overlay {
+      position: fixed; inset: 0; pointer-events: none !important;
+      z-index: 25000; overflow: hidden;
+      contain: layout size style;
+      transform: translateZ(0);
+    }
+    .owp-floating-reaction {
+      position: absolute; bottom: ${px(80)};
+      font-size: ${px(36)}; line-height: 1; user-select: none;
+      pointer-events: none !important;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      will-change: transform, opacity;
+      animation: owp-reaction-float 2.1s cubic-bezier(0.2, 0.6, 0.35, 1) forwards,
+                 owp-reaction-fade 2.1s ease-out forwards;
+    }
+    @keyframes owp-reaction-float {
+      0% {
+        transform: translate3d(0, 0, 0) scale(0.5);
+      }
+      15% {
+        transform: translate3d(calc(var(--owp-drift-x, 0) * 0.25), ${px(-65)}, 0) scale(1.2);
+      }
+      100% {
+        transform: translate3d(var(--owp-drift-x, 0), ${px(-380)}, 0) scale(1);
+      }
+    }
+    @keyframes owp-reaction-fade {
+      0% {
+        opacity: 0;
+      }
+      12% {
+        opacity: 1;
+      }
+      70% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .owp-floating-reaction {
+        animation: owp-reaction-fade 1.5s ease-out forwards;
+        transform: none;
+      }
+    }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
@@ -512,7 +578,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root #owp-emoji-panel, :root #owp-emoji-autocomplete {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root #owp-emoji-panel, :root #owp-emoji-autocomplete, :root #owp-reactions-overlay {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100}; }`;
   };
 

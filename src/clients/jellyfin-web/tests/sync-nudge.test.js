@@ -372,11 +372,11 @@ describe('sync adjustment: the room bar', () => {
     OWP.state.outOfSyncSince = 0;
   });
 
-  it('offers guests a button after the chat when the plugin enables it', () => {
+  it('offers guests a button after reactions when the plugin enables it', () => {
     renderRoom();
     const button = byId('owp-btn-sync');
     const buttons = document.querySelector('.owp-room-bar').children.map(child => child.id);
-    assert.ok(buttons.indexOf('owp-btn-sync') === buttons.indexOf('owp-btn-chat') + 1);
+    assert.ok(buttons.indexOf('owp-btn-sync') === buttons.indexOf('owp-btn-react') + 1);
     assert.equal(button.getAttribute('aria-label'), 'Sync adjustment');
     assert.equal(button.getAttribute('aria-controls'), 'owp-sync-section');
     assert.equal(button.getAttribute('aria-expanded'), 'false');

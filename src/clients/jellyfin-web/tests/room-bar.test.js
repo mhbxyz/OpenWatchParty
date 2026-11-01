@@ -39,7 +39,7 @@ Object.defineProperty(FakeDocument.prototype, 'activeElement', { configurable: t
 const byId = id => document.getElementById(id);
 const panel = () => byId(PANEL_ID);
 const expanded = id => byId(id).getAttribute('aria-expanded');
-const openSections = () => ['owp-people-section', 'owp-chat-section', 'owp-leave-confirm']
+const openSections = () => ['owp-people-section', 'owp-chat-section', 'owp-react-section', 'owp-leave-confirm']
   .filter(id => byId(id) && !byId(id).hidden);
 
 let left;
@@ -93,6 +93,7 @@ describe('room bar', () => {
       'owp-room-name',
       'owp-btn-people',
       'owp-btn-chat',
+      'owp-btn-react',
       'owp-btn-leave',
       'owp-close-btn'
     ]);
@@ -104,6 +105,7 @@ describe('room bar', () => {
     assert.ok(byId('owp-btn-people').querySelector('.owp-icon-users'));
     assert.ok(byId('owp-btn-people').querySelector('.owp-expand'));
     assert.ok(byId('owp-btn-chat').querySelector('.owp-icon-chat'));
+    assert.ok(byId('owp-btn-react').querySelector('.owp-icon-mood'));
     assert.ok(byId('owp-btn-leave').querySelector('.owp-icon-logout'));
     assert.ok(bar.querySelector('.owp-close-btn .owp-icon-x'));
     assert.ok(byId('owp-chat-send').querySelector('.owp-icon-send'));
@@ -116,6 +118,7 @@ describe('room bar', () => {
     assert.deepEqual(openSections(), []);
     assert.equal(expanded('owp-btn-people'), 'false');
     assert.equal(expanded('owp-btn-chat'), 'false');
+    assert.equal(expanded('owp-btn-react'), 'false');
   });
 
   it('opens one drop-down at a time and closes it from the same button', () => {
