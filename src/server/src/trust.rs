@@ -53,6 +53,13 @@ impl TrustStore {
     /// documented way to rotate the directory-mounted store) and an in-place
     /// rewrite invalidate the cache without any polling.
     pub fn load_cached(path: &Path) -> Result<Arc<Self>, String> {
+        Self::load_with_cache(path, TRUST_STORE_CACHE.get_or_init(|| Mutex::new(None)))
+    }
+
+    fn load_with_cache(
+        path: &Path,
+        cache: &Mutex<Option<CachedStore>>,
+    ) -> Result<Arc<Self>, String> {
         let fingerprint = Fingerprint::of(path)?;
         if !fingerprint.is_conclusive() {
             // Without a usable timestamp or inode the store cannot be proven
@@ -60,7 +67,6 @@ impl TrustStore {
             return Ok(Arc::new(Self::load(path)?));
         }
 
-        let cache = TRUST_STORE_CACHE.get_or_init(|| Mutex::new(None));
         let mut cached = cache
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
@@ -193,8 +199,13 @@ mod tests {
 
         let original = URL_SAFE_NO_PAD.encode([3u8; 384]);
         fs::write(&path, store_with_modulus("active", &original)).unwrap();
-        let first = TrustStore::load_cached(&path).unwrap();
-        let second = TrustStore::load_cached(&path).unwrap();
+        let other_path = dir.join("other-trust.json");
+        fs::write(&other_path, store_with_status("active")).unwrap();
+        let cache = Mutex::new(None);
+        let first = TrustStore::load_with_cache(&path, &cache).unwrap();
+        // Authentication tests can load a different store between these calls.
+        TrustStore::load_cached(&other_path).unwrap();
+        let second = TrustStore::load_with_cache(&path, &cache).unwrap();
         assert!(
             Arc::ptr_eq(&first, &second),
             "an unchanged store must be reused instead of re-parsed"
@@ -212,7 +223,7 @@ mod tests {
         );
         fs::write(&path, store_with_modulus("active", &rotated)).unwrap();
 
-        let after_rotation = TrustStore::load_cached(&path).unwrap();
+        let after_rotation = TrustStore::load_with_cache(&path, &cache).unwrap();
         assert_eq!(
             after_rotation.active_key("key-1").unwrap().n,
             rotated,
