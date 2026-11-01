@@ -329,6 +329,56 @@ Send a text message to the room.
 - `"Chat message too long (max 500 characters)"` - Text exceeds limit
 - `"Room ID required for chat"` - Missing room ID
 
+### `reaction`
+
+Send an emoji reaction to the room, or toggle reactions room-wide (host only).
+
+**Send a reaction:**
+```json
+{
+  "type": "reaction",
+  "room": "uuid-room-id",
+  "payload": {
+    "emoji": "🔥"
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `emoji` | string | An emoji string from the allowed reaction set |
+
+**Toggle reactions room-wide (host only):**
+```json
+{
+  "type": "reaction",
+  "room": "uuid-room-id",
+  "payload": {
+    "action": "toggle",
+    "enabled": false
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `action` | string | `"toggle"` |
+| `enabled` | boolean | `true` to enable reactions, `false` to disable room-wide |
+
+**Effects:**
+- Broadcast to all room members with the sender's username
+- Rate limited to 1 reaction per second per client
+- Room-wide toggle is host only; disables reactions for all participants
+
+**Error responses:**
+- `INVALID_REACTION_EMOJI` - Emoji not in allowlist
+- `REACTION_RATE_LIMITED` - Exceeded 1 reaction per second
+- `REACTIONS_DISABLED` - Reactions disabled in room
+- `HOST_PERMISSION_REQUIRED` - Non-host toggle attempt
+- `INVALID_REACTION_PAYLOAD` - Missing or malformed payload
+
 ### `participant_status`
 
 Report how this client is doing, for the room's participants list. Informational only: it never changes playback.
@@ -815,6 +865,50 @@ The room's last chat messages (up to 50, oldest first), sent once to a member th
 | `server_ts` | number | When the server relayed it |
 | `own` | boolean | Whether the joiner's user sent it, from this or an earlier connection (the server compares Jellyfin user ids without sending them) |
 
+### `reaction`
+
+Reaction message broadcast from server (or sent upon joining a room with reactions disabled).
+
+**Emoji broadcast:**
+```json
+{
+  "type": "reaction",
+  "room": "uuid-room-id",
+  "client": "uuid-sender-id",
+  "payload": {
+    "username": "Alice",
+    "emoji": "🔥"
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000050
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `username` | string | Sender's display name |
+| `emoji` | string | The reaction emoji |
+
+**Toggle broadcast (or join state):**
+```json
+{
+  "type": "reaction",
+  "room": "uuid-room-id",
+  "client": "uuid-host-id",
+  "payload": {
+    "action": "toggle",
+    "enabled": false
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000050
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `action` | string | `"toggle"` |
+| `enabled` | boolean | Current room reactions status |
+
 ### `error`
 
 Error response.
@@ -850,7 +944,7 @@ Error response.
 | `ROOM_NOT_FOUND` | The requested room does not exist |
 | `ROOM_FULL` | The requested room reached its participant limit |
 | `NOT_ROOM_MEMBER` | The client is not a member of the requested room |
-| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update`, `close_room` or a queue message |
+| `HOST_PERMISSION_REQUIRED` | A non-host client sent a `seek`, a `buffering` event, a `state_update`, `close_room`, a queue message or a reaction toggle |
 | `INVALID_PLAYBACK_PAYLOAD` | A playback payload is absent, malformed, or outside accepted bounds |
 | `NOT_IN_ROOM` | `leave_room`, `close_room` or a queue message was sent while the client had no room |
 | `INVALID_READY` | A `ready` transition is missing required room context |
@@ -858,6 +952,10 @@ Error response.
 | `CHAT_MESSAGE_EMPTY` | Chat text is empty |
 | `CHAT_MESSAGE_TOO_LONG` | Chat text exceeds the configured limit |
 | `INVALID_QUEUE_PAYLOAD` | A queue message's payload is absent, malformed, or outside accepted bounds |
+| `INVALID_REACTION_PAYLOAD` | A reaction payload is absent, malformed, or missing required fields |
+| `INVALID_REACTION_EMOJI` | The emoji sent is not in the allowed reaction set |
+| `REACTION_RATE_LIMITED` | A reaction was sent before the 1-second cooldown elapsed |
+| `REACTIONS_DISABLED` | Reactions are disabled room-wide |
 
 ## Sequence Diagram: Complete Session
 

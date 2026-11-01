@@ -14,6 +14,7 @@ OpenWatchParty 0.7.0 adds shared playback controls, host recovery, participant s
 - Clients correct playback drift automatically. The host can leave a room open for a compatible participant to take over; a short disconnect gives the same host 10 seconds to reconnect first.
 - Hosts can create short-lived, room-specific invite links. The invite ticket does not contain a Jellyfin password, API token, or session token. Invites require configured JWT authentication.
 - The room bar shows connection and synchronization state, participant names and (with a compatible session server) participant playback status.
+- Live emoji reactions with floating overlays, a quick hover tray, tab cycling, viewer mute, and room-wide host lock.
 
 ## Series queue
 

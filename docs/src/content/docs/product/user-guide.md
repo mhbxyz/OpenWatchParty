@@ -168,6 +168,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Room name** - Current watch party name; hover it if it is cut short
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
+- **Reactions** (mood icon) - Hover to pick an emoji, or click to toggle reactions on or off; see [Emoji reactions](#emoji-reactions)
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
 - **Queue** (list icon, while the room has a queue) - Opens the room's queue; see [Watching a series](#watching-a-series)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
@@ -228,6 +229,13 @@ The chat feature allows you to communicate with other watch party participants i
 ### Notes
 - The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
 - The chat input doesn't interfere with video player controls
+
+## Emoji reactions
+
+- **Hover tray:** Hover the **Reactions** button (mood icon) in the room bar to pick an emoji from the tray. Selecting one sends it immediately and closes the tray. Supports keyboard tab cycling.
+- **Viewer mute:** Click the **Reactions** button to hide floating reactions locally. A diagonal slash appears across the icon as a reminder. Click again to unmute.
+- **Host lock:** Hosts can disable reactions for the entire room via the toggle in the tray.
+- **Server validation:** All emojis are checked server-side against the allowlist with a 1-second rate limit.
 
 ## Sync Indicator
 
