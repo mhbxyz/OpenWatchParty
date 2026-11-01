@@ -77,6 +77,8 @@ pub struct Room {
     /// created paused, or moved to another item that doesn't go on a series).
     #[serde(skip)]
     pub countdown_pending: bool,
+    #[serde(skip)]
+    pub reactions_enabled: bool,
 }
 
 /// Why a member can't play yet: `readiness` from its client, or `loading`

@@ -149,6 +149,10 @@
 
   const validateReaction = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
+    if (message.payload.action === 'toggle') {
+      if (!onlyKeys(message.payload, ['action', 'enabled'])) return 'reaction has unknown fields';
+      return typeof message.payload.enabled === 'boolean' ? null : 'reaction enabled is invalid';
+    }
     if (!onlyKeys(message.payload, ['username', 'emoji'])) return 'reaction has unknown fields';
     if (!string(message.payload.username, MAX_NAME_LENGTH)) return 'reaction username is invalid';
     return ALLOWED_REACTIONS.has(message.payload.emoji) ? null : 'reaction emoji is invalid';

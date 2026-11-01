@@ -62,6 +62,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         queue: Default::default(),
         not_ready: HashMap::new(),
         countdown_pending: false,
+        reactions_enabled: true,
     }
 }
 

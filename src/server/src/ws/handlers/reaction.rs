@@ -22,6 +22,75 @@ pub(in crate::ws) async fn handle_reaction(
         return;
     };
 
+    if let Some(action) = parsed
+        .payload
+        .as_ref()
+        .and_then(|p| p.get("action"))
+        .and_then(|v| v.as_str())
+    {
+        if action == "toggle" {
+            let Some(enabled) = parsed
+                .payload
+                .as_ref()
+                .and_then(|p| p.get("enabled"))
+                .and_then(|v| v.as_bool())
+            else {
+                send_error(
+                    client_id,
+                    state,
+                    ErrorCode::InvalidReactionPayload,
+                    "Toggle payload must contain enabled boolean",
+                )
+                .await;
+                return;
+            };
+
+            let result = {
+                let mut locked = state.write().await;
+                if let Some(room) = locked.rooms.get_mut(room_id) {
+                    if !room.clients.iter().any(|id| id == client_id) {
+                        Err((
+                            ErrorCode::NotRoomMember,
+                            "Client is not a member of this room",
+                        ))
+                    } else if room.host_id != client_id {
+                        Err((
+                            ErrorCode::HostPermissionRequired,
+                            "Only the room host can configure reactions",
+                        ))
+                    } else {
+                        room.reactions_enabled = enabled;
+                        let room_clients = room.clients.clone();
+                        let senders: Vec<_> = room_clients
+                            .iter()
+                            .filter_map(|id| locked.clients.get(id).map(|c| c.sender.clone()))
+                            .collect();
+                        let msg = WsMessage {
+                            msg_type: ServerMessageType::Reaction,
+                            room: Some(room_id.to_string()),
+                            client: Some(client_id.to_string()),
+                            payload: Some(serde_json::json!({
+                                "action": "toggle",
+                                "enabled": enabled
+                            })),
+                            ts: now_ms(),
+                            server_ts: Some(now_ms()),
+                        };
+                        send_to_senders(&senders, &msg, "reaction toggle");
+                        Ok(())
+                    }
+                } else {
+                    Err((ErrorCode::RoomNotFound, "Room not found"))
+                }
+            };
+
+            if let Err((code, message)) = result {
+                send_error(client_id, state, code, message).await;
+            }
+            return;
+        }
+    }
+
     let Some(emoji) = parsed
         .payload
         .as_ref()
@@ -58,6 +127,12 @@ pub(in crate::ws) async fn handle_reaction(
                 Err((
                     ErrorCode::NotRoomMember,
                     "Client is not a member of this room",
+                ))
+            }
+            Some(room) if !room.reactions_enabled => {
+                Err((
+                    ErrorCode::ReactionsDisabled,
+                    "Reactions are disabled in this room",
                 ))
             }
             Some(room) => Ok(room.clients.clone()),
@@ -253,5 +328,46 @@ mod tests {
         handle_reaction("c1", &msg, &state).await;
         let third = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(third.msg_type, ServerMessageType::Reaction);
+    }
+
+    #[tokio::test]
+    async fn host_can_toggle_reactions_and_it_disables_emoji_reactions() {
+        let state = test_helpers::create_state();
+        let (host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Alice", true);
+        let (guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Bob", true);
+        state.write().await.clients.insert("c1".to_string(), host);
+        state.write().await.clients.insert("c2".to_string(), guest);
+
+        let mut room = test_helpers::create_room("r1", "c1");
+        room.clients.push("c2".to_string());
+        state.write().await.rooms.insert("r1".to_string(), room);
+
+        // Guest attempts to toggle -> rejected
+        let guest_toggle = reaction_message(
+            Some("r1"),
+            Some(serde_json::json!({ "action": "toggle", "enabled": false })),
+        );
+        handle_reaction("c2", &guest_toggle, &state).await;
+        let err = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_error_code(err, "HOST_PERMISSION_REQUIRED");
+
+        // Host toggles off -> succeeds and broadcasts to room
+        let host_toggle = reaction_message(
+            Some("r1"),
+            Some(serde_json::json!({ "action": "toggle", "enabled": false })),
+        );
+        handle_reaction("c1", &host_toggle, &state).await;
+        let host_notif = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(host_notif.msg_type, ServerMessageType::Reaction);
+        assert_eq!(host_notif.payload.unwrap()["enabled"], false);
+        let guest_notif = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_eq!(guest_notif.msg_type, ServerMessageType::Reaction);
+        assert_eq!(guest_notif.payload.unwrap()["enabled"], false);
+
+        // Now emoji reactions are rejected with REACTIONS_DISABLED
+        let emoji_msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "👍" })));
+        handle_reaction("c2", &emoji_msg, &state).await;
+        let disabled_err = test_helpers::recv_msg(&mut guest_rx).unwrap();
+        assert_error_code(disabled_err, "REACTIONS_DISABLED");
     }
 }

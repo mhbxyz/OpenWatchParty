@@ -65,6 +65,7 @@ pub(super) enum ErrorCode {
     InvalidReactionPayload,
     InvalidReactionEmoji,
     ReactionRateLimited,
+    ReactionsDisabled,
 }
 
 pub(super) fn error_message(

@@ -101,6 +101,7 @@ describe('WebSocket message schema validation', () => {
     envelope('pong', { client_ts: 1_700_000_000_000 }),
     envelope('chat_message', { username: 'Alice', text: 'Hello' }, { room: 'room-1', client: 'client-1' }),
     envelope('reaction', { username: 'Alice', emoji: '👍' }, { room: 'room-1', client: 'client-1' }),
+    envelope('reaction', { action: 'toggle', enabled: true }, { room: 'room-1', client: 'client-1' }),
     envelope('error', { code: 'ROOM_NOT_FOUND', message: 'Room not found' }, { client: 'client-1' })
   ];
 

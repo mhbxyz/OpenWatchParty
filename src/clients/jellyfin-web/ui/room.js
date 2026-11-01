@@ -49,6 +49,7 @@
 
   const showFloatingReaction = (emoji, username) => {
     if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    if (state.showReactionsOverlay === false || state.roomReactionsEnabled === false) return;
     const overlay = getOrCreateReactionsOverlay();
     const el = createElement('div', 'owp-floating-reaction');
 
@@ -87,6 +88,10 @@
 
   const sendReaction = (emoji) => {
     if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    if (state.roomReactionsEnabled === false) {
+      if (ui.showToast) ui.showToast(t('reactionsDisabled'));
+      return;
+    }
     const now = Date.now();
     if (now - (state.lastReactionSent || 0) < REACTION_COOLDOWN_MS) return;
     state.lastReactionSent = now;
@@ -96,8 +101,78 @@
     }
   };
 
+  const updateReactionControls = () => {
+    const reactBtn = document.getElementById('owp-btn-react');
+    const isRoomEnabled = state.roomReactionsEnabled !== false;
+    if (reactBtn) {
+      if (!isRoomEnabled && !state.isHost) {
+        reactBtn.classList.add('owp-reactions-disabled');
+        reactBtn.title = t('reactionsDisabled');
+      } else {
+        reactBtn.classList.remove('owp-reactions-disabled');
+        reactBtn.title = t('reactions');
+      }
+    }
+
+    const tray = document.getElementById('owp-react-section');
+    if (tray) {
+      const buttons = tray.querySelectorAll('.owp-reaction-btn');
+      buttons.forEach(btn => {
+        if (!isRoomEnabled && !state.isHost) btn.classList.add('owp-disabled');
+        else btn.classList.remove('owp-disabled');
+      });
+
+      let hostBtn = document.getElementById('owp-btn-react-host-toggle');
+      if (state.isHost && !hostBtn) {
+        hostBtn = createElement('button', 'owp-reaction-control-btn');
+        hostBtn.id = 'owp-btn-react-host-toggle';
+        hostBtn.type = 'button';
+        hostBtn.onclick = (e) => {
+          e.stopPropagation();
+          const newEnabled = !state.roomReactionsEnabled;
+          state.roomReactionsEnabled = newEnabled;
+          if (state.inRoom && OWP.actions?.send) {
+            OWP.actions.send('reaction', { action: 'toggle', enabled: newEnabled });
+          }
+          updateReactionControls();
+        };
+        tray.appendChild(hostBtn);
+      } else if (!state.isHost && hostBtn) {
+        hostBtn.remove();
+        hostBtn = null;
+      }
+
+      if (hostBtn) {
+        hostBtn.replaceChildren(createIcon(isRoomEnabled ? 'lockOpen' : 'lock'));
+        hostBtn.title = isRoomEnabled ? t('disableRoomReactions') : t('enableRoomReactions');
+        hostBtn.setAttribute('aria-label', hostBtn.title);
+        if (!isRoomEnabled) hostBtn.classList.add('active');
+        else hostBtn.classList.remove('active');
+      }
+
+      const viewerBtn = document.getElementById('owp-btn-react-viewer-toggle');
+      const isViewerEnabled = state.showReactionsOverlay !== false;
+      if (viewerBtn) {
+        viewerBtn.replaceChildren(createIcon(isViewerEnabled ? 'eye' : 'eyeOff'));
+        viewerBtn.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
+        viewerBtn.setAttribute('aria-label', viewerBtn.title);
+        if (!isViewerEnabled) viewerBtn.classList.add('muted');
+        else viewerBtn.classList.remove('muted');
+      }
+    }
+  };
+
   const receiveReaction = (msg) => {
     if (!msg || !msg.payload) return;
+    if (msg.payload.action === 'toggle') {
+      state.roomReactionsEnabled = Boolean(msg.payload.enabled);
+      updateReactionControls();
+      if (!state.roomReactionsEnabled) {
+        const overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+        if (overlay) overlay.remove();
+      }
+      return;
+    }
     if (msg.client && state.clientId && msg.client === state.clientId) return;
     const { emoji, username } = msg.payload;
     showFloatingReaction(emoji, username);
@@ -135,11 +210,16 @@
     section.id = 'owp-react-section';
     section.addEventListener('mouseenter', openReactSection);
     section.addEventListener('mouseleave', scheduleCloseReactSection);
+    const isRoomEnabled = state.roomReactionsEnabled !== false;
+
     ALLOWED_REACTIONS.forEach((emoji) => {
       const btn = createElement('button', 'owp-reaction-btn', emoji);
       btn.type = 'button';
       btn.title = emoji;
       btn.setAttribute('aria-label', emoji);
+      if (!isRoomEnabled && !state.isHost) {
+        btn.classList.add('owp-disabled');
+      }
       btn.onclick = () => {
         sendReaction(emoji);
         clearReactHoverTimer();
@@ -148,6 +228,52 @@
       };
       section.appendChild(btn);
     });
+
+    const divider = createElement('div', 'owp-react-divider');
+    section.appendChild(divider);
+
+    const viewerToggle = createElement('button', 'owp-reaction-control-btn');
+    viewerToggle.id = 'owp-btn-react-viewer-toggle';
+    viewerToggle.type = 'button';
+    const isViewerEnabled = state.showReactionsOverlay !== false;
+    viewerToggle.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
+    viewerToggle.setAttribute('aria-label', viewerToggle.title);
+    if (!isViewerEnabled) viewerToggle.classList.add('muted');
+    viewerToggle.appendChild(createIcon(isViewerEnabled ? 'eye' : 'eyeOff'));
+    viewerToggle.onclick = (e) => {
+      e.stopPropagation();
+      state.showReactionsOverlay = !state.showReactionsOverlay;
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('owp_show_reactions_overlay', String(state.showReactionsOverlay));
+      }
+      if (!state.showReactionsOverlay) {
+        const overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+        if (overlay) overlay.remove();
+      }
+      updateReactionControls();
+    };
+    section.appendChild(viewerToggle);
+
+    if (state.isHost) {
+      const hostToggle = createElement('button', 'owp-reaction-control-btn');
+      hostToggle.id = 'owp-btn-react-host-toggle';
+      hostToggle.type = 'button';
+      hostToggle.title = isRoomEnabled ? t('disableRoomReactions') : t('enableRoomReactions');
+      hostToggle.setAttribute('aria-label', hostToggle.title);
+      if (!isRoomEnabled) hostToggle.classList.add('active');
+      hostToggle.appendChild(createIcon(isRoomEnabled ? 'lockOpen' : 'lock'));
+      hostToggle.onclick = (e) => {
+        e.stopPropagation();
+        const newEnabled = !state.roomReactionsEnabled;
+        state.roomReactionsEnabled = newEnabled;
+        if (state.inRoom && OWP.actions?.send) {
+          OWP.actions.send('reaction', { action: 'toggle', enabled: newEnabled });
+        }
+        updateReactionControls();
+      };
+      section.appendChild(hostToggle);
+    }
+
     return section;
   };
 
@@ -314,6 +440,7 @@
       if (state.roomBarSection === 'sync') state.roomBarSection = '';
     }
     updateLeaveConfirm();
+    updateReactionControls();
     if (ui.updateQueue) ui.updateQueue();
     updateStartLabel();
     applyRoomSection();
@@ -554,8 +681,8 @@
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
 
-  OWP.reactions = { showReaction: showFloatingReaction, send: sendReaction, receive: receiveReaction, ALLOWED_REACTIONS };
+  OWP.reactions = { showReaction: showFloatingReaction, send: sendReaction, receive: receiveReaction, updateReactionControls, ALLOWED_REACTIONS };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
-  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });
+  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel, updateReactionControls });
 })();

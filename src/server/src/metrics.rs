@@ -60,7 +60,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 19] = [
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 26] = [
+pub const ERROR_CODES: [&str; 27] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -86,6 +86,7 @@ pub const ERROR_CODES: [&str; 26] = [
     "INVALID_REACTION_PAYLOAD",
     "INVALID_REACTION_EMOJI",
     "REACTION_RATE_LIMITED",
+    "REACTIONS_DISABLED",
     "other",
 ];
 

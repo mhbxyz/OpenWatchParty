@@ -10,7 +10,7 @@
     watchParty: 'Watch Party', closePanel: 'Close panel', availableRooms: 'Available rooms', createRoom: 'Create Room',
     createRoomHint: 'Start playing something to create a room.', server: 'Server: ', onlineCount: 'Online: {count}',
     guest: 'Guest', anonymous: 'Anonymous', host: 'Host', participants: 'Participants', participantsCount: 'Participants, {count}', chat: 'Chat',
-    reactions: 'Reactions', react: 'React',
+    reactions: 'Reactions', react: 'React', hideReactions: 'Hide floating reactions', showReactions: 'Show floating reactions', disableRoomReactions: 'Disable reactions for room', enableRoomReactions: 'Enable reactions for room', reactionsDisabled: 'Reactions are disabled in this room',
     chatUnread_one: 'Chat, {count} unread', chatUnread_other: 'Chat, {count} unread',
     latency: 'Latency to the watch party server (client {client})', leaveRoom: 'Leave room', closeRoom: 'Close room',
     invite: 'Invite', typeMessage: 'Type a message...', sendMessage: 'Send message', emoji: 'Emoji', emojiPicker: 'Emoji picker', emojiCat_faces: 'Smileys & Emotion', emojiCat_hands: 'People & Body', emojiCat_symbols: 'Symbols', emojiCat_nature: 'Animals & Nature', emojiCat_food: 'Food & Drink', emojiCat_activity: 'Activities', cancel: 'Cancel', leave: 'Leave', closeForEveryone: 'Close for everyone', leaveHint: 'If you leave, {name} becomes the host and the room stays open.',
@@ -56,7 +56,7 @@
     watchParty: 'Watch Party', closePanel: 'Cerrar panel', availableRooms: 'Salas disponibles', createRoom: 'Crear sala',
     createRoomHint: 'Para crear una sala, primero hay que reproducir algo.', server: 'Servidor: ', onlineCount: 'En línea: {count}',
     guest: 'Invitado', anonymous: 'Anónimo', host: 'Anfitrión', participants: 'Participantes', participantsCount: 'Participantes: {count}', chat: 'Chat',
-    reactions: 'Reacciones', react: 'Reaccionar',
+    reactions: 'Reacciones', react: 'Reaccionar', hideReactions: 'Ocultar reacciones flotantes', showReactions: 'Mostrar reacciones flotantes', disableRoomReactions: 'Desactivar reacciones en la sala', enableRoomReactions: 'Activar reacciones en la sala', reactionsDisabled: 'Las reacciones están desactivadas en esta sala',
     chatUnread_one: 'Chat, {count} sin leer', chatUnread_other: 'Chat, {count} sin leer',
     latency: 'Latencia al servidor de la sala (cliente {client})', leaveRoom: 'Salir de la sala', closeRoom: 'Cerrar sala',
     invite: 'Invitar', typeMessage: 'Escribir un mensaje...', sendMessage: 'Enviar mensaje', emoji: 'Emoji', emojiPicker: 'Selector de emojis', emojiCat_faces: 'Emoticonos y emociones', emojiCat_hands: 'Personas y cuerpo', emojiCat_symbols: 'Símbolos', emojiCat_nature: 'Animales y naturaleza', emojiCat_food: 'Comida y bebida', emojiCat_activity: 'Actividades', cancel: 'Cancelar', leave: 'Salir', closeForEveryone: 'Cerrar para todos', leaveHint: 'Si te vas, {name} pasa a ser el anfitrión y la sala sigue abierta.',
@@ -101,7 +101,7 @@
     watchParty: 'Watch Party', closePanel: 'Fermer le panneau', availableRooms: 'Salons disponibles', createRoom: 'Créer un salon',
     createRoomHint: 'Lancez une vidéo pour créer un salon.', server: 'Serveur : ', onlineCount: 'En ligne : {count}',
     guest: 'Invité', anonymous: 'Anonyme', host: 'Hôte', participants: 'Participants', participantsCount: 'Participants : {count}', chat: 'Chat',
-    reactions: 'Réactions', react: 'Réagir',
+    reactions: 'Réactions', react: 'Réagir', hideReactions: 'Masquer les réactions flottantes', showReactions: 'Afficher les réactions flottantes', disableRoomReactions: 'Désactiver les réactions dans la salle', enableRoomReactions: 'Activer les réactions dans la salle', reactionsDisabled: 'Les réactions sont désactivées dans cette salle',
     chatUnread_one: 'Chat, {count} non lu', chatUnread_other: 'Chat, {count} non lus',
     latency: 'Latence vers le serveur de session (client {client})', leaveRoom: 'Quitter le salon', closeRoom: 'Fermer le salon',
     invite: 'Inviter', typeMessage: 'Écrire un message...', sendMessage: 'Envoyer', emoji: 'Emoji', emojiPicker: 'Sélecteur d’émojis', emojiCat_faces: 'Émoticônes et émotions', emojiCat_hands: 'Personnes et corps', emojiCat_symbols: 'Symboles', emojiCat_nature: 'Animaux et nature', emojiCat_food: 'Nourriture et boissons', emojiCat_activity: 'Activités', cancel: 'Annuler', leave: 'Quitter', closeForEveryone: 'Fermer pour tous', leaveHint: "Si vous partez, {name} devient l'hôte et le salon reste ouvert.",
@@ -146,7 +146,7 @@
     watchParty: 'Watch Party', closePanel: 'Panel schließen', availableRooms: 'Verfügbare Räume', createRoom: 'Raum erstellen',
     createRoomHint: 'Zum Erstellen erst etwas abspielen.', server: 'Server: ', onlineCount: 'Online: {count}',
     guest: 'Gast', anonymous: 'Anonym', host: 'Host', participants: 'Teilnehmer', participantsCount: 'Teilnehmer: {count}', chat: 'Chat',
-    reactions: 'Reaktionen', react: 'Reagieren',
+    reactions: 'Reaktionen', react: 'Reagieren', hideReactions: 'Schwebende Reaktionen ausblenden', showReactions: 'Schwebende Reaktionen anzeigen', disableRoomReactions: 'Reaktionen für den Raum deaktivieren', enableRoomReactions: 'Reaktionen für den Raum aktivieren', reactionsDisabled: 'Reaktionen sind in diesem Raum deaktiviert',
     chatUnread_one: 'Chat, {count} ungelesen', chatUnread_other: 'Chat, {count} ungelesen',
     latency: 'Latenz zum Watch-Party-Server (Client {client})', leaveRoom: 'Raum verlassen', closeRoom: 'Raum schließen',
     invite: 'Einladen', typeMessage: 'Nachricht schreiben...', sendMessage: 'Senden', emoji: 'Emoji', emojiPicker: 'Emoji-Auswahl', emojiCat_faces: 'Smileys & Emotionen', emojiCat_hands: 'Menschen & Körper', emojiCat_symbols: 'Symbole', emojiCat_nature: 'Tiere & Natur', emojiCat_food: 'Essen & Trinken', emojiCat_activity: 'Aktivitäten', cancel: 'Abbrechen', leave: 'Verlassen', closeForEveryone: 'Für alle schließen', leaveHint: 'Beim Verlassen wird {name} der Host und der Raum bleibt offen.',
@@ -226,6 +226,7 @@
     NOT_IN_ROOM: 'notInRoom',
     NOT_ROOM_MEMBER: 'notInRoom',
     CHAT_MESSAGE_TOO_LONG: 'errorChatTooLong',
+    REACTIONS_DISABLED: 'reactionsDisabled',
     PROTOCOL_VERSION_UNSUPPORTED: 'errorProtocol'
   };
   // Some codes carry different messages (authentication errors are about

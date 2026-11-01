@@ -433,6 +433,18 @@
     }
     .owp-reaction-btn:hover { background: rgba(255, 255, 255, 0.12); transform: scale(1.2); }
     .owp-reaction-btn:active { transform: scale(0.95); }
+    .owp-reaction-btn.owp-disabled { opacity: 0.35; pointer-events: none; transform: none; }
+    .owp-react-divider { border-left: 1px solid rgba(255, 255, 255, 0.18); height: ${px(20)}; margin: 0 ${px(4)}; flex-shrink: 0; }
+    .owp-reaction-control-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: ${px(28)}; height: ${px(28)}; border: none; border-radius: ${px(6)};
+      background: transparent; cursor: pointer; color: #ecebe6; padding: 0; flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .owp-reaction-control-btn:hover { background: rgba(255, 255, 255, 0.15); }
+    .owp-reaction-control-btn.active { color: #f59e0b; }
+    .owp-reaction-control-btn.muted { color: #888888; }
+    .owp-bar-btn.owp-reactions-disabled { opacity: 0.5; }
     @media (prefers-reduced-motion: reduce) {
       .owp-reaction-btn { transition: none; }
       .owp-reaction-btn:hover { transform: none; }
