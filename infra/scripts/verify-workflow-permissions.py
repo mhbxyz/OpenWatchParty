@@ -54,7 +54,12 @@ EXPECTED = {
         "e2e": {"contents": "read"},
     },
     "rerun.yml": {
-        "rerun": {"actions": "write", "contents": "read", "issues": "write"},
+        "rerun": {
+            "actions": "write",
+            "contents": "read",
+            "issues": "write",
+            "pull-requests": "write",
+        },
     },
     "security.yml": {
         "secret-scan": {"contents": "read"},
