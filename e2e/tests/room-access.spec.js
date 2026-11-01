@@ -53,7 +53,7 @@ test('rejected guests stay outside the room and see the outcome', async () => {
   expect((await helpers.owpState(guest)).inRoom).toBe(false);
 });
 
-test('unlisted rooms disappear from both discovery surfaces', async () => {
+test('unlisted rooms disappear from discovery but remain joinable by id without approval', async () => {
   await guest.goto('/#/home');
   await expect(guest.locator(`.owp-room-card[data-room-id="${roomId}"]`)).toBeVisible({ timeout: 30_000 });
   await helpers.clickRoomBar(host, '#owp-btn-people');
@@ -61,4 +61,10 @@ test('unlisted rooms disappear from both discovery surfaces', async () => {
   await expect(guest.locator(`.owp-room-card[data-room-id="${roomId}"]`)).toHaveCount(0);
   await helpers.openPanelFromHeader(guest);
   await expect(guest.locator(`.owp-room-item button[data-room-id="${roomId}"]`)).toHaveCount(0);
+
+  await helpers.clickRoomBar(host, host.getByRole('switch', { name: 'Ask to join', exact: true }));
+  await expect(host.getByRole('switch', { name: 'Ask to join', exact: true })).toHaveAttribute('aria-checked', 'false');
+  await guest.evaluate(id => window.OpenWatchParty.actions.joinRoom(id), roomId);
+  await helpers.waitInRoom(guest, true);
+  await helpers.expectParticipants(host, 2);
 });
