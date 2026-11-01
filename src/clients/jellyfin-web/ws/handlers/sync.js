@@ -11,6 +11,8 @@
     if (msg.room !== state.roomId) {
       state.participants = [];
       state.sharedPlaybackControl = false;
+      state.roomReactionsEnabled = true;
+      state.showReactionsOverlay = true;
       Object.assign(state, OWP.stateFactories.createQueueState());
     }
     state.inRoom = true;

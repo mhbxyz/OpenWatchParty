@@ -315,6 +315,14 @@ pub(in crate::ws) async fn handle_join_room(
             // History replaces the chat, so send it before new SERVER lines.
             // A play that waits now waits for the new member too.
             super::super::pending_play::send_waiting(room, &state.clients);
+            if !room.reactions_enabled {
+                super::reaction::send_reactions_enabled_to_client(
+                    room_id,
+                    client_id,
+                    &state.clients,
+                    false,
+                );
+            }
         }
         joined
     };
@@ -1360,5 +1368,30 @@ mod tests {
             "AUTHENTICATION_FAILED",
         );
         assert!(!guest_joined(&state).await);
+    }
+
+    #[tokio::test]
+    async fn joining_room_with_disabled_reactions_sends_disabled_reaction_state() {
+        let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+        // Host disabled reactions in the room
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .reactions_enabled = false;
+
+        handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+        let messages: Vec<_> =
+            std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+        let reaction_msg = messages
+            .iter()
+            .find(|msg| msg.msg_type == ServerMessageType::Reaction);
+        assert!(reaction_msg.is_some());
+        let payload = reaction_msg.unwrap().payload.as_ref().unwrap();
+        assert_eq!(payload["action"], "toggle");
+        assert_eq!(payload["enabled"], false);
     }
 }

@@ -51,6 +51,7 @@ fn register_client(
         message_count: 0,
         last_reset: now,
         last_seen: now,
+        last_reaction: None,
     }
 }
 

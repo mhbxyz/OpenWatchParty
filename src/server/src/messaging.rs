@@ -232,6 +232,7 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                reactions_enabled: true,
                 chat_history: Default::default(),
             },
         );
@@ -261,6 +262,7 @@ mod tests {
                 queue: Default::default(),
                 not_ready: HashMap::new(),
                 countdown_pending: false,
+                reactions_enabled: true,
                 chat_history: Default::default(),
             },
         );

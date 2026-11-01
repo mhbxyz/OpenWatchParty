@@ -28,10 +28,274 @@
   const ROOM_SECTIONS = [
     { name: 'people', sectionId: 'owp-people-section', buttonId: 'owp-btn-people' },
     { name: 'chat', sectionId: 'owp-chat-section', buttonId: 'owp-btn-chat' },
+    { name: 'react', sectionId: 'owp-react-section', buttonId: 'owp-btn-react' },
     { name: 'sync', sectionId: 'owp-sync-section', buttonId: 'owp-btn-sync' },
     { name: 'queue', sectionId: 'owp-queue-section', buttonId: 'owp-btn-queue' },
     { name: 'leave', sectionId: 'owp-leave-confirm', buttonId: 'owp-btn-leave' }
   ];
+
+  const ALLOWED_REACTIONS = ['❤️', '😂', '🔥', '😮', '🤯', '😳', '😢', '😭'];
+  const REACTIONS_OVERLAY_ID = 'owp-reactions-overlay';
+
+  const getOrCreateReactionsOverlay = () => {
+    let overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+    if (!overlay) {
+      overlay = createElement('div');
+      overlay.id = REACTIONS_OVERLAY_ID;
+      document.body.appendChild(overlay);
+    }
+    return overlay;
+  };
+
+  const showFloatingReaction = (emoji, username) => {
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    if (state.showReactionsOverlay === false || state.roomReactionsEnabled === false) return;
+    const overlay = getOrCreateReactionsOverlay();
+    const el = createElement('div', 'owp-floating-reaction');
+
+    const emojiEl = createElement('span', 'owp-reaction-emoji', emoji);
+    el.appendChild(emojiEl);
+
+    const name = username !== undefined ? username : (state.userName || t('anonymous'));
+    if (name) {
+      const nameEl = createElement('span', 'owp-reaction-username', name);
+      el.appendChild(nameEl);
+    }
+
+    // Randomize starting X position along bottom right/center (68% to 88% across viewport)
+    const startXPercent = 68 + (Math.random() * 20);
+    el.style.left = `${startXPercent}%`;
+
+    // Drift path for organic motion
+    const drift = (Math.random() - 0.5) * 80;
+    el.style.setProperty('--owp-drift-x', `${Math.round(drift)}px`);
+
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      if (el.parentNode) el.remove();
+      if (overlay.childElementCount === 0) overlay.remove();
+    };
+
+    el.addEventListener('animationend', remove);
+    const fallbackTimer = OWP.timers?.setTimeout?.(remove, 2200) || setTimeout(remove, 2200);
+    el._timer = fallbackTimer;
+    overlay.appendChild(el);
+  };
+
+  const REACTION_COOLDOWN_MS = 1000;
+
+  const sendReaction = (emoji) => {
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    if (state.roomReactionsEnabled === false) {
+      if (ui.showToast) ui.showToast(t('reactionsDisabled'));
+      return;
+    }
+    const now = Date.now();
+    if (now - (state.lastReactionSent || 0) < REACTION_COOLDOWN_MS) return;
+    state.lastReactionSent = now;
+    showFloatingReaction(emoji, state.userName || t('anonymous'));
+    if (state.inRoom && OWP.actions?.send) {
+      OWP.actions.send('reaction', { emoji });
+    }
+  };
+
+  const updateReactionControls = () => {
+    const reactBtn = document.getElementById('owp-btn-react');
+    const isRoomEnabled = state.roomReactionsEnabled !== false;
+    const isViewerEnabled = state.showReactionsOverlay !== false;
+    if (reactBtn) {
+      if (!isRoomEnabled) {
+        reactBtn.classList.add('owp-reactions-disabled');
+        reactBtn.classList.remove('owp-reactions-muted');
+        reactBtn.title = t('reactionsDisabled');
+        reactBtn.setAttribute('aria-label', reactBtn.title);
+      } else if (!isViewerEnabled) {
+        reactBtn.classList.remove('owp-reactions-disabled');
+        reactBtn.classList.add('owp-reactions-muted');
+        const hiddenLabel = `${t('reactions')} (${t('reactionsHidden')})`;
+        reactBtn.title = hiddenLabel;
+        reactBtn.setAttribute('aria-label', hiddenLabel);
+      } else {
+        reactBtn.classList.remove('owp-reactions-disabled');
+        reactBtn.classList.remove('owp-reactions-muted');
+        reactBtn.title = t('reactions');
+        reactBtn.setAttribute('aria-label', t('reactions'));
+      }
+    }
+
+    const tray = document.getElementById('owp-react-section');
+    if (tray) {
+      const buttons = tray.querySelectorAll('.owp-reaction-btn');
+      buttons.forEach(btn => {
+        if (!isRoomEnabled) btn.classList.add('owp-disabled');
+        else btn.classList.remove('owp-disabled');
+      });
+
+      const divider = tray.querySelector('.owp-react-divider');
+      if (divider) {
+        divider.style.display = (!isRoomEnabled && !state.isHost) ? 'none' : '';
+      }
+
+      let hostBtn = document.getElementById('owp-btn-react-host-toggle');
+      if (state.isHost && !hostBtn) {
+        hostBtn = createElement('button', 'owp-reaction-control-btn');
+        hostBtn.id = 'owp-btn-react-host-toggle';
+        hostBtn.type = 'button';
+        hostBtn.onclick = (e) => {
+          e.stopPropagation();
+          const newEnabled = !state.roomReactionsEnabled;
+          state.roomReactionsEnabled = newEnabled;
+          if (state.inRoom && OWP.actions?.send) {
+            OWP.actions.send('reaction', { action: 'toggle', enabled: newEnabled });
+          }
+          updateReactionControls();
+        };
+        tray.appendChild(hostBtn);
+      } else if (!state.isHost && hostBtn) {
+        hostBtn.remove();
+        hostBtn = null;
+      }
+
+      if (hostBtn) {
+        hostBtn.replaceChildren(createIcon(isRoomEnabled ? 'lockOpen' : 'lock'));
+        hostBtn.title = isRoomEnabled ? t('disableRoomReactions') : t('enableRoomReactions');
+        hostBtn.setAttribute('aria-label', hostBtn.title);
+        if (!isRoomEnabled) hostBtn.classList.add('active');
+        else hostBtn.classList.remove('active');
+      }
+
+      const viewerBtn = document.getElementById('owp-btn-react-viewer-toggle');
+      if (viewerBtn) {
+        viewerBtn.style.display = isRoomEnabled ? '' : 'none';
+        const isViewerEnabled = state.showReactionsOverlay !== false;
+        viewerBtn.replaceChildren(createIcon(isViewerEnabled ? 'eye' : 'eyeOff'));
+        viewerBtn.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
+        viewerBtn.setAttribute('aria-label', viewerBtn.title);
+        if (!isViewerEnabled) viewerBtn.classList.add('muted');
+        else viewerBtn.classList.remove('muted');
+      }
+    }
+  };
+
+  const receiveReaction = (msg) => {
+    if (!msg || !msg.payload) return;
+    if (msg.payload.action === 'toggle') {
+      state.roomReactionsEnabled = Boolean(msg.payload.enabled);
+      updateReactionControls();
+      if (!state.roomReactionsEnabled) {
+        const overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+        if (overlay) overlay.remove();
+      }
+      return;
+    }
+    if (msg.client && state.clientId && msg.client === state.clientId) return;
+    const { emoji, username } = msg.payload;
+    showFloatingReaction(emoji, username);
+  };
+
+  let reactHoverTimer = null;
+  const clearReactHoverTimer = () => {
+    if (reactHoverTimer) {
+      clearTimeout(reactHoverTimer);
+      reactHoverTimer = null;
+    }
+  };
+
+  const openReactSection = () => {
+    clearReactHoverTimer();
+    if (state.roomBarSection !== 'react') {
+      state.roomBarSection = 'react';
+      applyRoomSection();
+    }
+  };
+
+  const scheduleCloseReactSection = () => {
+    clearReactHoverTimer();
+    reactHoverTimer = setTimeout(() => {
+      reactHoverTimer = null;
+      if (state.roomBarSection === 'react') {
+        state.roomBarSection = '';
+        applyRoomSection();
+      }
+    }, 250);
+  };
+
+  const createReactSection = () => {
+    const section = createElement('div');
+    section.id = 'owp-react-section';
+    section.addEventListener('mouseenter', openReactSection);
+    section.addEventListener('mouseleave', scheduleCloseReactSection);
+    const isRoomEnabled = state.roomReactionsEnabled !== false;
+
+    ALLOWED_REACTIONS.forEach((emoji) => {
+      const btn = createElement('button', 'owp-reaction-btn', emoji);
+      btn.type = 'button';
+      btn.title = emoji;
+      btn.setAttribute('aria-label', emoji);
+      if (!isRoomEnabled) {
+        btn.classList.add('owp-disabled');
+      }
+      btn.onclick = () => {
+        sendReaction(emoji);
+        clearReactHoverTimer();
+        state.roomBarSection = '';
+        applyRoomSection();
+      };
+      section.appendChild(btn);
+    });
+
+    const divider = createElement('div', 'owp-react-divider');
+    if (!isRoomEnabled && !state.isHost) {
+      divider.style.display = 'none';
+    }
+    section.appendChild(divider);
+
+    const viewerToggle = createElement('button', 'owp-reaction-control-btn');
+    viewerToggle.id = 'owp-btn-react-viewer-toggle';
+    viewerToggle.type = 'button';
+    if (!isRoomEnabled) {
+      viewerToggle.style.display = 'none';
+    }
+    const isViewerEnabled = state.showReactionsOverlay !== false;
+    viewerToggle.title = isViewerEnabled ? t('hideReactions') : t('showReactions');
+    viewerToggle.setAttribute('aria-label', viewerToggle.title);
+    if (!isViewerEnabled) viewerToggle.classList.add('muted');
+    viewerToggle.appendChild(createIcon(isViewerEnabled ? 'eye' : 'eyeOff'));
+    viewerToggle.onclick = (e) => {
+      e.stopPropagation();
+      state.showReactionsOverlay = !state.showReactionsOverlay;
+      if (!state.showReactionsOverlay) {
+        const overlay = document.getElementById(REACTIONS_OVERLAY_ID);
+        if (overlay) overlay.remove();
+      }
+      updateReactionControls();
+    };
+    section.appendChild(viewerToggle);
+
+    if (state.isHost) {
+      const hostToggle = createElement('button', 'owp-reaction-control-btn');
+      hostToggle.id = 'owp-btn-react-host-toggle';
+      hostToggle.type = 'button';
+      hostToggle.title = isRoomEnabled ? t('disableRoomReactions') : t('enableRoomReactions');
+      hostToggle.setAttribute('aria-label', hostToggle.title);
+      if (!isRoomEnabled) hostToggle.classList.add('active');
+      hostToggle.appendChild(createIcon(isRoomEnabled ? 'lockOpen' : 'lock'));
+      hostToggle.onclick = (e) => {
+        e.stopPropagation();
+        const newEnabled = !state.roomReactionsEnabled;
+        state.roomReactionsEnabled = newEnabled;
+        if (state.inRoom && OWP.actions?.send) {
+          OWP.actions.send('reaction', { action: 'toggle', enabled: newEnabled });
+        }
+        updateReactionControls();
+      };
+      section.appendChild(hostToggle);
+    }
+
+    return section;
+  };
 
 
   // The sync adjustment: offered to guests when the plugin enables it. The
@@ -133,6 +397,9 @@
       OWP.emoji?.closePicker?.();
       OWP.emoji?.hideSuggestions?.();
     }
+    if (open !== 'react') {
+      clearReactHoverTimer();
+    }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
       OWP.chat.markRead();
@@ -193,6 +460,7 @@
       if (state.roomBarSection === 'sync') state.roomBarSection = '';
     }
     updateLeaveConfirm();
+    updateReactionControls();
     if (ui.updateQueue) ui.updateQueue();
     updateStartLabel();
     applyRoomSection();
@@ -318,13 +586,21 @@
     chatBtn.appendChild(badge);
     chatBtn.onclick = () => toggleRoomSection('chat');
 
+    const reactBtn = createBarButton('owp-btn-react', t('reactions'), 'mood', 'owp-react-section');
+    reactBtn.addEventListener('mouseenter', openReactSection);
+    reactBtn.addEventListener('mouseleave', scheduleCloseReactSection);
+    reactBtn.onclick = () => {
+      clearReactHoverTimer();
+      toggleRoomSection('react');
+    };
+
     // Leaving always asks first; compatible hosts can pass the room on or close it.
     const leaveBtn = createBarButton('owp-btn-leave', t('leaveRoom'), 'logout', 'owp-leave-confirm');
     leaveBtn.classList.add('danger');
     leaveBtn.onclick = () => toggleRoomSection('leave');
 
     // Invite links are minted by the host: guests get no button at all.
-    const roomActions = [peopleBtn, chatBtn];
+    const roomActions = [peopleBtn, chatBtn, reactBtn];
     if (offersSyncNudge()) {
       const syncBtn = createBarButton('owp-btn-sync', t('syncAdjustment'), 'refresh', 'owp-sync-section');
       syncBtn.onclick = () => toggleRoomSection('sync');
@@ -385,7 +661,7 @@
 
     const confirm = createElement('div', 'owp-leave-confirm');
     confirm.id = 'owp-leave-confirm';
-    drop.append(peopleSection, chatSection);
+    drop.append(peopleSection, chatSection, createReactSection());
     if (offersSyncNudge()) drop.appendChild(createSyncSection());
     drop.appendChild(confirm);
 
@@ -425,6 +701,8 @@
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
 
+  OWP.reactions = { showReaction: showFloatingReaction, send: sendReaction, receive: receiveReaction, updateReactionControls, ALLOWED_REACTIONS };
+
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
-  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });
+  Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel, updateReactionControls });
 })();

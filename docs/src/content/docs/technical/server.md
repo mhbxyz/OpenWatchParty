@@ -37,7 +37,8 @@ src/
 │       ├── misc.rs       # Ping, list_rooms, etc.
 │       ├── playback.rs   # player_event, state_update, ready
 │       ├── status.rs     # participant_status
-│       └── queue.rs      # Room queue messages and the up-next countdown
+│       ├── queue.rs      # Room queue messages and the up-next countdown
+│       └── reaction.rs   # Emoji reactions and room-wide toggle
 └── room/
     ├── mod.rs
     ├── leave.rs          # Client leave / disconnect and host recovery
@@ -106,6 +107,7 @@ Represents a connected WebSocket client.
 | `message_count` | `u32` | Messages sent in current rate-limit window |
 | `last_reset` | `Instant` | Monotonic time of last rate-limit window reset |
 | `last_seen` | `Instant` | Monotonic time of last activity (for zombie detection) |
+| `last_reaction` | `Option<Instant>` | Monotonic time of last reaction sent (for 1-second reaction rate limit) |
 
 ### Struct `Room`
 
@@ -131,6 +133,7 @@ Represents a watch party room.
 | `status_broadcast` | `StatusBroadcast` | No | Participant-status broadcast scheduling |
 | `guest_command_until` | `Option<Instant>` | No | Deadline protecting a guest command from stale host state |
 | `queue` | `MediaQueue` | No | Queued items, the up-next countdown and the generation of the pending play the last advance armed; the current item is `media_id` |
+| `reactions_enabled` | `bool` | No | Room-wide emoji reactions toggle (controlled by host, default true) |
 
 ### Struct `PlaybackState`
 
@@ -282,6 +285,9 @@ filling does not restore an item removed by the host. The pending-play generatio
 keeps old host events from changing the new item's initial state while members
 load it. Countdown generations prevent a canceled or replaced timer from
 advancing the room. See [Room queue](/technical/protocol/#room-queue).
+
+#### `reaction`
+Relays emoji reactions and handles host room toggling. Validates emojis against `ALLOWED_REACTIONS`, enforces a 1-second monotonic rate limit per client, and restricts room toggling to the host.
 
 ## Module: `room/`
 

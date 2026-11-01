@@ -31,6 +31,7 @@ pub struct Client {
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
+    pub last_reaction: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -80,6 +81,8 @@ pub struct Room {
     /// created paused, or moved to another item that doesn't go on a series).
     #[serde(skip)]
     pub countdown_pending: bool,
+    #[serde(skip)]
+    pub reactions_enabled: bool,
 }
 
 /// Why a member can't play yet: `readiness` from its client, or `loading`
@@ -211,6 +214,7 @@ pub enum ClientMessageType {
     QueueCountdown,
     Readiness,
     StartNow,
+    Reaction,
     #[serde(other)]
     Unknown,
 }
@@ -239,6 +243,7 @@ impl ClientMessageType {
             Self::QueueCountdown => "queue_countdown",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
+            Self::Reaction => "reaction",
             Self::Unknown => "unknown",
         }
     }
@@ -266,6 +271,7 @@ pub enum ServerMessageType {
     ChatMessage,
     QueueState,
     StartState,
+    Reaction,
     ChatHistory,
 }
 
@@ -290,6 +296,7 @@ impl ServerMessageType {
             Self::ParticipantStatuses => "participant_statuses",
             Self::QueueState => "queue_state",
             Self::StartState => "start_state",
+            Self::Reaction => "reaction",
             Self::ChatHistory => "chat_history",
         }
     }
@@ -356,6 +363,7 @@ mod tests {
             "participant_list",
             "participant_statuses",
             "room_capabilities",
+            "reaction",
         ] {
             for fixture in [
                 serde_json::json!({"type":name,"ts":0}),

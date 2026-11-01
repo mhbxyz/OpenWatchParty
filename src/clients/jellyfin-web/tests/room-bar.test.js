@@ -39,7 +39,7 @@ Object.defineProperty(FakeDocument.prototype, 'activeElement', { configurable: t
 const byId = id => document.getElementById(id);
 const panel = () => byId(PANEL_ID);
 const expanded = id => byId(id).getAttribute('aria-expanded');
-const openSections = () => ['owp-people-section', 'owp-chat-section', 'owp-leave-confirm']
+const openSections = () => ['owp-people-section', 'owp-chat-section', 'owp-react-section', 'owp-leave-confirm']
   .filter(id => byId(id) && !byId(id).hidden);
 
 let left;
@@ -81,6 +81,9 @@ describe('room bar', () => {
     OWP.chat.messages = [];
     OWP.chat.unreadCount = 0;
     OWP.state.roomBarSection = '';
+    OWP.state.lastReactionSent = 0;
+    OWP.state.showReactionsOverlay = true;
+    OWP.state.roomReactionsEnabled = true;
   });
 
   it('shows the sync dot, latency, room name and buttons in that order', () => {
@@ -93,6 +96,7 @@ describe('room bar', () => {
       'owp-room-name',
       'owp-btn-people',
       'owp-btn-chat',
+      'owp-btn-react',
       'owp-btn-leave',
       'owp-close-btn'
     ]);
@@ -104,6 +108,7 @@ describe('room bar', () => {
     assert.ok(byId('owp-btn-people').querySelector('.owp-icon-users'));
     assert.ok(byId('owp-btn-people').querySelector('.owp-expand'));
     assert.ok(byId('owp-btn-chat').querySelector('.owp-icon-chat'));
+    assert.ok(byId('owp-btn-react').querySelector('.owp-icon-mood'));
     assert.ok(byId('owp-btn-leave').querySelector('.owp-icon-logout'));
     assert.ok(bar.querySelector('.owp-close-btn .owp-icon-x'));
     assert.ok(byId('owp-chat-send').querySelector('.owp-icon-send'));
@@ -116,6 +121,7 @@ describe('room bar', () => {
     assert.deepEqual(openSections(), []);
     assert.equal(expanded('owp-btn-people'), 'false');
     assert.equal(expanded('owp-btn-chat'), 'false');
+    assert.equal(expanded('owp-btn-react'), 'false');
   });
 
   it('opens one drop-down at a time and closes it from the same button', () => {
@@ -917,5 +923,179 @@ describe('room bar', () => {
     OWP.ui.render(true);
     assert.equal(panel().classList.contains(ROOM_MODE_CLASS), false);
     assert.equal(panel().querySelector('.owp-room-bar'), null);
+  });
+
+  it('shows floating emoji reactions with the sender username', () => {
+    renderRoom({ userName: 'Alice' });
+    byId('owp-btn-react').click();
+    assert.equal(expanded('owp-btn-react'), 'true');
+    const tray = byId('owp-react-section');
+    assert.equal(tray.hidden, false);
+    const buttons = tray.querySelectorAll('.owp-reaction-btn');
+    assert.equal(buttons.length, 8);
+
+    buttons[0].click();
+    assert.equal(tray.hidden, true);
+    assert.equal(expanded('owp-btn-react'), 'false');
+    const overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    const reaction = overlay.querySelector('.owp-floating-reaction');
+    assert.ok(reaction);
+    assert.equal(reaction.querySelector('.owp-reaction-emoji').textContent, '❤️');
+    assert.equal(reaction.querySelector('.owp-reaction-username').textContent, 'Alice');
+
+    OWP.reactions.showReaction('🔥', 'Bob');
+    const reactions = overlay.querySelectorAll('.owp-floating-reaction');
+    assert.equal(reactions.length, 2);
+    assert.equal(reactions[1].querySelector('.owp-reaction-emoji').textContent, '🔥');
+    assert.equal(reactions[1].querySelector('.owp-reaction-username').textContent, 'Bob');
+  });
+
+  it('sends reaction over websocket with cooldown and receives reactions from other clients', () => {
+    const sent = [];
+    OWP.actions.send = (type, payload) => { sent.push({ type, payload }); };
+    renderRoom({ userName: 'Alice', clientId: 'client-alice', inRoom: true });
+
+    byId('owp-btn-react').click();
+    const tray = byId('owp-react-section');
+    const buttons = tray.querySelectorAll('.owp-reaction-btn');
+
+    // First click sends message
+    buttons[0].click();
+    assert.deepEqual(sent, [{ type: 'reaction', payload: { emoji: '❤️' } }]);
+
+    // Immediate second click is throttled
+    buttons[1].click();
+    assert.equal(sent.length, 1);
+
+    const overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 1);
+
+    // Incoming reaction from another client is displayed
+    OWP.reactions.receive({
+      client: 'client-bob',
+      payload: { emoji: '🔥', username: 'Bob' }
+    });
+    const reactions = overlay.querySelectorAll('.owp-floating-reaction');
+    assert.equal(reactions.length, 2);
+    assert.equal(reactions[1].querySelector('.owp-reaction-emoji').textContent, '🔥');
+    assert.equal(reactions[1].querySelector('.owp-reaction-username').textContent, 'Bob');
+
+    // Incoming reaction from own client is ignored (already rendered optimistically)
+    OWP.reactions.receive({
+      client: 'client-alice',
+      payload: { emoji: '👍', username: 'Alice' }
+    });
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 2);
+  });
+
+  it('opens reaction tray on hover and closes on mouseleave', async () => {
+    renderRoom();
+    const btn = byId('owp-btn-react');
+    const tray = byId('owp-react-section');
+    assert.equal(tray.hidden, true);
+
+    btn.dispatchEvent({ type: 'mouseenter' });
+    assert.equal(tray.hidden, false);
+    assert.equal(expanded('owp-btn-react'), 'true');
+
+    btn.dispatchEvent({ type: 'mouseleave' });
+    assert.equal(tray.hidden, false);
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(tray.hidden, true);
+    assert.equal(expanded('owp-btn-react'), 'false');
+  });
+
+  it('viewer toggle mutes floating reactions on screen and updates main bar button', () => {
+    renderRoom({ inRoom: true, isHost: false });
+    const viewerToggle = byId('owp-btn-react-viewer-toggle');
+    const reactBtn = byId('owp-btn-react');
+    assert.ok(viewerToggle);
+    assert.ok(reactBtn);
+    assert.equal(OWP.state.showReactionsOverlay, true);
+    assert.equal(reactBtn.classList.contains('owp-reactions-muted'), false);
+    assert.equal(reactBtn.title, 'Reactions');
+
+    // Initial state: reaction renders
+    OWP.reactions.showReaction('❤️', 'Alice');
+    let overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 1);
+
+    // Toggle off: overlay is removed, new reactions ignored, main bar button shows muted slash
+    viewerToggle.click();
+    assert.equal(OWP.state.showReactionsOverlay, false);
+    assert.equal(reactBtn.classList.contains('owp-reactions-muted'), true);
+    assert.ok(reactBtn.title.includes('Reactions hidden'));
+    overlay = document.getElementById('owp-reactions-overlay');
+    assert.equal(overlay, null);
+
+    OWP.reactions.showReaction('❤️', 'Bob');
+    overlay = document.getElementById('owp-reactions-overlay');
+    assert.equal(overlay, null);
+
+    // Toggle back on: restores normal state
+    viewerToggle.click();
+    assert.equal(OWP.state.showReactionsOverlay, true);
+    assert.equal(reactBtn.classList.contains('owp-reactions-muted'), false);
+    assert.equal(reactBtn.title, 'Reactions');
+    OWP.reactions.showReaction('🔥', 'Charlie');
+    overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 1);
+  });
+
+  it('resets showReactionsOverlay to true per session/room', () => {
+    OWP.state.showReactionsOverlay = false;
+    const roomState = OWP.stateFactories.createRoomState();
+    assert.equal(roomState.showReactionsOverlay, true);
+  });
+
+  it('host toggle controls room reactions permission and informs guests', () => {
+    const sent = [];
+    OWP.actions.send = (type, payload) => { sent.push({ type, payload }); };
+    let toast = '';
+    OWP.ui.showToast = (msg) => { toast = msg; };
+
+    // Host view: has host toggle button
+    renderRoom({ inRoom: true, isHost: true });
+    const hostToggle = byId('owp-btn-react-host-toggle');
+    assert.ok(hostToggle);
+
+    // Host clicks toggle off
+    hostToggle.click();
+    assert.equal(OWP.state.roomReactionsEnabled, false);
+    assert.deepEqual(sent, [{ type: 'reaction', payload: { action: 'toggle', enabled: false } }]);
+
+    // For host: buttons are also disabled and viewer toggle is hidden
+    const hostTray = byId('owp-react-section');
+    const hostButtons = hostTray.querySelectorAll('.owp-reaction-btn');
+    assert.ok(hostButtons[0].className.includes('owp-disabled'));
+    const hostViewerToggle = byId('owp-btn-react-viewer-toggle');
+    assert.equal(hostViewerToggle.style.display, 'none');
+
+    // Guest view: does not have host toggle button, emojis are disabled, viewer toggle and divider are hidden
+    renderRoom({ inRoom: true, isHost: false });
+    assert.equal(byId('owp-btn-react-host-toggle'), null);
+    const tray = byId('owp-react-section');
+    const buttons = tray.querySelectorAll('.owp-reaction-btn');
+    assert.ok(buttons[0].className.includes('owp-disabled'));
+    const guestViewerToggle = byId('owp-btn-react-viewer-toggle');
+    assert.equal(guestViewerToggle.style.display, 'none');
+    const guestDivider = tray.querySelector('.owp-react-divider');
+    assert.equal(guestDivider.style.display, 'none');
+
+    // Guest trying to send is blocked with toast
+    buttons[0].click();
+    assert.equal(toast, 'Reactions are disabled in this room');
+
+    // Guest receives toggle on from host
+    OWP.reactions.receive({ payload: { action: 'toggle', enabled: true } });
+    assert.equal(OWP.state.roomReactionsEnabled, true);
+    assert.equal(buttons[0].className.includes('owp-disabled'), false);
+    assert.equal(guestViewerToggle.style.display, '');
+    assert.equal(guestDivider.style.display, '');
   });
 });

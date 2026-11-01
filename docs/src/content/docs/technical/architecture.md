@@ -66,6 +66,7 @@ A lightweight WebSocket server that manages rooms and relays messages.
 - Manage room lifecycle (create, join, leave, close)
 - Relay playback events between clients
 - Validate host permissions
+- Validate emoji reactions (allowlist, rate limits, host lock)
 - Filter state updates (anti-jitter and per-connection message limits)
 - Schedule synchronized actions and pending plays
 - Negotiate optional host transfer, participant status, shared guest controls and media queue capabilities
@@ -95,6 +96,7 @@ The Jellyfin Web client consists of the `plugin.js` loader and 39 allow-listed J
 - Synchronize clocks with the server
 - Negotiate optional protocol capabilities and report participant status
 - Support a host-controlled media queue and a local guest sync adjustment
+- Support emoji reactions (hover tray, keyboard cycling, viewer mute)
 
 **Modules:**
 - `plugin.js` - Loader, script initialization

@@ -152,6 +152,9 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | `isBuffering` | boolean | `true` if video is buffering (HLS) |
 | `wantsToPlay` | boolean | `true` if user wants to play |
 | `isSyncing` | boolean | Anti-feedback lock during sync |
+| `lastReactionSent` | number | Timestamp of the last reaction sent for cooldown |
+| `roomReactionsEnabled` | boolean | `true` if reactions are enabled room-wide (host toggle) |
+| `showReactionsOverlay` | boolean | `true` if floating reactions are displayed for this viewer (viewer mute toggle) |
 
 ### Connection and Room Lifecycle
 

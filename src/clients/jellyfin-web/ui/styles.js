@@ -458,6 +458,116 @@
       border-radius: ${px(4)}; font-size: ${px(18)}; line-height: 1;
     }
     .owp-emoji-item:hover { background: rgba(var(--owp-ink), 0.15); }
+    /* Reactions tray (in the room bar drop-down) */
+    #owp-react-section {
+      display: flex; align-items: center; justify-content: space-around; gap: ${px(2)}; padding: ${px(2)} 0;
+    }
+    .owp-reaction-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: ${px(32)}; height: ${px(32)}; border: none; border-radius: ${px(8)};
+      background: transparent; cursor: pointer; font-size: ${px(18)}; line-height: 1;
+      transition: transform 0.12s ease, background 0.15s;
+    }
+    .owp-reaction-btn:hover { background: rgba(var(--owp-ink), 0.12); transform: scale(1.2); }
+    .owp-reaction-btn:active { transform: scale(0.95); }
+    .owp-reaction-btn.owp-disabled { opacity: 0.35; pointer-events: none; transform: none; }
+    .owp-react-divider { border-left: 1px solid var(--owp-line); height: ${px(20)}; margin: 0 ${px(4)}; flex-shrink: 0; }
+    .owp-reaction-control-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: ${px(28)}; height: ${px(28)}; border: none; border-radius: ${px(6)};
+      background: transparent; cursor: pointer; color: var(--owp-text); padding: 0; flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .owp-reaction-control-btn:hover { background: rgba(var(--owp-ink), 0.15); }
+    .owp-reaction-control-btn.active { color: var(--owp-warn); }
+    .owp-reaction-control-btn.muted { color: var(--owp-muted); }
+    .owp-bar-btn.owp-reactions-disabled { opacity: 0.5; }
+    .owp-bar-btn.owp-reactions-muted {
+      position: relative;
+      opacity: 0.7;
+    }
+    .owp-bar-btn.owp-reactions-muted::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: ${px(16)};
+      height: ${px(2)};
+      background: var(--owp-bad);
+      transform: translate(-50%, -50%) rotate(-45deg);
+      border-radius: ${px(1)};
+      pointer-events: none;
+      box-shadow: 0 0 ${px(2)} rgba(0, 0, 0, 0.6);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .owp-reaction-btn { transition: none; }
+      .owp-reaction-btn:hover { transform: none; }
+      .owp-reaction-btn:active { transform: none; }
+    }
+    /* Floating reactions overlay */
+    #owp-reactions-overlay {
+      position: fixed; inset: 0; pointer-events: none !important;
+      z-index: 25000; overflow: hidden;
+      contain: layout size style;
+      transform: translateZ(0);
+    }
+    .owp-floating-reaction {
+      position: absolute; bottom: ${px(80)};
+      display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+      user-select: none; pointer-events: none !important;
+      transform: translateZ(0);
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      will-change: transform, opacity;
+      animation: owp-reaction-float 2.1s cubic-bezier(0.2, 0.6, 0.35, 1) forwards,
+                 owp-reaction-fade 2.1s ease-out forwards;
+    }
+    .owp-reaction-emoji {
+      font-size: ${px(36)}; line-height: 1;
+    }
+    .owp-reaction-username {
+      margin-top: ${px(3)};
+      font-size: ${px(11)}; font-weight: 500; line-height: 1.2;
+      color: var(--owp-text-strong);
+      background: rgba(var(--owp-surface-deep), 0.75);
+      padding: ${px(1)} ${px(6)};
+      border-radius: ${px(8)};
+      max-width: ${px(100)};
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      text-shadow: 0 ${px(1)} ${px(2)} rgba(0, 0, 0, 0.6);
+      box-shadow: 0 ${px(1)} ${px(4)} rgba(0, 0, 0, 0.4);
+    }
+    @keyframes owp-reaction-float {
+      0% {
+        transform: translate3d(0, 0, 0) scale(0.5);
+      }
+      15% {
+        transform: translate3d(calc(var(--owp-drift-x, 0) * 0.25), ${px(-65)}, 0) scale(1.2);
+      }
+      100% {
+        transform: translate3d(var(--owp-drift-x, 0), ${px(-380)}, 0) scale(1);
+      }
+    }
+    @keyframes owp-reaction-fade {
+      0% {
+        opacity: 0;
+      }
+      12% {
+        opacity: 1;
+      }
+      70% {
+        opacity: 1;
+      }
+      100% {
+        opacity: 0;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .owp-floating-reaction {
+        animation: owp-reaction-fade 1.5s ease-out forwards;
+        transform: none;
+      }
+    }
     /* Toast styles */
     /* Bottom right, so chat toasts do not cover the room bar at the top */
     .owp-toast-container {
@@ -551,7 +661,7 @@
       style.id = APPEARANCE_STYLE_ID;
       document.head.appendChild(style);
     }
-    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root #owp-emoji-panel, :root #owp-emoji-autocomplete {`
+    style.textContent = `:root #${PANEL_ID}, :root .owp-toast-container, :root .owp-toast-system, :root .owp-queue-next, :root .owp-start-float, :root #owp-emoji-panel, :root #owp-emoji-autocomplete, :root #owp-reactions-overlay {`
       + ` --owp-scale: ${textSize / APPEARANCE.baseTextSize}; --owp-surface-alpha: ${opacity / 100};${colors} }`;
   };
 

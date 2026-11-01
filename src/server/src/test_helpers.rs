@@ -33,6 +33,7 @@ pub fn create_client_with_rx(
         message_count: 0,
         last_reset: now,
         last_seen: now,
+        last_reaction: None,
     };
     (client, rx)
 }
@@ -62,6 +63,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         queue: Default::default(),
         not_ready: HashMap::new(),
         countdown_pending: false,
+        reactions_enabled: true,
         chat_history: Default::default(),
     }
 }

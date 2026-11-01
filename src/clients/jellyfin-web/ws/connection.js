@@ -185,6 +185,7 @@
       case 'state_update': h.handleStateUpdate(msg, video); break;
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
+      case 'reaction': if (OWP.reactions?.receive && msg.payload) OWP.reactions.receive(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
       case 'start_state': h.handleStartState(msg); break;
       case 'chat_history': h.handleChatHistory(msg); break;

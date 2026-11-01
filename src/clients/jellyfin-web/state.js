@@ -209,6 +209,9 @@
     roomMediaId: '',       // The room's item, from room_state: a change is a queue advance
     sharedPlaybackControl: false,
     readyRoomId: '',
+    lastReactionSent: 0,
+    roomReactionsEnabled: true,
+    showReactionsOverlay: true,
     ...createQueueState(),
     ...createStartState(),
   });

@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::types::ServerState;
 
 /// Message types a client can send, as named on the wire.
-pub const CLIENT_MESSAGE_TYPES: [&str; 21] = [
+pub const CLIENT_MESSAGE_TYPES: [&str; 22] = [
     "auth",
     "list_rooms",
     "create_room",
@@ -32,11 +32,12 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 21] = [
     "queue_countdown",
     "readiness",
     "start_now",
+    "reaction",
     "unknown",
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 19] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 20] = [
     "client_hello",
     "auth_success",
     "error",
@@ -54,12 +55,13 @@ pub const SERVER_MESSAGE_TYPES: [&str; 19] = [
     "chat_message",
     "queue_state",
     "start_state",
+    "reaction",
     "chat_history",
     "other",
 ];
 
 /// Error codes the server sends, plus `other` for anything not listed.
-pub const ERROR_CODES: [&str; 23] = [
+pub const ERROR_CODES: [&str; 27] = [
     "AUTHENTICATION_REQUIRED",
     "AUTHENTICATION_FAILED",
     "AUTHENTICATION_EXPIRED",
@@ -82,6 +84,10 @@ pub const ERROR_CODES: [&str; 23] = [
     "CHAT_MESSAGE_EMPTY",
     "CHAT_MESSAGE_TOO_LONG",
     "INVALID_QUEUE_PAYLOAD",
+    "INVALID_REACTION_PAYLOAD",
+    "INVALID_REACTION_EMOJI",
+    "REACTION_RATE_LIMITED",
+    "REACTIONS_DISABLED",
     "other",
 ];
 
