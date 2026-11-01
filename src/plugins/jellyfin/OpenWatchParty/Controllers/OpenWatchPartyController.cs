@@ -434,7 +434,7 @@ public class OpenWatchPartyController : ControllerBase
         {
             rsaKeyActive = RsaSigningKeyStore.ForPlugin()?.IsActive == true;
         }
-        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or InvalidDataException or UnauthorizedAccessException)
         {
             // Signing with the shared secret instead could fail on a server
             // that only trusts the key, so issuance stops until it is fixed.
