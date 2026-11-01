@@ -13,6 +13,8 @@ grep -Fq "github.event.comment.user.login == 'francotosqui'" "$workflow"
 grep -Fq 'ALLOWED_USER=${ALLOWED_USER:-francotosqui}' "$script"
 grep -Fq 'actions: write' "$workflow"
 grep -Fq 'issues: write' "$workflow"
+# Timeline comments on PRs also need the PR permission for the job token.
+grep -Fq 'pull-requests: write' "$workflow"
 grep -Fq '.github/workflows/publish.yml' "$script" && {
     printf '%s\n' 'Publish must not be in the rerun allowlist' >&2
     exit 1
