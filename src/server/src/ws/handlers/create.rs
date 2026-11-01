@@ -78,6 +78,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         not_ready: HashMap::new(),
         // Created paused: its first play counts down.
         countdown_pending: true,
+        chat_history: Default::default(),
     }
 }
 

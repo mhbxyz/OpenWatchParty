@@ -176,8 +176,9 @@ separate nested state objects.
 On an unexpected socket close, the client remembers the room in
 `desiredRoomId`, normalizes playback rate and clears active membership. It
 reconnects with capped exponential backoff (1s, 2s, 4s, 8s, 16s, then 30s),
-resetting the counter when a socket opens. After authentication, it rejoins the
-remembered room; authentication/rejoin waits time out after 5s. A failed rejoin
+resetting the counter once the connection authenticates, so a rejected token
+keeps backing off. After authentication, it rejoins the remembered room;
+authentication/rejoin waits time out after 5s. A failed rejoin
 resets room state and rejects late room-state replies. An older server without
 host transfer closes the room on host disconnect, so the host does not attempt
 room recovery in that case.
@@ -442,8 +443,13 @@ Stores each participant's status, when the list has the same length as the parti
 #### `queue_state` and media queue
 The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.
 
+If a library request fails while filling the queue, the host retries up to three times, at least five seconds apart, from the existing lifecycle sync tick. The retry belongs to that room, media item and fill cursor; losing the host role or the authoritative queue discards it. Success ends the retries.
+
 #### `start_state` and readiness
 With a server that acknowledges `start_when_ready`, `app/start.js` sends `readiness` when this client's reason changes, from `start.ownReason()`: `loading` until the room's media shows (`transcoding` when it comes through the server's HLS, a `blob:` or `.m3u8` source), `autoplay_blocked` after the browser stopped a play, and `buffering` while the video stalls (`waiting`) or seeks. A paused video that has its frame (`readyState` 2) is ready: browsers stop loading a paused video. It runs on every sync tick and on the video's own events. While the room waits (`start_state` `waiting`) or counts down (`starting` with `countdown`), the client pauses its video at the play's position as OWP's own action (nothing is sent) and holds its room work (`pendingPlayUntil`). A play pressed meanwhile sends `start_now` while the room waits and only keeps waiting during the countdown; OWP's own play at the start time goes through. `ui.updateStartLabel()` puts "Waiting for Ana" (two names, or a count) or "Starting in 3" in place of the room's name, centred in the name's place with as much space after it as the fixed-width latency leaves before it, and as wide as the name at least so the bar keeps its size; with the panel closed it shows on its own where the bar would be (`#owp-start-float`). Selecting it sends `start_now` for the host, or a guest sharing the controls; its tooltip names each member's reason. SERVER lines in the chat (`chat.system()`) say who the room waits for and why, who got ready (a moment later, and not for a member whose `client_left` came meanwhile), who it started without, and a cancelled start. Only the last kind, an error, counts as unread and shows a toast.
+
+#### `chat_history`
+With a server that acknowledges `chat_history`, joining a room brings its last 50 chat messages. `chat.loadHistory()` replaces the chat with them, none unread; a rejoin after a lost connection gets them again. Messages from this member count as its own by the server's `own` flag (same Jellyfin user, from an earlier connection too) or its current client id. Loading it clears the unread count.
 
 #### `host_changed`
 Updates `isHost` for the current room and shows the new-host toast. When this client becomes host it only resets drift correction (playback rate, *catching up*); a room command or media load it accepted as a guest still completes, and it sends no host events or state heartbeat until then: until the scheduled time, or at most as long as a guest waits for the room's media. The existing room bar is updated in place so Invite and the current leave choices change without replacing chat or keyboard focus. All playback broadcasts, the host state heartbeat, and the invite button read `state.isHost` at use time.
@@ -485,7 +491,7 @@ Manages the plugin user interface.
 ### Functions
 
 #### `injectStyles() -> void`
-Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs, the up-next strip and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables are set on `#owp-panel`, `.owp-queue-next` (the up-next strip, which floats outside the panel while the panel is closed), `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
+Injects CSS styles into `<head>`. The sizes of the panel, the room bar, its drop-downs, the up-next strip and the toasts are written for 12 px text and multiplied by `--owp-scale`, and their surfaces use `--owp-surface-alpha` with a 12 px backdrop blur; both variables, and the colors as `--owp-*` variables (surface, text, accent, status and field colors, with Glass's values), are set on `#owp-panel`, `.owp-queue-next` (the up-next strip, which floats outside the panel while the panel is closed), `.owp-toast-container` and `.owp-toast-system`, with the defaults of 14 px and 55 %. `prefers-reduced-transparency: reduce` makes the surfaces opaque.
 
 #### `updateStatusIndicator() -> void`
 Updates connection status indicator (Online/Offline).
@@ -525,7 +531,7 @@ In a room, `render()` draws a single bar (sync dot, latency, room name, then the
 Adds or removes the stylesheet that hides Jellyfin's SyncPlay button, following `state.hideNativeSyncPlayButton` (from `hide_native_syncplay_button` in the token response).
 
 #### `applyAppearance() -> void`
-Sets `--owp-scale` (text size / 12) and `--owp-surface-alpha` from `state.appearanceTextSize` and `state.appearanceOpacity` (from `appearance_text_size` and `appearance_opacity` in the token response), in its own stylesheet. A missing or out-of-range value falls back to the default.
+Sets `--owp-scale` (text size / 12) and `--owp-surface-alpha` from `state.appearanceTextSize` and `state.appearanceOpacity` (from `appearance_text_size` and `appearance_opacity` in the token response), and the color variables of `state.appearancePreset` (`appearance_preset`) over Glass's, in its own stylesheet. A missing or out-of-range value falls back to the default.
 
 #### `showToast(message: string) -> void`
 Shows a toast notification.

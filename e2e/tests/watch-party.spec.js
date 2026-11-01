@@ -47,7 +47,7 @@ async function openRoomWithGuest(joinMethod) {
   if (joinMethod === 'card') {
     await helpers.joinRoomFromHomeCard(guest, room.roomId);
   } else {
-    await helpers.joinRoomFromHeader(guest, room.roomName);
+    await helpers.joinRoomFromHeader(guest, room.roomId);
   }
 
   await helpers.expectParticipants(guest, 2);

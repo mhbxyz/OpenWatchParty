@@ -52,6 +52,7 @@
     panel.addEventListener('keydown', panelStopPropagation);
     panel.addEventListener('keyup', panelStopPropagation);
     panel.addEventListener('keypress', panelStopPropagation);
+    panel.addEventListener('wheel', panelStopPropagation);
   };
 
   // The loader (/OpenWatchParty/ClientScript) can stay cached for up to an hour
@@ -159,6 +160,7 @@
       }
       if (state.inRoom && playback.reportStatus) playback.reportStatus();
       if (state.inRoom && OWP.start?.report) OWP.start.report();
+      if (OWP.queue?.retryFill) OWP.queue.retryFill();
       // Also outside a room and for the host, so that leaving, hosting or
       // rejoining ends the guest's out-of-sync count right away.
       if (state.showSyncNudge) {

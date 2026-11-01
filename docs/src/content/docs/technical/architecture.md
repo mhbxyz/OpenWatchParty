@@ -399,7 +399,8 @@ When a client disconnects and reconnects:
 
 **Auto-reconnect**:
 - Transport reconnect uses capped exponential backoff: 1s, 2s, 4s, 8s, 16s,
-  then 30s; opening a socket resets the attempt counter
+  then 30s; an authenticated connection resets the attempt counter (a socket
+  that opens but fails authentication does not)
 - Maintains `autoReconnect=true` state
 - Remembers `desiredRoomId` across an unexpected close, then reauthenticates and
   rejoins; each authentication/rejoin wait has a 5s timeout

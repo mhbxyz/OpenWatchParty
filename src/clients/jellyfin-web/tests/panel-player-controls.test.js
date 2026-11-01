@@ -460,18 +460,24 @@ describe('a press outside the panel', () => {
     }
   });
 
-  it('ignores presses inside it, on the Watch Party button and on the toasts', () => {
+  it('ignores presses inside it, on the Watch Party button, on the toasts, and on the emoji picker or autocomplete', () => {
     openOverPlayer(hooks);
     const toasts = element('div', 'owp-toast-container');
     const toast = element('div', 'owp-toast');
     toasts.appendChild(toast);
     const notice = element('div', 'owp-toast-system');
-    document.body.append(toasts, notice);
+    const emojiPanel = element('div', '', { id: 'owp-emoji-panel' });
+    const emojiItem = element('button', 'owp-emoji-item');
+    emojiPanel.appendChild(emojiItem);
+    const autocomplete = element('div', '', { id: 'owp-emoji-autocomplete' });
+    const autocompleteItem = element('div', 'owp-emoji-suggestion');
+    autocomplete.appendChild(autocompleteItem);
+    document.body.append(toasts, notice, emojiPanel, autocomplete);
     const headerButton = document.getElementById(MODERN_HEADER_BTN_ID);
 
     const icon = headerButton.querySelector('.owp-watch-party-icon');
     assert.ok(icon);
-    for (const target of [panel().querySelector('.owp-close-btn'), panel(), headerButton, icon, toast, notice]) {
+    for (const target of [panel().querySelector('.owp-close-btn'), panel(), headerButton, icon, toast, notice, emojiPanel, emojiItem, autocomplete, autocompleteItem]) {
       const event = hooks.fire('pointerdown', { target });
       assert.equal(closed(), false);
       assert.equal(event.defaultPrevented, false);

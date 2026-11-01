@@ -192,6 +192,7 @@
   const setAppearance = (data) => {
     state.appearanceOpacity = data.appearance_opacity;
     state.appearanceTextSize = data.appearance_text_size;
+    state.appearancePreset = data.appearance_preset;
     if (OWP.ui?.applyAppearance) OWP.ui.applyAppearance();
   };
 

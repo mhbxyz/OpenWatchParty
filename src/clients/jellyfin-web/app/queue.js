@@ -37,18 +37,24 @@
   // which comes after room_state on joining. Filling goes on from the episode
   // the room's queue_add appended last, which the server keeps, so one the
   // host removed doesn't come back after a reload or a host change either.
-  // Each room item is looked at once; the next room_state or queue_state looks
-  // again at one whose fill failed or was dropped.
+  // Each room item is looked at once. A failed library request is retried up
+  // to three times, five seconds apart, without waiting for a room message.
   let seenItem = '';
   // The fill waiting for the library, dropped when the room moves to another
   // item or this client loses the role or the room's queue (another room, a
   // lost connection).
   let filling = null;
+  const FILL_RETRY_MS = 5000;
+  const MAX_FILL_RETRIES = 3;
+  let retry = null;
 
   const fill = async () => {
     if (!state.queueReceived) return;
     const roomId = state.roomId;
     const item = `${roomId}|${state.roomMediaId}`;
+    const key = `${item}|${state.queueLastAdded || ''}`;
+    if (retry && retry.key !== key) retry = null;
+    if (retry && Date.now() < retry.at) return;
     if (filling?.item !== item) filling = null;
     if (seenItem === item || filling) return;
     const index = roomIndex();
@@ -74,7 +80,14 @@
         }));
       }
     } catch (err) {
-      if (filling === attempt) filling = null;
+      if (filling === attempt) {
+        filling = null;
+        if (isQueueHost() && state.queueReceived && `${state.roomId}|${state.roomMediaId}` === item
+            && state.queueLastAdded === lastAdded) {
+          const failures = (retry?.failures || 0) + 1;
+          retry = { key, failures, at: failures > MAX_FILL_RETRIES ? Infinity : Date.now() + FILL_RETRY_MS };
+        }
+      }
       throw err;
     }
     const current = filling === attempt;
@@ -82,6 +95,7 @@
     // The answer is for the queue this started from, not one with another item
     // added meanwhile.
     if (!current || !isQueueHost() || state.queueLastAdded !== lastAdded) return;
+    retry = null;
     seenItem = item;
     if (!result) return;
     const episodes = (result.Items || [])
@@ -126,11 +140,17 @@
   // it saw as host: the queue it finds on becoming the host again is
   // inherited.
   queue.refresh = () => {
+    if (!isQueueHost() || !state.queueReceived) retry = null;
     if (!state.isHost) seenItem = '';
     if (!state.isHost || !state.queueReceived) filling = null;
     if (!isQueueHost() || !state.roomMediaId || !window.ApiClient) return;
     if (credits.mediaId !== state.roomMediaId) loadCredits(state.roomMediaId).catch(err => report('credits', err));
     fill().catch(err => report('fill', err));
+  };
+
+  // Reuse the lifecycle tick: no new timer survives a leave or a cleanup.
+  queue.retryFill = () => {
+    if (retry && Date.now() >= retry.at) queue.refresh();
   };
 
   // A queue_state answers the last countdown request. The host's video is
