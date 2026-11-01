@@ -260,7 +260,12 @@ pub(super) async fn join_room(
             let previously_admitted = state.clients.get(client_id).is_some_and(|client| {
                 !client.user_id.is_empty() && room.admitted_users.contains(&client.user_id)
             });
-            if room.access.approval
+            let blocked = state
+                .clients
+                .get(client_id)
+                .is_some_and(|client| room.blocked_users.contains(&client.user_id));
+            if !blocked
+                && room.access.approval
                 && !previously_admitted
                 && !admitted
                 && !has_ticket
@@ -278,10 +283,6 @@ pub(super) async fn join_room(
             // Checked under the same lock as the join, so a block that lands
             // while the join is on its way still holds. It also refuses a
             // reclaim and an invite ticket.
-            let blocked = state
-                .clients
-                .get(client_id)
-                .is_some_and(|client| room.blocked_users.contains(&client.user_id));
             if blocked {
                 let sender = state.clients.get(client_id).map(|c| c.sender.clone());
                 (

@@ -102,6 +102,7 @@ fn remove_from_room(
     if payload.block {
         let room = state.rooms.get_mut(&room_id).expect("room still exists");
         room.blocked_users.insert(target_user_id.clone());
+        room.admitted_users.remove(&target_user_id);
         if room
             .pending_host_reconnect
             .as_ref()
@@ -482,6 +483,32 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn blocking_revokes_admission_but_plain_removal_preserves_it() {
+        for block in [false, true] {
+            let (state, _host_rx, _target_rx) = setup_room("host-user", "target-user").await;
+            {
+                let mut locked = state.write().await;
+                let room = locked.rooms.get_mut("room").unwrap();
+                room.access.approval = true;
+                room.admitted_users.insert("target-user".to_string());
+            }
+
+            handle_remove_participant(
+                "host",
+                &message(Some(serde_json::json!({ "id": "target", "block": block }))),
+                &state,
+            )
+            .await;
+
+            let locked = state.read().await;
+            assert_eq!(
+                locked.rooms["room"].admitted_users.contains("target-user"),
+                !block
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn block_removes_every_session_hides_room_and_refuses_all_joins() {
         let (state, _host_rx, mut target_rx) = setup_room("host-user", "blocked-user").await;
         let (mut second, mut second_rx) =
@@ -496,7 +523,13 @@ mod tests {
             let mut locked = state.write().await;
             locked.clients.insert("second".to_string(), second);
             locked.clients.insert("other".to_string(), other);
+            locked
+                .clients
+                .get_mut("target")
+                .unwrap()
+                .supports_room_access = true;
             let room = locked.rooms.get_mut("room").unwrap();
+            room.access.approval = true;
             room.clients
                 .extend(["second".to_string(), "other".to_string()]);
             room.pending_host_reconnect = Some(PendingHostReconnect {
@@ -586,6 +619,7 @@ mod tests {
                 "The host blocked you from this room",
             );
         }
+        assert!(state.read().await.rooms["room"].join_requests.is_empty());
 
         let notification = {
             let mut locked = state.write().await;

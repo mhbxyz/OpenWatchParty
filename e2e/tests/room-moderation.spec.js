@@ -34,6 +34,10 @@ test.beforeEach(async () => {
   await helpers.joinRoomFromHomeCard(guest, room.roomId);
   await helpers.expectParticipants(host, 2);
   await helpers.expectParticipants(guest, 2);
+  const people = host.locator('#owp-btn-people');
+  if ((await people.getAttribute('aria-expanded')) !== 'true') await helpers.clickRoomBar(host, people);
+  await helpers.clickRoomBar(host, host.getByRole('switch', { name: 'Ask to join', exact: true }));
+  await expect(host.getByRole('switch', { name: 'Ask to join', exact: true })).toHaveAttribute('aria-checked', 'true');
 });
 
 async function moderateGuest(action) {
@@ -45,7 +49,7 @@ async function moderateGuest(action) {
   await helpers.clickRoomBar(host, row.locator(action));
 }
 
-test('the host removes a guest and the guest can join again from the room list', async () => {
+test('a removed guest can rejoin an approval room using their previous admission', async () => {
   const room = await helpers.owpState(host);
   await moderateGuest('.owp-mod-remove');
 
@@ -60,7 +64,7 @@ test('the host removes a guest and the guest can join again from the room list',
   await helpers.expectParticipants(guest, 2);
 });
 
-test('the host blocks a guest and direct joins remain refused', async () => {
+test('a blocked guest cannot reuse an admission or request approval again', async () => {
   const room = await helpers.owpState(host);
   await moderateGuest('.owp-mod-block');
 
@@ -82,4 +86,6 @@ test('the host blocks a guest and direct joins remain refused', async () => {
     return { inRoom: state.inRoom, roomId: state.roomId };
   }).toEqual({ inRoom: false, roomId: '' });
   await expect(guest.locator('.owp-toast-system', { hasText: 'The host blocked you from this room' })).toBeVisible();
+  expect(await guest.evaluate(() => window.OpenWatchParty.state.pendingJoin)).toBeNull();
+  expect(await host.evaluate(() => window.OpenWatchParty.state.joinRequests)).toEqual([]);
 });
