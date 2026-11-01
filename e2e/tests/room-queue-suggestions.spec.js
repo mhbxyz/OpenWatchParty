@@ -113,6 +113,30 @@ test('accepting a suggestion replaces guest metadata with the host library item'
   }
 });
 
+test('a missing report from another tab belongs to you and disappears when that tab leaves', async () => {
+  await search(host, 'Sprite');
+  await helpers.clickRoomBar(host, host.locator('.owp-queue-result', { hasText: 'Sprite Fright' })
+    .getByRole('button', { name: 'Add' }));
+  const id = await helpers.findMovieId(host, 'Sprite Fright');
+  const room = await helpers.owpState(host);
+  const otherTab = await guestContext.newPage();
+  const unavailable = page => page.evaluate(itemId =>
+    window.OpenWatchParty.state.queueUnavailable.find(item => item.id === itemId), id);
+  try {
+    await helpers.joinRoomFromHomeCard(otherTab, room.roomId);
+    await helpers.expectParticipants(host, 3);
+    await otherTab.evaluate(itemId => window.OpenWatchParty.actions.send('queue_availability', { missing: [itemId] }), id);
+
+    await expect.poll(() => unavailable(guest)).toEqual({ id, names: [], you: true });
+    await expect.poll(() => unavailable(host)).toEqual({ id, names: [helpers.GUEST_USER], you: false });
+    await openQueue(guest);
+    await expect(guest.locator('.owp-queue-warn')).toHaveText('Not available for you');
+  } finally {
+    await otherTab.close();
+  }
+  await expect.poll(() => unavailable(guest)).toBeUndefined();
+});
+
 test('a guest withdraws one suggestion and the host dismisses another', async () => {
   await search(guest, 'Sprite');
   await helpers.clickRoomBar(guest, guest.locator('.owp-queue-result', { hasText: 'Sprite Fright' }).getByRole('button', { name: 'Suggest' }));

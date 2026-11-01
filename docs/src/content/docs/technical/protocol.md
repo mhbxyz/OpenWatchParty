@@ -652,7 +652,7 @@ Suggestions and item availability, sent only to members that declared `queue_sug
 }
 ```
 
-`suggestions` keeps suggestion order; optional `series` is present only when supplied, and `mine` uses the suggester's stable user id (or client id when no user id exists). `unavailable` follows queue order and then suggestion order, omits items nobody currently reports, lists other reporting members in room join order, never includes the recipient in `names`, and records the recipient separately in `you`. Reports for ids no longer queued or suggested are ignored.
+`suggestions` keeps suggestion order; optional `series` is present only when supplied, and `mine` uses the suggester's stable user id (or client id when no user id exists). `unavailable` follows queue order and then suggestion order and omits items nobody currently reports. It lists each other reporting account once in room join order, using the user id to deduplicate rather than the display name. If any connection of the recipient's account reports an item missing, `you` is true and that account is excluded from `names`. Connections without a user id remain distinct by client id. Reports for ids no longer queued or suggested are ignored.
 
 ### `start_state`
 

@@ -217,19 +217,31 @@ impl MediaQueue {
         );
         let unavailable = ids
             .filter_map(|id| {
-                let you = self
-                    .availability
-                    .get(recipient_id)
-                    .is_some_and(|missing| missing.contains(id));
+                let mut you = false;
+                let mut seen_users = HashSet::new();
                 let names: Vec<_> = members
                     .iter()
-                    .filter(|member| member.as_str() != recipient_id)
                     .filter(|member| {
                         self.availability
                             .get(member.as_str())
                             .is_some_and(|missing| missing.contains(id))
                     })
-                    .filter_map(|member| clients.get(member).map(|client| client.user_name.clone()))
+                    .filter_map(|member| {
+                        let client = clients.get(member)?;
+                        let user = if client.user_id.is_empty() {
+                            member.as_str()
+                        } else {
+                            client.user_id.as_str()
+                        };
+                        if user == recipient_user {
+                            you = true;
+                            None
+                        } else if seen_users.insert(user) {
+                            Some(client.user_name.clone())
+                        } else {
+                            None
+                        }
+                    })
                     .collect();
                 (you || !names.is_empty()).then(|| QueueUnavailableDetails {
                     id: id.to_string(),
@@ -502,6 +514,72 @@ mod tests {
     }
 
     #[test]
+    fn unavailable_names_are_deduplicated_by_account_not_display_name() {
+        let mut queue = queue(&["a"]);
+        assert!(queue.suggest(suggestion("b", "user-ana")));
+        let mut clients = HashMap::new();
+        for (id, user_id, name) in [
+            ("host", "user-host", "Host"),
+            ("ana-first", "user-ana", "Ana"),
+            ("another-user", "user-other", "Ana"),
+            ("ana-second", "user-ana", "Ana"),
+        ] {
+            let (client, _rx) = crate::test_helpers::create_client_with_rx(user_id, name, true);
+            clients.insert(id.to_string(), client);
+        }
+        let members = vec![
+            "host".to_string(),
+            "ana-first".to_string(),
+            "another-user".to_string(),
+            "ana-second".to_string(),
+        ];
+        for id in ["ana-first", "another-user", "ana-second"] {
+            queue.report_availability(id, HashSet::from(["a".to_string(), "b".to_string()]));
+        }
+
+        let details = queue.details("host", &clients, &members);
+        assert_eq!(details.unavailable.len(), 2);
+        for item in details.unavailable {
+            assert_eq!(item.names, ["Ana", "Ana"]);
+            assert!(!item.you);
+        }
+    }
+
+    #[test]
+    fn any_missing_tab_of_the_recipient_sets_you_without_naming_the_account() {
+        let mut queue = queue(&["a"]);
+        let mut clients = HashMap::new();
+        for (id, user_id, name) in [
+            ("ana-first", "user-ana", "Ana"),
+            ("ana-second", "user-ana", "Ana"),
+            ("bob", "user-bob", "Bob"),
+        ] {
+            let (client, _rx) = crate::test_helpers::create_client_with_rx(user_id, name, true);
+            clients.insert(id.to_string(), client);
+        }
+        let members = vec![
+            "ana-first".to_string(),
+            "ana-second".to_string(),
+            "bob".to_string(),
+        ];
+        queue.report_availability("ana-first", HashSet::new());
+        queue.report_availability("ana-second", HashSet::from(["a".to_string()]));
+        queue.report_availability("bob", HashSet::from(["a".to_string()]));
+
+        for recipient in ["ana-first", "ana-second"] {
+            let details = queue.details(recipient, &clients, &members);
+            assert_eq!(details.unavailable.len(), 1);
+            assert!(details.unavailable[0].you);
+            assert_eq!(details.unavailable[0].names, ["Bob"]);
+        }
+
+        assert!(queue.forget_availability("ana-second"));
+        let details = queue.details("ana-first", &clients, &members);
+        assert!(!details.unavailable[0].you);
+        assert_eq!(details.unavailable[0].names, ["Bob"]);
+    }
+
+    #[test]
     fn details_use_client_ids_for_insecure_members() {
         let mut queue = MediaQueue::default();
         assert!(queue.suggest(suggestion("a", "ana-client")));
@@ -514,5 +592,11 @@ mod tests {
 
         assert!(queue.details("ana-client", &clients, &members).suggestions[0].mine);
         assert!(!queue.details("bob-client", &clients, &members).suggestions[0].mine);
+        for id in ["ana-client", "bob-client"] {
+            queue.report_availability(id, HashSet::from(["a".to_string()]));
+        }
+        let details = queue.details("ana-client", &clients, &members);
+        assert!(details.unavailable[0].you);
+        assert_eq!(details.unavailable[0].names, ["Bob"]);
     }
 }
