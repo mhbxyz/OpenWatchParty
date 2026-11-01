@@ -335,6 +335,15 @@ describe('participant tracks', () => {
       assert.deepEqual(folds().map(fold => fold.getAttribute('aria-expanded')), ['false', 'false']);
     });
 
+    it('keeps the pressed participant control in the DOM when closing tracks', () => {
+      renderPeople(people());
+      folds()[0].click();
+      const row = rows()[3];
+      row.dispatchEvent({ type: 'pointerdown' });
+      assert.equal(rows()[3], row);
+      assert.deepEqual(boxes(), []);
+    });
+
     it('keeps the box open while the list redraws, and closes it in another room', () => {
       renderPeople(people());
       folds()[0].click();

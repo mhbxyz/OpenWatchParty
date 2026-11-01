@@ -98,7 +98,10 @@
     panel.addEventListener('pointerdown', (event) => {
       if (!openTracks || event.target?.closest?.('.owp-tracks, .owp-tracks-fold')) return;
       openTracks = '';
-      updateParticipantList();
+      // Keep the pressed control alive until its click fires (for example,
+      // the moderation menu beside these tracks).
+      panel.querySelectorAll('.owp-tracks').forEach(box => box.remove());
+      panel.querySelectorAll('.owp-tracks-fold').forEach(fold => fold.setAttribute('aria-expanded', 'false'));
     });
   };
 
