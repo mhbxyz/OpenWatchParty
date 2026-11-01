@@ -130,17 +130,21 @@ This needs a session server and clients with the feature. With an older client o
 
 ## Participant Experience
 
-As a participant:
+As a participant, Play and Pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
 
-While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
+### Guest controls
 
-Shared controls require a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Upgrading clients does not grant guests permission to seek or close the room.
+Open **Participants** to see the room's guest controls. The host can allow guests to seek (the timeline, chapters, rewind and fast-forward), change what is playing from the room queue, and remove or reorder upcoming queue items. Changes take effect immediately for everyone. Previous/Next item controls in Jellyfin itself remain host-only, as do adding items, cancelling the up-next countdown, invites, host transfer and closing the room.
+
+Guests see **What guests can do** with a Yes/No value for each permission. Without seek permission, the timeline and seeking controls stay dimmed and seek keys are ignored. Without either queue permission, the queue remains read-only. Rooms on an older client or server keep the previous host-only behavior and do not show this section.
+
+Shared play/pause requires a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Guest permissions never allow closing the room.
 
 | What Happens | What You See |
 |--------------|--------------|
 | Host or a guest plays | Video starts automatically |
 | Host or a guest pauses | Video pauses automatically |
-| Host seeks | Video jumps to new position |
+| Host, or an allowed guest, seeks | Video jumps to new position |
 | Host leaves | A compatible participant becomes host; otherwise the room closes |
 | Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
@@ -166,7 +170,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Sync dot** - Your sync status; hover it for the details (the host's is always green)
 - **Latency** - Round-trip time from you to the session server, in milliseconds
 - **Room name** - Current watch party name; hover it if it is cut short
-- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
+- **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge, each person's status, and the [guest controls](#guest-controls)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
 - **Queue** (list icon, while the room has a queue) - Opens the room's queue; see [Watching a series](#watching-a-series)
@@ -197,8 +201,8 @@ A status changes after it has held for about a second. People on an older versio
 While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. The room queue can contain up to 20 items, including the current episode. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
-- The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
-- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
+- The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests get the matching controls only when the host allows changing what is playing or editing the queue.
+- **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once; a guest allowed to change what is playing gets **Next**, but not **Cancel**. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
 - When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
 
 ![OpenWatchParty episode queue with the current and next episodes](/assets/images/watch-party-queue.png)

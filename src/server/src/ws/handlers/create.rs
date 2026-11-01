@@ -62,6 +62,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         ready_clients: HashSet::from([client_id.to_string()]),
         pending_play: None,
         pending_host_reconnect: None,
+        permissions: Default::default(),
         state: PlaybackState {
             position: start_pos,
             play_state: PlayState::Paused,
@@ -195,6 +196,7 @@ pub(in crate::ws) async fn handle_create_room(
         let room = room_msg.room.as_ref().and_then(|id| rooms.get(id));
         if let Some(room) = room {
             crate::room::send_room_capabilities(room, clients);
+            crate::room::send_room_permissions(room, clients, Some(client_id));
         }
         if let Some((list, statuses)) = participant_list {
             send_message(sender.clone(), &list, Some(client_id));
@@ -296,9 +298,10 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn create_room_sends_the_host_its_participant_list() {
+    async fn create_room_sends_permissions_and_the_participant_list() {
         let state = test_helpers::create_state();
-        let (host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        host.supports_room_permissions = true;
         state.write().await.clients.insert("host".to_string(), host);
         let parsed = IncomingMessage {
             msg_type: crate::types::ClientMessageType::CreateRoom,
@@ -316,6 +319,14 @@ mod tests {
         assert_eq!(
             test_helpers::recv_msg(&mut host_rx).unwrap().msg_type,
             ServerMessageType::RoomState
+        );
+        let permissions = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(
+            permissions.payload.unwrap(),
+            serde_json::json!({
+                "seek": false, "change_media": false, "edit_queue": false
+            })
         );
         let list = test_helpers::recv_msg(&mut host_rx).unwrap();
         assert_eq!(list.msg_type, ServerMessageType::ParticipantList);

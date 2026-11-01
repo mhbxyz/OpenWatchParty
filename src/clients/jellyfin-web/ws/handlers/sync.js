@@ -11,6 +11,8 @@
     if (msg.room !== state.roomId) {
       state.participants = [];
       state.sharedPlaybackControl = false;
+      state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+      state.roomPermissionsReceived = false;
       Object.assign(state, OWP.stateFactories.createQueueState());
     }
     state.inRoom = true;

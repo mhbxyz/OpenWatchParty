@@ -21,6 +21,10 @@
   h.handleAuthSuccess = (msg) => {
     state.serverFeatures = msg.payload?.features || [];
     if (!state.serverFeatures.includes('shared_playback_control')) state.sharedPlaybackControl = false;
+    if (!state.serverFeatures.includes('room_permissions')) {
+      state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+      state.roomPermissionsReceived = false;
+    }
     if (state.connectionPhase !== 'authenticated' && OWP.actions?.handleAuthenticatedConnection) {
       OWP.actions.handleAuthenticatedConnection();
     }
@@ -31,6 +35,28 @@
     state.sharedPlaybackControl = state.serverFeatures.includes('shared_playback_control')
       && msg.payload.features.includes('shared_playback_control');
     if (ui.updateRoomRoleControls) ui.updateRoomRoleControls();
+  };
+
+  h.handleRoomPermissions = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId || !state.serverFeatures.includes('room_permissions')) return;
+    const previous = state.roomPermissions;
+    const first = !state.roomPermissionsReceived;
+    state.roomPermissions = { ...msg.payload };
+    state.roomPermissionsReceived = true;
+    if (!first && !state.isHost && ui.showToast) {
+      const changed = Object.keys(state.roomPermissions).filter(key => previous[key] !== state.roomPermissions[key]);
+      if (changed.length === 1) {
+        const key = changed[0];
+        const suffix = state.roomPermissions[key] ? 'On' : 'Off';
+        const names = { seek: 'Seek', change_media: 'ChangeMedia', edit_queue: 'EditQueue' };
+        ui.showToast(t(`guestPermission${names[key]}${suffix}`));
+      } else if (changed.length > 1) {
+        ui.showToast(t('guestPermissionsChanged'));
+      }
+    }
+    if (ui.updateGuestControls) ui.updateGuestControls();
+    if (ui.updateQueue) ui.updateQueue();
+    if (ui.updateRoomPermissions) ui.updateRoomPermissions();
   };
 
   h.handleParticipantsUpdate = (msg) => {

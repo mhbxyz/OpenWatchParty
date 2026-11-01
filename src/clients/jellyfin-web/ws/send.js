@@ -99,6 +99,8 @@
     }
     state.guestPaused = false;
     state.sharedPlaybackControl = false;
+    state.roomPermissions = { seek: false, change_media: false, edit_queue: false };
+    state.roomPermissionsReceived = false;
     if (!isReconnect && actions.cancelRoomRejoin) actions.cancelRoomRejoin();
     state.desiredRoomId = id;
     state.rejectedRejoinRoomIds = state.rejectedRejoinRoomIds.filter(roomId => roomId !== id);
@@ -148,6 +150,10 @@
     }
   };
 
+  const setRoomPermissions = ({ seek, change_media, edit_queue }) => {
+    send('set_room_permissions', { seek, change_media, edit_queue });
+  };
+
   Object.assign(actions, {
     send,
     normalizePlaybackRate,
@@ -158,6 +164,7 @@
     resetRoomUI,
     createRoom,
     joinRoom,
+    setRoomPermissions,
     leaveRoom,
     closeRoom
   });

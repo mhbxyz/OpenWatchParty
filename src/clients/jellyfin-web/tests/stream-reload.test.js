@@ -212,12 +212,14 @@ describe('the host switches an audio or subtitle track', () => {
     assert.deepEqual(events(), ['player_event buffering 400']);
   });
 
-  it('does nothing for a guest, or outside a room', () => {
+  it('tracks a guest reload locally and does nothing outside a room', () => {
     video.fire('timeupdate', { currentTime: 60, readyState: 4, paused: false });
     OWP.state.isHost = false;
     video.fire('emptied', { currentTime: 0, readyState: 0, paused: true });
-    assert.equal(OWP.state.streamReloadUntil, 0);
+    assert.equal(OWP.state.streamReloadUntil, now + STREAM_RELOAD_MAX_MS);
+    assert.deepEqual(events(), []);
 
+    OWP.state.streamReloadUntil = 0;
     OWP.state.isHost = true;
     OWP.state.inRoom = false;
     video.fire('emptied', { currentTime: 0, readyState: 0, paused: true });

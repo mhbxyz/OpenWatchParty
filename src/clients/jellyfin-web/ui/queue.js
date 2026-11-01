@@ -48,7 +48,7 @@
     const current = items.findIndex(item => item.id === state.roomMediaId);
     const head = createElement('div', 'owp-queue-head');
     head.appendChild(createElement('span', 'owp-queue-title', t('queueTitle')));
-    if (state.isHost) {
+    if (state.isHost || state.roomPermissions.change_media) {
       const previous = queue().previousItem?.();
       const next = queue().nextItem?.();
       const back = pillButton('secondary', t('queuePrevious'), () => previous && queue().advance(previous.id), 'prev', true);
@@ -69,20 +69,28 @@
       name.title = item.title;
       row.append(mark, name);
       if (index === current) row.appendChild(createElement('span', 'owp-queue-now', t('queueWatching')));
-      if (state.isHost && index > current) {
+      if (index > current && (state.isHost || state.roomPermissions.change_media || state.roomPermissions.edit_queue)) {
         const actions = createElement('span', 'owp-queue-actions');
-        actions.append(
-          iconButton(t('queuePlayNow'), 'play', () => queue().advance(item.id)),
-          iconButton(t('queueMoveUp'), 'up', () => queue().move(item.id, index - 1), index === current + 1),
-          iconButton(t('queueMoveDown'), 'down', () => queue().move(item.id, index + 1), index === items.length - 1),
-          iconButton(t('queueRemove'), 'x', () => queue().remove(item.id))
-        );
+        if (state.isHost || state.roomPermissions.change_media) {
+          actions.appendChild(iconButton(t('queuePlayNow'), 'play', () => queue().advance(item.id)));
+        }
+        if (state.isHost || state.roomPermissions.edit_queue) {
+          actions.append(
+            iconButton(t('queueMoveUp'), 'up', () => queue().move(item.id, index - 1), index === current + 1),
+            iconButton(t('queueMoveDown'), 'down', () => queue().move(item.id, index + 1), index === items.length - 1),
+            iconButton(t('queueRemove'), 'x', () => queue().remove(item.id))
+          );
+        }
         row.appendChild(actions);
       }
       list.appendChild(row);
     });
-    const note = createElement('div', 'owp-queue-note', t(state.isHost ? 'queueAutoNote' : 'queueReadOnly'));
-    section.replaceChildren(head, list, note);
+    const content = [head, list];
+    if (state.isHost) content.push(createElement('div', 'owp-queue-note', t('queueAutoNote')));
+    else if (!state.roomPermissions.change_media && !state.roomPermissions.edit_queue) {
+      content.push(createElement('div', 'owp-queue-note', t('queueReadOnly')));
+    }
+    section.replaceChildren(...content);
   };
 
   // The bar's queue button and its drop-down section, while the room has a
@@ -116,7 +124,7 @@
     }
     // A queue_state that only starts or stops the countdown leaves the list,
     // and the button that has the focus, as they are.
-    const key = JSON.stringify([state.queueItems, state.roomMediaId, state.isHost]);
+    const key = JSON.stringify([state.queueItems, state.roomMediaId, state.isHost, state.roomPermissions]);
     if (section.dataset.key !== key) {
       section.dataset.key = key;
       fillSection(section);
@@ -142,12 +150,10 @@
     text.title = next.title;
     const time = createElement('span', 'owp-queue-next-time');
     strip.append(createIcon('next'), text, time);
-    if (state.isHost) {
+    if (state.isHost || state.roomPermissions.change_media) {
       const actions = createElement('div', 'owp-queue-next-actions');
-      actions.append(
-        pillButton('secondary', t('cancel'), () => queue().cancelCountdown()),
-        pillButton('primary', t('queueNext'), () => queue().advance(next.id), 'next')
-      );
+      if (state.isHost) actions.appendChild(pillButton('secondary', t('cancel'), () => queue().cancelCountdown()));
+      actions.appendChild(pillButton('primary', t('queueNext'), () => queue().advance(next.id), 'next'));
       strip.appendChild(actions);
     }
     strip.appendChild(createElement('span', 'owp-queue-next-bar'));
@@ -162,11 +168,12 @@
       return;
     }
     let strip = document.getElementById(STRIP_ID);
-    if (!strip || strip.dataset.item !== next.id || strip.dataset.host !== String(state.isHost)) {
+    const controls = `${state.isHost}|${state.roomPermissions.change_media}`;
+    if (!strip || strip.dataset.item !== next.id || strip.dataset.controls !== controls) {
       strip?.remove();
       strip = createStrip(next);
       strip.dataset.item = next.id;
-      strip.dataset.host = String(state.isHost);
+      strip.dataset.controls = controls;
     }
     strip.querySelector('.owp-queue-next-time').textContent = t('queueSeconds', { seconds: Math.ceil(remaining / 1000) });
     strip.querySelector('.owp-queue-next-bar').style.width = `${Math.min(100, (remaining / QUEUE_COUNTDOWN_MS) * 100)}%`;

@@ -27,6 +27,7 @@ pub fn create_client_with_rx(
         authentication_version: 0,
         supports_host_transfer: false,
         supports_shared_playback_control: false,
+        supports_room_permissions: false,
         supports_media_queue: false,
         supports_start_when_ready: false,
         supports_chat_history: false,
@@ -47,6 +48,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         ready_clients: HashSet::from([host_id.to_string()]),
         pending_play: None,
         pending_host_reconnect: None,
+        permissions: Default::default(),
         state: PlaybackState {
             position: 0.0,
             play_state: PlayState::Paused,

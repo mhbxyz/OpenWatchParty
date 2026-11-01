@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'room_permissions', 'chat_history'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -208,6 +208,8 @@
     roomHostId: '',
     roomMediaId: '',       // The room's item, from room_state: a change is a queue advance
     sharedPlaybackControl: false,
+    roomPermissions: { seek: false, change_media: false, edit_queue: false },
+    roomPermissionsReceived: false,
     readyRoomId: '',
     ...createQueueState(),
     ...createStartState(),

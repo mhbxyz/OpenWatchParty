@@ -129,6 +129,59 @@ describe('room queue view', () => {
     assert.notEqual(byId('owp-btn-queue'), null);
   });
 
+  it('gives guest queue controls only for their matching permissions', () => {
+    enterRoom({
+      isHost: false,
+      clientId: 'guest',
+      queueItems: ['a', 'b', 'c', 'd'].map(item),
+      roomPermissions: { seek: false, change_media: true, edit_queue: false }
+    });
+    assert.equal(byId('owp-queue-section').querySelectorAll('.owp-queue-head button').length, 2);
+    assert.deepEqual(rowButtons(rows()[2]), [['Play now', null]]);
+    assert.equal(byId('owp-queue-section').querySelector('.owp-queue-note'), null);
+
+    OWP.state.roomPermissions = { seek: false, change_media: false, edit_queue: true };
+    OWP.ui.updateQueue();
+    assert.equal(byId('owp-queue-section').querySelectorAll('.owp-queue-head button').length, 0);
+    assert.deepEqual(rowButtons(rows()[2]).map(([label]) => label), ['Move up', 'Move down', 'Remove']);
+    assert.equal(byId('owp-queue-section').querySelector('.owp-queue-note'), null);
+  });
+
+  it('lets change-media guests use countdown Next but never Cancel', () => {
+    enterRoom({
+      isHost: false,
+      clientId: 'guest',
+      queueItems: ['a', 'b', 'c'].map(item),
+      roomPermissions: { seek: false, change_media: true, edit_queue: false },
+      queueCountdownUntil: Date.now() + 5000
+    });
+    assert.deepEqual(strip().querySelectorAll('button').map(button => button.textContent), ['Next']);
+    strip().querySelector('button').click();
+    assert.deepEqual(commands, [['advance', 'c']]);
+  });
+
+  it('rebuilds a visible countdown strip when change-media permission changes', () => {
+    enterRoom({
+      isHost: false,
+      clientId: 'guest',
+      queueItems: ['a', 'b', 'c'].map(item),
+      queueCountdownUntil: Date.now() + 5000
+    });
+    const readOnlyStrip = strip();
+    assert.equal(readOnlyStrip.querySelectorAll('button').length, 0);
+
+    OWP.state.roomPermissions.change_media = true;
+    OWP.ui.updateQueue();
+    const interactiveStrip = strip();
+    assert.notEqual(interactiveStrip, readOnlyStrip);
+    assert.deepEqual(interactiveStrip.querySelectorAll('button').map(button => button.textContent), ['Next']);
+
+    OWP.state.roomPermissions.change_media = false;
+    OWP.ui.updateQueue();
+    assert.notEqual(strip(), interactiveStrip);
+    assert.equal(strip().querySelectorAll('button').length, 0);
+  });
+
   it('shows up next on its own with the panel closed and under the bar with it open', () => {
     enterRoom({ queueItems: ['a', 'b', 'c'].map(item) });
     panel().classList.add('hide');

@@ -107,6 +107,7 @@ const joinAs = (clientId, { playing = true } = {}) => {
     clientId,
     roomHostId: 'host',
     sharedPlaybackControl: true,
+    roomPermissions: { seek: false, change_media: false, edit_queue: false },
     guestPaused: false,
     isHost: clientId === 'host',
     roomWaiting: false,
@@ -159,6 +160,74 @@ describe('play and pause shared by the room', () => {
   });
 
   describe('a guest', () => {
+    it('sends only an allowed user seek and keeps correction at its new position', () => {
+      video.currentTime = 40;
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents(), []);
+
+      OWP.state.roomPermissions.seek = true;
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents().map(message => message.payload), [{ action: 'seek', position: 40 }]);
+      assert.equal(OWP.state.lastSyncPosition, 40);
+      assert.equal(OWP.state.lastSyncServerTs, serverNow);
+
+      h.handleStateUpdate(stateUpdate('playing', 10), video);
+      OWP.playback.syncLoop();
+      assert.equal(video.currentTime, 40);
+      assert.equal(video.playbackRate, 1);
+
+      OWP.state.isSyncing = true;
+      video.currentTime = 60;
+      video.dispatch('seeked');
+      assert.equal(playerEvents().length, 1);
+    });
+
+    it('keeps a guest stream restoration seek local until the reload finishes', () => {
+      for (const playing of [false, true]) {
+        sent = [];
+        joinAs('guest', { playing });
+        OWP.state.roomPermissions.seek = true;
+        video.dispatch('timeupdate');
+        video.readyState = 0;
+        video.currentTime = 0;
+        video.dispatch('emptied');
+        video.readyState = 4;
+        video.currentTime = 10;
+        video.dispatch('seeked');
+        assert.deepEqual(playerEvents(), [], 'restoring a track must not seek the room');
+
+        video.dispatch(playing ? 'playing' : 'canplay');
+        video.currentTime = 40;
+        video.dispatch('seeked');
+        assert.deepEqual(playerEvents().map(message => message.payload), [{ action: 'seek', position: 40 }]);
+      }
+    });
+
+    it('does not send an allowed seek during suppression, room work, or stream reload', () => {
+      OWP.state.roomPermissions.seek = true;
+      const realShouldSend = OWP.utils.shouldSend;
+      const cases = [
+        ['suppressed', () => { OWP.utils.shouldSend = () => false; }],
+        ['syncing', () => { OWP.state.isSyncing = true; }],
+        ['pending room play', () => { OWP.state.pendingPlayUntil = serverNow + 1000; }],
+        ['stream reload', () => { OWP.state.streamReloadUntil = localNow + 1000; }]
+      ];
+      try {
+        for (const [label, arrange] of cases) {
+          sent = [];
+          Object.assign(OWP.state, { isSyncing: false, pendingPlayUntil: 0, streamReloadUntil: 0 });
+          OWP.utils.shouldSend = () => true;
+          arrange();
+          video.currentTime++;
+          video.dispatch('seeked');
+          assert.deepEqual(playerEvents(), [], label);
+        }
+      } finally {
+        OWP.utils.shouldSend = realShouldSend;
+        Object.assign(OWP.state, { isSyncing: false, pendingPlayUntil: 0, streamReloadUntil: 0 });
+      }
+    });
+
     it('keeps a local pause without sending commands when the host is legacy', async () => {
       OWP.state.sharedPlaybackControl = false;
       video.pause();
@@ -184,6 +253,15 @@ describe('play and pause shared by the room', () => {
       assert.equal(OWP.state.sharedPlaybackControl, true);
       h.handleRoomCapabilities({ ...message, payload: { features: [] } });
       assert.equal(OWP.state.sharedPlaybackControl, false);
+    });
+
+    it('clears room permissions when authentication does not echo the feature', () => {
+      OWP.state.roomPermissions = { seek: true, change_media: true, edit_queue: true };
+      OWP.state.roomPermissionsReceived = true;
+      OWP.state.connectionPhase = 'authenticated';
+      h.handleAuthSuccess({ payload: { features: [] } });
+      assert.deepEqual(OWP.state.roomPermissions, { seek: false, change_media: false, edit_queue: false });
+      assert.equal(OWP.state.roomPermissionsReceived, false);
     });
 
     it('applies server-ordered acknowledgements without echoing or retaining an optimistic hold', async () => {
@@ -405,6 +483,21 @@ describe('play and pause shared by the room', () => {
         apply();
         assert.equal(video.paused, false);
         assert.deepEqual(playerEvents(), []);
+      } finally {
+        OWP.utils.scheduleAt = original;
+      }
+    });
+
+    it('keeps the play state of a scheduled playing guest seek', () => {
+      let apply;
+      const original = OWP.utils.scheduleAt;
+      OWP.utils.scheduleAt = (_, callback) => { apply = callback; };
+      try {
+        const command = playerEvent('seek', 40, { client: 'guest', playState: 'playing' });
+        command.payload.target_server_ts = serverNow + 1000;
+        h.handlePlayerEvent(command, video);
+        assert.equal(typeof apply, 'function');
+        assert.equal(OWP.state.hostPendingPlayState, 'playing');
       } finally {
         OWP.utils.scheduleAt = original;
       }
@@ -674,12 +767,31 @@ describe('play and pause shared by the room', () => {
       assert.deepEqual(toasts, []);
     });
 
-    it('ignores the commands only a host sends', () => {
-      for (const action of ['seek', 'buffering']) {
-        h.handlePlayerEvent(playerEvent(action, 50, { client: 'guest' }), video);
-      }
+    it('applies a guest seek but still ignores guest buffering', () => {
+      h.handlePlayerEvent(playerEvent('seek', 50, { client: 'guest', playState: 'playing' }), video);
+      h.handlePlayerEvent(playerEvent('buffering', 80, { client: 'guest' }), video);
       assert.equal(video.paused, false);
+      assert.equal(video.currentTime, 50);
+      video.dispatch('seeked');
+      assert.deepEqual(playerEvents(), []);
+    });
+
+    it('plays a paused host for a guest seek without a play toast', () => {
+      joinAs('host', { playing: false });
+      h.handlePlayerEvent(playerEvent('seek', 50, { client: 'guest', playState: 'playing' }), video);
+      assert.equal(video.paused, false);
+      assert.equal(video.currentTime, 50);
+      assert.deepEqual(toasts, []);
+    });
+
+    it('waits for a stream reload before applying a guest seek', () => {
+      OWP.state.streamReloadUntil = localNow + 10000;
+      h.handlePlayerEvent(playerEvent('seek', 50, { client: 'guest' }), video);
       assert.equal(video.currentTime, 10);
+      assert.equal(OWP.state.reloadGuestCommand.msg.payload.action, 'seek');
+      OWP.state.streamReloadUntil = 0;
+      h.applyReloadGuestCommand(video);
+      assert.equal(video.currentTime, 50);
     });
 
     it('drops a scheduled guest command after a role change', () => {

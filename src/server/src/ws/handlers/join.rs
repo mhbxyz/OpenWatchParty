@@ -50,6 +50,7 @@ fn add_client_to_room(
         room.clients.insert(0, client_id.to_string());
         room.host_id = client_id.to_string();
         room.pending_host_reconnect = None;
+        crate::room::reset_room_permissions_for_host(room, locked_clients);
     } else if !room.clients.iter().any(|id| id == client_id) {
         room.clients.push(client_id.to_string());
     }
@@ -308,6 +309,7 @@ pub(in crate::ws) async fn handle_join_room(
         }
         if let Some(room) = state.rooms.get(room_id) {
             crate::room::send_room_capabilities(room, &state.clients);
+            crate::room::send_room_permissions(room, &state.clients, Some(client_id));
             super::queue::send_queue_state(room, &state.clients, Some(client_id));
             if joined {
                 super::chat::send_chat_history(room, &state.clients, client_id);
@@ -476,6 +478,7 @@ mod tests {
         let mut clients = HashMap::new();
         let (mut host, _rx) = test_helpers::create_client_with_rx("user-host", "Host", true);
         host.supports_host_transfer = true;
+        host.supports_room_permissions = true;
         host.session_expires_at = Some(u64::MAX);
         clients.insert("new-host".to_string(), host);
         let mut room = test_helpers::create_room("room-1", "old-host");
@@ -484,6 +487,11 @@ mod tests {
             user_id: "user-host".to_string(),
             generation: 1,
         });
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
 
         assert!(add_client_to_room(
             "new-host",
@@ -495,7 +503,48 @@ mod tests {
         assert_eq!(room.host_id, "new-host");
         assert_eq!(room.clients[0], "new-host");
         assert!(room.pending_host_reconnect.is_none());
+        assert_eq!(
+            room.permissions,
+            crate::types::RoomPermissions {
+                seek: true,
+                change_media: true,
+                edit_queue: true,
+            }
+        );
         assert_eq!(clients["new-host"].room_id.as_deref(), Some("room-1"));
+    }
+
+    #[test]
+    fn legacy_reclaim_resets_and_broadcasts_permissions() {
+        let mut clients = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("user-host", "Host", true);
+        host.supports_host_transfer = true;
+        host.session_expires_at = Some(u64::MAX);
+        let (mut observer, mut observer_rx) =
+            test_helpers::create_client_with_rx("observer", "Observer", true);
+        observer.room_id = Some("room-1".to_string());
+        observer.supports_room_permissions = true;
+        clients.insert("new-host".to_string(), host);
+        clients.insert("observer".to_string(), observer);
+        let mut room = test_helpers::create_room("room-1", "old-host");
+        room.clients = vec!["observer".to_string()];
+        room.pending_host_reconnect = Some(crate::types::PendingHostReconnect {
+            user_id: "user-host".to_string(),
+            generation: 1,
+        });
+        room.permissions.seek = true;
+
+        assert!(add_client_to_room(
+            "new-host",
+            &mut room,
+            &mut clients,
+            &None
+        ));
+
+        assert_eq!(room.permissions, Default::default());
+        let permissions = test_helpers::recv_msg(&mut observer_rx).unwrap();
+        assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(permissions.payload.unwrap()["seek"], false);
     }
 
     #[test]
@@ -786,6 +835,34 @@ mod tests {
                 assert_eq!(payload["current"], 0);
                 assert_eq!(payload["items"].as_array().unwrap().len(), 1);
                 assert_eq!(payload["last_added"], "b".repeat(32));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn join_sends_permissions_only_to_a_joiner_that_negotiated_them() {
+        for supports_permissions in [true, false] {
+            let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
+            {
+                let mut locked = state.write().await;
+                locked
+                    .clients
+                    .get_mut("guest")
+                    .unwrap()
+                    .supports_room_permissions = supports_permissions;
+                locked.rooms.get_mut("room").unwrap().permissions.seek = true;
+            }
+
+            handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
+
+            let messages: Vec<_> =
+                std::iter::from_fn(|| test_helpers::recv_msg(&mut guest_rx)).collect();
+            let permissions = messages
+                .iter()
+                .find(|message| message.msg_type == ServerMessageType::RoomPermissions);
+            assert_eq!(permissions.is_some(), supports_permissions);
+            if let Some(permissions) = permissions {
+                assert_eq!(permissions.payload.as_ref().unwrap()["seek"], true);
             }
         }
     }

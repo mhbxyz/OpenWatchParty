@@ -11,7 +11,7 @@
 
   // Jellyfin switches an audio or subtitle track by reloading the stream in
   // place: the video empties (position 0), plays again and seeks back to where
-  // it was. Until it plays again, the host's events describe the reload, not
+  // it was. Until it plays again, each member's events describe the reload, not
   // the room.
   const isReloadingStream = () => Boolean(state.streamReloadUntil && utils.nowMs() < state.streamReloadUntil);
 
@@ -174,6 +174,24 @@
     actions.send('player_event', { action, position: video.currentTime, play_state: playState });
   };
 
+  // A guest's own seek, when the host lets guests seek. Its sync seeks, the
+  // room's commands and a stream reload are told apart as the host's are.
+  // The room's position becomes this one, so the sync doesn't pull it back.
+  const onGuestSeek = (video) => {
+    const actions = OWP.actions;
+    if (!state.inRoom || state.isHost || !state.roomPermissions.seek || !actions?.send) return;
+    if (!utils.shouldSend() || state.isSyncing || hasPendingRoomWork() || isReloadingStream()) return;
+    if (!utils.isVideoReady()) return;
+    state.lastSyncPosition = video.currentTime;
+    state.lastSyncServerTs = utils.getServerNow();
+    state.isInitialSync = false;
+    state.initialSyncUntil = 0;
+    state.initialSyncTargetPos = null;
+    state.syncCooldownUntil = utils.nowMs() + 2000;
+    utils.log('GUEST', { action: 'seek', pos: video.currentTime });
+    actions.send('player_event', { action: 'seek', position: video.currentTime });
+  };
+
   const createVideoListeners = (video) => {
     return {
       waiting: () => {
@@ -232,6 +250,7 @@
       },
       seeked: () => {
         utils.log('VIDEO', { event: 'seeked', pos: video.currentTime });
+        onGuestSeek(video);
         onHostEvent('seek', video);
       },
       // The room waits for the host's reload as it does while the host buffers,
@@ -241,10 +260,10 @@
         // A reload already under way (a retry empties again) keeps its limit.
         // OWP opening the room's next item empties the video too: that is no
         // reload, and the room's play must not wait for one.
-        if (!state.isHost || !state.inRoom || state.guestPaused || isReloadingStream() || state.pendingMediaId) return;
+        if (!state.inRoom || state.guestPaused || isReloadingStream() || state.pendingMediaId) return;
         state.streamReloadUntil = utils.nowMs() + STREAM_RELOAD_MAX_MS;
         state.streamReloadResume = state.lastPlayedPlaying;
-        if (!state.streamReloadResume || hasPendingRoomWork()
+        if (!state.isHost || !state.streamReloadResume || hasPendingRoomWork()
             || !OWP.actions || !OWP.actions.send) return;
         utils.log('HOST', { action: 'stream_reload', pos: state.lastPlayedPosition });
         OWP.actions.send('player_event', { action: 'buffering', position: state.lastPlayedPosition });

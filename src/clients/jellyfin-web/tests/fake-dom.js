@@ -120,9 +120,14 @@ const matchesSimple = (element, selector) => {
     if (matchesSimple(element, notMatch[1])) return false;
   }
   const attributes = [...selector.matchAll(/\[([\w-]+)(?:(\*?=)"([^"]*)")?\]/g)];
-  const attributeValue = name => (name === 'class'
-    ? element.className || undefined
-    : (Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined));
+  const attributeValue = name => {
+    if (name === 'class') return element.className || undefined;
+    if (name.startsWith('data-')) {
+      const key = name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+      if (Object.prototype.hasOwnProperty.call(element.dataset, key)) return element.dataset[key];
+    }
+    return Object.prototype.hasOwnProperty.call(element.attributes, name) ? element.attributes[name] : undefined;
+  };
   if (attributes.some(([, name, operator, value]) => {
     const actual = attributeValue(name);
     if (operator === undefined) return actual === undefined;

@@ -13,6 +13,7 @@ require('../chat/input.js');
 require('../ui/toasts.js');
 require('../ui/home.js');
 require('./load-panel-views.js');
+require('../playback/bind.js');
 require('../playback/sync.js');
 
 const { PANEL_ID } = OWP.constants;
@@ -48,7 +49,20 @@ const resetRoom = () => {
   serverNow = 100000;
   localNow = 50000;
   sent = [];
-  video = { currentTime: 0, playbackRate: 1, paused: false, seeking: false, readyState: 4, buffered: ranges([0, 600]) };
+  const listeners = new Map();
+  video = {
+    currentTime: 0,
+    playbackRate: 1,
+    paused: false,
+    seeking: false,
+    readyState: 4,
+    buffered: ranges([0, 600]),
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    removeEventListener: (type, listener) => {
+      if (listeners.get(type) === listener) listeners.delete(type);
+    },
+    dispatch: type => listeners.get(type)?.()
+  };
   OWP.actions = { send: (...args) => sent.push(args) };
   Object.assign(OWP.state, {
     inRoom: true,
@@ -225,9 +239,26 @@ describe('sync adjustment: the nudge', () => {
   });
 
   it('only moves the local video: nothing is sent to the room', () => {
-    guestAt(100, 101.2);
-    nudge();
-    assert.deepEqual(sent, []);
+    const realSuppress = OWP.utils.suppress;
+    const realShouldSend = OWP.utils.shouldSend;
+    Object.assign(OWP.state, {
+      roomPermissions: { seek: true, change_media: false, edit_queue: false },
+      suppressUntil: 0,
+      bound: false
+    });
+    OWP.utils.suppress = () => { OWP.state.suppressUntil = localNow + 2000; };
+    OWP.utils.shouldSend = () => localNow > OWP.state.suppressUntil;
+    OWP.playback.bindVideo();
+    try {
+      guestAt(100, 101.2);
+      nudge();
+      video.dispatch('seeked');
+      assert.deepEqual(sent, []);
+    } finally {
+      OWP.playback.cleanupVideoListeners();
+      OWP.utils.suppress = realSuppress;
+      OWP.utils.shouldSend = realShouldSend;
+    }
   });
 
   it('follows the host while the room plays', () => {

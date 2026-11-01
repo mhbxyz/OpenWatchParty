@@ -144,6 +144,8 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | `roomWaiting` | boolean | `true` while a guest is waiting for the host after buffering |
 | `roomHostId` | string | Client id of the room's host, to tell a guest's play or pause from the host's |
 | `sharedPlaybackControl` | boolean | Enabled only after server and current-room capability negotiation; false on connection or room reset |
+| `roomPermissions` | object | Current `{ seek, change_media, edit_queue }` guest permissions; all false until received and reset on join, room change, leave, or failed feature negotiation |
+| `roomPermissionsReceived` | boolean | Whether `room_permissions` has arrived for the current room; suppresses join-time permission toasts |
 | `ownCommandUntil` | number | Until when a guest's own play or pause holds against room updates already on their way |
 | `ownCommandPlayState` | string | Play state of that command |
 | `guestPaused` | boolean | `true` while a guest has paused local playback; on promotion, retained until playback matches the room so the private pause cannot become authoritative |
@@ -300,7 +302,7 @@ Binds video events to synchronization handlers.
 - `playing`: Sets `isBuffering = false`; a host may report the end of a stream reload
 - `play`: A host reports it; a guest reports it only with negotiated `sharedPlaybackControl`
 - `pause`: A host reports it (ignored if buffering); a guest reports it only with negotiated shared control
-- `seeked`: The host reports it; guests cannot seek the room
+- `seeked`: The host reports it; a guest reports `{ action: "seek", position }` only when `roomPermissions.seek` is enabled and the seek was not caused by synchronization
 
 **Send logic (`sendStateUpdate`):**
 ```
@@ -314,9 +316,9 @@ Otherwise → send state_update
 **Event logic:**
 ```
 Host → send permitted play, pause, seek and buffering events
-Guest → send only a play/pause that reverses the current room state and only when shared playback control is negotiated
+Guest → send a play/pause that reverses the current room state only with shared playback control, or an allowed user seek
 All senders → suppress room echoes and stale events during room/media work
-Host-only → seek and buffering; a guest's pause can remain private when shared control is unavailable
+Host-only → buffering; a guest's pause can remain private when shared control is unavailable
 ```
 
 #### `syncLoop() -> void`
@@ -354,9 +356,11 @@ previous drift-correction status.
 ### Description
 Manages WebSocket communication with the session server.
 
-Every new connection resets `serverFeatures` and shared-control availability and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, the host's Close room action falls back to `leave_room` because that server closes a room when its host leaves.
+Every new connection resets `serverFeatures`, shared-control availability and room permissions, and advertises `features: ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "room_permissions"]` in `auth`, for both JWT and insecure identity modes. An optional `auth_success.features` array records the supported subset. If an older server omits it, room permissions remain all false and their People-section UI stays hidden; the host's Close room action also falls back to `leave_room` because that server closes a room when its host leaves.
 
 `room_capabilities` enables shared play/pause only while the current host supports it. Otherwise guests retain their private pause and cannot play a paused room. Canonical playback acknowledgements clear the optimistic command hold and apply in server order, with event suppression to prevent echoes. The host keeps the play and pause it sent (`hostControlAcks`) until their canonical events return, and retires them without applying them again; a newer opposite control supersedes a pending command, and a guest command that changes neither the play state nor the position does not start the syncing lock. Host-side commands retry a temporarily missing video until `VIDEO_ACTION_MAX_WAIT_MS`, preserving the room, role and playback-attempt guards. Pending retries gate authoritative heartbeats; a stream reload still defers the latest command until it completes.
+
+`handleRoomPermissions` stores the strict three-boolean payload, refreshes guest locks, the queue and the People section, and shows guests change toasts only after the first value for a room. `ui/guest-controls.js` gates the slider, chapters, rewind/fast-forward and seek keys; track changes stay host-only. `ui/queue.js` gates media changes separately from move/remove controls. The host's People switches call `setRoomPermissions` with all three values. A guest seek updates `lastSyncPosition` and `lastSyncServerTs` before drift correction can pull it back; `ws/handlers/playback.js` applies it on the host with the room's play state from the event and defers it across an in-place stream reload.
 
 After an unexpected close, the client buffers a `WS_CLOSE` diagnostic containing the
 WebSocket close code, clean flag, and truncated reason. On the next connection it

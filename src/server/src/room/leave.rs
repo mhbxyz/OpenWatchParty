@@ -64,6 +64,7 @@ fn promote_next_host(
     room.host_id = new_host_id.clone();
     room.pending_host_reconnect = None;
     crate::room::send_room_capabilities(room, clients);
+    crate::room::reset_room_permissions_for_host(room, clients);
     Some(host_changed_message(room_id, &new_host_id, &host_name))
 }
 
@@ -524,6 +525,83 @@ mod tests {
                 { "name": "Later", "is_host": false }
             ])
         );
+    }
+
+    #[test]
+    fn transfer_keeps_permissions_for_a_capable_host() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut next, mut next_rx) = test_helpers::create_client_with_rx("next", "Next", true);
+        for client in [&mut host, &mut next] {
+            client.room_id = Some("room".to_string());
+            client.supports_room_permissions = true;
+        }
+        next.supports_host_transfer = true;
+        clients.insert("host".into(), host);
+        clients.insert("next".into(), next);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients.push("next".into());
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
+        rooms.insert("room".into(), room);
+
+        let notification = handle_leave("host", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(rooms["room"].host_id, "next");
+        assert_eq!(
+            rooms["room"].permissions,
+            crate::types::RoomPermissions {
+                seek: true,
+                change_media: true,
+                edit_queue: true,
+            }
+        );
+        assert!(test_helpers::recv_msg(&mut next_rx).is_none());
+        send_leave_notification(&notification, "test");
+    }
+
+    #[test]
+    fn transfer_to_a_legacy_host_resets_and_broadcasts_permissions() {
+        let mut clients = HashMap::new();
+        let mut rooms = HashMap::new();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("host", "Host", true);
+        let (mut next, mut next_rx) = test_helpers::create_client_with_rx("next", "Next", true);
+        let (mut observer, mut observer_rx) =
+            test_helpers::create_client_with_rx("observer", "Observer", true);
+        for client in [&mut host, &mut next, &mut observer] {
+            client.room_id = Some("room".to_string());
+        }
+        next.supports_host_transfer = true;
+        observer.supports_room_permissions = true;
+        clients.insert("host".into(), host);
+        clients.insert("next".into(), next);
+        clients.insert("observer".into(), observer);
+        let mut room = test_helpers::create_room("room", "host");
+        room.clients = vec!["host".into(), "next".into(), "observer".into()];
+        room.permissions = crate::types::RoomPermissions {
+            seek: true,
+            change_media: true,
+            edit_queue: true,
+        };
+        rooms.insert("room".into(), room);
+
+        let notification = handle_leave("host", &mut clients, &mut rooms).unwrap();
+
+        assert_eq!(rooms["room"].permissions, Default::default());
+        assert!(test_helpers::recv_msg(&mut next_rx).is_none());
+        let permissions = test_helpers::recv_msg(&mut observer_rx).unwrap();
+        assert_eq!(permissions.msg_type, ServerMessageType::RoomPermissions);
+        assert_eq!(
+            permissions.payload.unwrap(),
+            serde_json::json!({
+                "seek": false, "change_media": false, "edit_queue": false
+            })
+        );
+        send_leave_notification(&notification, "test");
     }
 
     #[tokio::test(start_paused = true)]

@@ -98,12 +98,14 @@
     return true;
   };
 
-  // A guest's play or pause, on the host's player. Its own play and pause
-  // events are held back (startSyncing) so they are not sent again.
+  // A guest's command on the host's player: a play, a pause or, when the host
+  // lets guests seek, a seek with the room's play state. The events it causes
+  // are held back (startSyncing) so they are not sent again.
   const applyGuestCommand = (msg, fallbackVideo) => {
     const video = resolveVideo(fallbackVideo);
     if (!video || !msg.payload) return false;
-    const playing = msg.payload.action === 'play';
+    const seek = msg.payload.action === 'seek';
+    const playing = seek ? msg.payload.play_state === 'playing' : msg.payload.action === 'play';
     // While the host's stream reloads, the latest guest command waits for the
     // reload to end; otherwise the reload's own play would undo a pause.
     if (state.streamReloadUntil) {
@@ -127,10 +129,10 @@
     if (changed || (target !== null && movesVideo(video, target, threshold))) utils.startSyncing();
     if (target !== null) seekToTarget(video, target, true, threshold);
     state.wantsToPlay = playing;
-    if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
+    if (changed && playing) OWP.playback.safePlay(video, seek ? 'guest seek command' : 'guest play command');
     else if (changed) video.pause();
     // Scheduled play retains its initiator; only guest actions get this toast.
-    if ((changed || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
+    if (((changed && !seek) || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;
   };
 
@@ -145,7 +147,7 @@
   };
 
   const handleHostPlayerEvent = (msg, video) => {
-    if (msg.payload.action !== 'play' && msg.payload.action !== 'pause') return;
+    if (!['play', 'pause', 'seek'].includes(msg.payload.action)) return;
     // Only controls actually sent as host are acknowledgements. Queue starts
     // and a former guest's pending play must still run after host promotion.
     const acknowledgement = msg.client === state.clientId
@@ -166,7 +168,10 @@
     const actionAttempt = ++state.playbackActionAttempt;
     const retryDeadline = utils.nowMs() + Math.max(0, targetTs - utils.getServerNow()) + VIDEO_ACTION_MAX_WAIT_MS;
     state.pendingPlayUntil = targetTs;
-    state.hostPendingPlayState = msg.payload.action === 'play' ? 'playing' : 'paused';
+    const pendingPlaying = msg.payload.action === 'seek'
+      ? msg.payload.play_state === 'playing'
+      : msg.payload.action === 'play';
+    state.hostPendingPlayState = pendingPlaying ? 'playing' : 'paused';
     const apply = () => {
       if (actionAttempt !== state.playbackActionAttempt || !state.inRoom || state.roomId !== roomId || !state.isHost) {
         if (actionAttempt === state.playbackActionAttempt && state.roomId === roomId) {
