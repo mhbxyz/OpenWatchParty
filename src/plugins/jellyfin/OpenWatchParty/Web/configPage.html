@@ -599,7 +599,6 @@
                     $('#HideNativeSyncPlayButton', page).prop('checked', config.HideNativeSyncPlayButton === true);
                     $('#ShowSyncNudgeButton', page).prop('checked', config.ShowSyncNudgeButton === true);
                     setAppearance(page, config);
-                    OpenWatchPartyConfigurationPage.updateAuthStatus(page, config);
                     OpenWatchPartyConfigurationPage.runDiagnostics(false).then(function(diagnostics) {
                         if (diagnostics) OpenWatchPartyConfigurationPage.updateAuthStatus(page, config, diagnostics);
                     });

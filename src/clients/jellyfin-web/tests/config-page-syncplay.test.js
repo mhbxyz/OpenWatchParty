@@ -97,7 +97,10 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const authStatusCalls = [];
   page.init = async () => {};
   page.runDiagnostics = async () => diagnostics;
-  page.updateAuthStatus = (target, config, result) => { authStatusCalls.push([config, result]); };
+  page.updateAuthStatus = (target, config, result) => {
+    authStatusCalls.push([config, result]);
+    updateAuthStatus.call(page, target, config, result);
+  };
 
   const settle = () => new Promise(resolve => setImmediate(resolve));
   return {
@@ -347,12 +350,20 @@ describe('configuration page authentication status', () => {
     assert.equal(form.authStatus({ JwtSecret: 'short' }, invalidSecret), 'BLOCKED: JWT secret must contain at least 32 Unicode characters');
   });
 
-  it('updates the status with the diagnostics once the page loads', async () => {
+  it('waits for diagnostics before showing the authentication status for an RSA-only setup', async () => {
     const diagnostics = keyDiagnostics('pass', 'Authentication configuration is valid');
-    const form = loadConfigPage({ JwtSecret: '' }, { diagnostics });
+    let resolveDiagnostics;
+    const pendingDiagnostics = new Promise(resolve => { resolveDiagnostics = resolve; });
+    const form = loadConfigPage({ JwtSecret: '' }, { diagnostics: pendingDiagnostics });
     await form.show();
-    assert.equal(form.authStatusCalls.length, 2);
-    assert.equal(form.authStatusCalls[0][1], undefined);
-    assert.equal(form.authStatusCalls[1][1], diagnostics);
+    assert.equal(form.fields.get('AuthStatus')?.text || '', '');
+    assert.equal(form.authStatusCalls.length, 0);
+
+    resolveDiagnostics(diagnostics);
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.equal(form.authStatusCalls.length, 1);
+    assert.equal(form.authStatusCalls[0][1], diagnostics);
+    assert.equal(form.fields.get('AuthStatus').text, 'Authentication enabled');
   });
 });
