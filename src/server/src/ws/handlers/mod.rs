@@ -5,6 +5,7 @@ mod join;
 mod misc;
 mod playback;
 mod queue;
+mod reaction;
 mod start;
 mod status;
 
@@ -18,5 +19,6 @@ pub(in crate::ws) use misc::{
 };
 pub(in crate::ws) use playback::handle_playback;
 pub(in crate::ws) use queue::handle_queue;
+pub(in crate::ws) use reaction::handle_reaction;
 pub(in crate::ws) use start::{handle_readiness, handle_start_now};
 pub(in crate::ws) use status::handle_participant_status;

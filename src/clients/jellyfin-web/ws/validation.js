@@ -145,6 +145,15 @@
     return timestamp(message.payload.client_ts) ? null : 'client_ts is invalid';
   };
 
+  const ALLOWED_REACTIONS = new Set(['👍', '❤️', '😂', '😮', '😢', '👏', '🎉', '🔥']);
+
+  const validateReaction = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['username', 'emoji'])) return 'reaction has unknown fields';
+    if (!string(message.payload.username, MAX_NAME_LENGTH)) return 'reaction username is invalid';
+    return ALLOWED_REACTIONS.has(message.payload.emoji) ? null : 'reaction emoji is invalid';
+  };
+
   const validateChat = (message) => {
     if (!payloadObject(message)) return 'payload must be an object';
     if (!onlyKeys(message.payload, ['username', 'text'])) return 'chat_message has unknown fields';
@@ -218,6 +227,7 @@
     state_update: validateStateUpdate,
     pong: validatePong,
     chat_message: validateChat,
+    reaction: validateReaction,
     queue_state: validateQueueState,
     start_state: validateStartState,
     error: validateError
@@ -234,6 +244,7 @@
     'player_event',
     'state_update',
     'chat_message',
+    'reaction',
     'queue_state',
     'start_state'
   ]);

@@ -2,7 +2,7 @@ use super::constants::MAX_MESSAGE_SIZE;
 use super::handlers::{
     handle_auth, handle_chat_message, handle_client_log, handle_close_room, handle_create_room,
     handle_join_room, handle_leave_room, handle_participant_status, handle_ping, handle_playback,
-    handle_queue, handle_readiness, handle_ready, handle_start_now, handle_unknown,
+    handle_queue, handle_reaction, handle_readiness, handle_ready, handle_start_now, handle_unknown,
 };
 use crate::auth::JwtConfig;
 use crate::messaging::{send_room_list, send_to_client};
@@ -62,6 +62,9 @@ pub(super) enum ErrorCode {
     ChatMessageEmpty,
     ChatMessageTooLong,
     InvalidQueuePayload,
+    InvalidReactionPayload,
+    InvalidReactionEmoji,
+    ReactionRateLimited,
 }
 
 pub(super) fn error_message(
@@ -282,6 +285,7 @@ pub(super) async fn client_msg(
         ClientMessageType::Ping => handle_ping(client_id, &parsed, state).await,
         ClientMessageType::ClientLog => handle_client_log(client_id, &parsed),
         ClientMessageType::ChatMessage => handle_chat_message(client_id, &parsed, state).await,
+        ClientMessageType::Reaction => handle_reaction(client_id, &parsed, state).await,
         ClientMessageType::ParticipantStatus => {
             handle_participant_status(client_id, &parsed, state).await
         }

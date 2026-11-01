@@ -32,6 +32,7 @@ pub fn create_client_with_rx(
         message_count: 0,
         last_reset: now,
         last_seen: now,
+        last_reaction: None,
     };
     (client, rx)
 }

@@ -83,6 +83,26 @@
     overlay.appendChild(el);
   };
 
+  const REACTION_COOLDOWN_MS = 1000;
+
+  const sendReaction = (emoji) => {
+    if (!ALLOWED_REACTIONS.includes(emoji)) return;
+    const now = Date.now();
+    if (now - (state.lastReactionSent || 0) < REACTION_COOLDOWN_MS) return;
+    state.lastReactionSent = now;
+    showFloatingReaction(emoji, state.userName || t('anonymous'));
+    if (state.inRoom && OWP.actions?.send) {
+      OWP.actions.send('reaction', { emoji });
+    }
+  };
+
+  const receiveReaction = (msg) => {
+    if (!msg || !msg.payload) return;
+    if (msg.client && state.clientId && msg.client === state.clientId) return;
+    const { emoji, username } = msg.payload;
+    showFloatingReaction(emoji, username);
+  };
+
   const createReactSection = () => {
     const section = createElement('div');
     section.id = 'owp-react-section';
@@ -92,8 +112,7 @@
       btn.title = emoji;
       btn.setAttribute('aria-label', emoji);
       btn.onclick = () => {
-        // Trigger local animation for visual testing (dummy click without server communication)
-        showFloatingReaction(emoji);
+        sendReaction(emoji);
       };
       section.appendChild(btn);
     });
@@ -495,7 +514,7 @@
     if (OWP.emoji?.setupAutocomplete) OWP.emoji.setupAutocomplete(chatInput);
   };
 
-  OWP.reactions = { showReaction: showFloatingReaction, ALLOWED_REACTIONS };
+  OWP.reactions = { showReaction: showFloatingReaction, send: sendReaction, receive: receiveReaction, ALLOWED_REACTIONS };
 
   Object.assign(views, { renderRoom, setupChatInput, toggleRoomSection, applyRoomSection });
   Object.assign(ui, { updateRoomRoleControls, updateSyncSection, updateStartLabel });

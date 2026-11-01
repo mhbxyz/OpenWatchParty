@@ -81,6 +81,7 @@ describe('room bar', () => {
     OWP.chat.messages = [];
     OWP.chat.unreadCount = 0;
     OWP.state.roomBarSection = '';
+    OWP.state.lastReactionSent = 0;
   });
 
   it('shows the sync dot, latency, room name and buttons in that order', () => {
@@ -944,5 +945,44 @@ describe('room bar', () => {
     assert.equal(reactions.length, 2);
     assert.equal(reactions[1].querySelector('.owp-reaction-emoji').textContent, '❤️');
     assert.equal(reactions[1].querySelector('.owp-reaction-username').textContent, 'Bob');
+  });
+
+  it('sends reaction over websocket with cooldown and receives reactions from other clients', () => {
+    const sent = [];
+    OWP.actions.send = (type, payload) => { sent.push({ type, payload }); };
+    renderRoom({ userName: 'Alice', clientId: 'client-alice', inRoom: true });
+
+    byId('owp-btn-react').click();
+    const tray = byId('owp-react-section');
+    const buttons = tray.querySelectorAll('.owp-reaction-btn');
+
+    // First click sends message
+    buttons[0].click();
+    assert.deepEqual(sent, [{ type: 'reaction', payload: { emoji: '👍' } }]);
+
+    // Immediate second click is throttled
+    buttons[1].click();
+    assert.equal(sent.length, 1);
+
+    const overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 1);
+
+    // Incoming reaction from another client is displayed
+    OWP.reactions.receive({
+      client: 'client-bob',
+      payload: { emoji: '🔥', username: 'Bob' }
+    });
+    const reactions = overlay.querySelectorAll('.owp-floating-reaction');
+    assert.equal(reactions.length, 2);
+    assert.equal(reactions[1].querySelector('.owp-reaction-emoji').textContent, '🔥');
+    assert.equal(reactions[1].querySelector('.owp-reaction-username').textContent, 'Bob');
+
+    // Incoming reaction from own client is ignored (already rendered optimistically)
+    OWP.reactions.receive({
+      client: 'client-alice',
+      payload: { emoji: '👍', username: 'Alice' }
+    });
+    assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 2);
   });
 });

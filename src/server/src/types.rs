@@ -30,6 +30,7 @@ pub struct Client {
     pub message_count: u32,
     pub last_reset: Instant,
     pub last_seen: Instant, // For zombie connection detection
+    pub last_reaction: Option<Instant>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -195,6 +196,7 @@ pub enum ClientMessageType {
     QueueCountdown,
     Readiness,
     StartNow,
+    Reaction,
     #[serde(other)]
     Unknown,
 }
@@ -223,6 +225,7 @@ impl ClientMessageType {
             Self::QueueCountdown => "queue_countdown",
             Self::Readiness => "readiness",
             Self::StartNow => "start_now",
+            Self::Reaction => "reaction",
             Self::Unknown => "unknown",
         }
     }
@@ -250,6 +253,7 @@ pub enum ServerMessageType {
     ChatMessage,
     QueueState,
     StartState,
+    Reaction,
 }
 
 impl ServerMessageType {
@@ -273,6 +277,7 @@ impl ServerMessageType {
             Self::ParticipantStatuses => "participant_statuses",
             Self::QueueState => "queue_state",
             Self::StartState => "start_state",
+            Self::Reaction => "reaction",
         }
     }
 }
@@ -338,6 +343,7 @@ mod tests {
             "participant_list",
             "participant_statuses",
             "room_capabilities",
+            "reaction",
         ] {
             for fixture in [
                 serde_json::json!({"type":name,"ts":0}),
