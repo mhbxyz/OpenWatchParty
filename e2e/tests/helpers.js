@@ -181,17 +181,30 @@ async function ensureRoomBarVisible(page) {
   await expect(page.locator('#owp-panel')).not.toHaveClass(/owp-controls-hidden/);
 }
 
+// Over the player the room bar fades out again with Jellyfin's controls,
+// maybe between bringing them back and the click. The click would then wait
+// on a pointer that no longer moves, so the controls never come back: bring
+// them back and click again until the click lands.
+async function clickRoomBar(page, target) {
+  const control = typeof target === 'string' ? page.locator(target) : target;
+  await expect(async () => {
+    await ensureRoomBarVisible(page);
+    await control.click({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+}
+
 async function createRoom(page) {
   await openPanelFromOsd(page);
   await page.locator('#owp-btn-create').click();
   await waitInRoom(page, true);
 }
 
-async function joinRoomFromHeader(page, roomName) {
+// By the room's id: a room an earlier test left, still in its grace period,
+// can have the same name.
+async function joinRoomFromHeader(page, roomId) {
   await page.goto('/#/home');
   await openPanelFromHeader(page);
-  const row = page.locator('.owp-room-item', { hasText: roomName }).first();
-  await row.locator('.owp-btn').click();
+  await page.locator(`.owp-room-item .owp-btn[data-room-id="${roomId}"]`).click();
   await waitForPlaying(page);
   await waitInRoom(page, true);
 }
@@ -206,9 +219,8 @@ async function joinRoomFromHomeCard(page, roomId) {
 }
 
 async function leaveRoom(page) {
-  await ensureRoomBarVisible(page);
-  await page.locator('#owp-btn-leave').click();
-  await page.locator('#owp-btn-confirm-leave').click();
+  await clickRoomBar(page, '#owp-btn-leave');
+  await clickRoomBar(page, '#owp-btn-confirm-leave');
   await waitInRoom(page, false);
 }
 
@@ -223,9 +235,8 @@ async function leaveIfInRoom(page) {
 // Unlike leaveRoom's existing host behavior (Close for everyone), this
 // clicks the host's separate Leave action and preserves the room for guests.
 async function leaveRoomKeepingRoom(page) {
-  await ensureRoomBarVisible(page);
-  await page.locator('#owp-btn-leave').click();
-  await page.locator('#owp-btn-leave-room').click();
+  await clickRoomBar(page, '#owp-btn-leave');
+  await clickRoomBar(page, '#owp-btn-leave-room');
   await waitInRoom(page, false);
 }
 
@@ -254,6 +265,7 @@ module.exports = {
   openPanelFromOsd,
   openPanelFromHeader,
   ensureRoomBarVisible,
+  clickRoomBar,
   createRoom,
   joinRoomFromHeader,
   joinRoomFromHomeCard,

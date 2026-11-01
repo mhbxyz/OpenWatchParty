@@ -391,6 +391,7 @@ public class OpenWatchPartyController : ControllerBase
                 show_sync_nudge_button = config.ShowSyncNudgeButton,
                 appearance_opacity = config.AppearanceOpacity,
                 appearance_text_size = config.AppearanceTextSize,
+                appearance_preset = config.AppearancePreset,
                 invite_ttl_seconds = config.InviteTtlSeconds,
                 protocol_version = ProtocolVersion
             });
@@ -417,6 +418,7 @@ public class OpenWatchPartyController : ControllerBase
             show_sync_nudge_button = config.ShowSyncNudgeButton,
             appearance_opacity = config.AppearanceOpacity,
             appearance_text_size = config.AppearanceTextSize,
+            appearance_preset = config.AppearancePreset,
             invite_ttl_seconds = config.InviteTtlSeconds,
             protocol_version = ProtocolVersion
         });

@@ -12,6 +12,7 @@ pub mod secrets;
 pub mod state;
 pub mod storage;
 pub mod trust;
+pub mod ui;
 pub mod web;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

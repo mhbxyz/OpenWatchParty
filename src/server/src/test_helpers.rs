@@ -29,6 +29,7 @@ pub fn create_client_with_rx(
         supports_shared_playback_control: false,
         supports_media_queue: false,
         supports_start_when_ready: false,
+        supports_chat_history: false,
         message_count: 0,
         last_reset: now,
         last_seen: now,
@@ -63,6 +64,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         not_ready: HashMap::new(),
         countdown_pending: false,
         reactions_enabled: true,
+        chat_history: Default::default(),
     }
 }
 
