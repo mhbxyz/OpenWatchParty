@@ -138,18 +138,22 @@
     const mediaId = state.roomMediaId;
     const userId = window.ApiClient.getCurrentUserId();
     const generation = roomGeneration;
-    const selected = {
-      id: item.id,
-      title: item.title,
-      ...(state.serverFeatures.includes('start_when_ready') && /^[0-9a-f]{32}$/i.test(item.series || '')
-        ? { series: item.series }
-        : {})
-    };
+    const isCurrentContext = () => generation === roomGeneration && isQueueHost()
+      && state.roomId === roomId && state.clientId === clientId
+      && state.roomMediaId === mediaId && window.ApiClient.getCurrentUserId() === userId;
+    let selected;
+    try {
+      selected = queueItem(await window.ApiClient.getItem(userId, item.id));
+    } catch (err) {
+      report('add-selected', err);
+      return;
+    }
+    if (!isCurrentContext()) return;
     const items = [];
     if (state.roomMediaId && state.roomMediaId !== selected.id
         && !state.queueItems.some(entry => entry.id === state.roomMediaId)) {
       try {
-        const current = await window.ApiClient.getItem(window.ApiClient.getCurrentUserId(), state.roomMediaId);
+        const current = await window.ApiClient.getItem(userId, mediaId);
         items.push(queueItem(current));
       } catch (err) {
         report('add-current', err);
@@ -157,9 +161,7 @@
     }
     items.push(selected);
     // A library response must not add an earlier room's items to a new queue.
-    if (generation !== roomGeneration || !isQueueHost() || state.roomId !== roomId
-        || state.clientId !== clientId || state.roomMediaId !== mediaId
-        || window.ApiClient.getCurrentUserId() !== userId) return;
+    if (!isCurrentContext()) return;
     send('queue_add', { items });
   };
 

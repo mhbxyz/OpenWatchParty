@@ -246,18 +246,47 @@ describe('collaborative queue behavior', () => {
 
   it('adds the room item first, falls back to the selected item, and does not prepend an item already queued', async () => {
     OWP.state.isHost = true;
-    getItem = async () => current;
+    getItem = async (userId, id) => id === IDS.movie ? movie : current;
     await OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
     assert.deepEqual(sent.pop(), { type: 'queue_add', payload: { items: [
       { id: IDS.current, title: 'OWP Test Show · S1:E1 · Pilot', series: IDS.series },
       { id: IDS.movie, title: 'Sprite Fright' }
     ] } });
-    getItem = async () => { throw new Error('offline'); };
+    getItem = async (userId, id) => {
+      if (id === IDS.movie) return movie;
+      throw new Error('offline');
+    };
     await OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
     assert.deepEqual(sent.pop().payload.items, [{ id: IDS.movie, title: 'Sprite Fright' }]);
     OWP.state.queueItems = [{ id: IDS.current, title: 'Pilot' }];
     await OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
     assert.deepEqual(sent.pop().payload.items, [{ id: IDS.movie, title: 'Sprite Fright' }]);
+  });
+
+  it('accepts suggestions using the host library title and series instead of guest metadata', async () => {
+    enterRoom({ isHost: true, queueItems: [{ id: IDS.current, title: 'Pilot' }] });
+    getItem = async (userId, id) => {
+      assert.equal(userId, 'user-1');
+      assert.equal(id, IDS.episode);
+      return episode;
+    };
+
+    await OWP.queue.accept({ id: IDS.episode, title: 'Guest title', series: IDS.unknown });
+
+    assert.deepEqual(sent, [{ type: 'queue_add', payload: { items: [{
+      id: IDS.episode,
+      title: 'OWP Test Show · S1:E2 · A Very Long Day',
+      series: IDS.series
+    }] } }]);
+  });
+
+  it('does not add a suggestion when the host cannot load its library item', async () => {
+    enterRoom({ isHost: true, queueItems: [{ id: IDS.current, title: 'Pilot' }] });
+    getItem = async () => { throw new Error('Not available to this host'); };
+
+    await OWP.queue.accept({ id: IDS.movie, title: 'Guest title', series: IDS.series });
+
+    assert.deepEqual(sent, []);
   });
 
   it('sends guest suggestion, dismiss, withdraw and accept payloads', async () => {
@@ -287,17 +316,20 @@ describe('collaborative queue behavior', () => {
       ['host', () => { OWP.state.isHost = false; }],
       ['feature', () => { OWP.state.serverFeatures = []; }]
     ];
-    for (const [label, change] of changes) {
+    for (const stage of ['selected', 'current']) for (const [label, change] of changes) {
       sent = [];
       currentUser = 'user-1';
       enterRoom({ isHost: true });
       let resolve;
-      getItem = () => new Promise(done => { resolve = done; });
+      getItem = (userId, id) => stage === 'current' && id === IDS.movie
+        ? Promise.resolve(movie)
+        : new Promise(done => { resolve = done; });
       const pending = OWP.queue.add({ id: IDS.movie, title: 'Sprite Fright' });
+      await settle();
       change();
-      resolve(current);
+      resolve(stage === 'selected' ? movie : current);
       await pending;
-      assert.deepEqual(sent, [], label);
+      assert.deepEqual(sent, [], `${stage}: ${label}`);
     }
   });
 
