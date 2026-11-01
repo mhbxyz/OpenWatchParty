@@ -39,7 +39,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 24] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 22] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 23] = [
     "room_access",
     "join_requests",
     "join_pending",
@@ -61,6 +61,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 22] = [
     "chat_message",
     "queue_state",
     "start_state",
+    "chat_history",
     "other",
 ];
 

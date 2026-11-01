@@ -37,6 +37,30 @@ describe('application lifecycle initialization', () => {
     OWP._lifecycle.clearAllIntervals();
   });
 
+  it('checks queue retries from the existing sync interval', (t) => {
+    const intervals = new Map();
+    t.mock.method(OWP.timers, 'setInterval', (callback, delay) => {
+      intervals.set(delay, callback);
+      return intervals.size;
+    });
+    let retries = 0;
+    const previous = OWP.queue;
+    OWP.queue = { retryFill: () => { retries++; } };
+    OWP.state.initialized = false;
+    // The first initialization test deliberately throws once.
+    styleAttempts = 1;
+    try {
+      OWP.app.init();
+      intervals.get(OWP.constants.SYNC_LOOP_MS)();
+      assert.equal(retries, 1);
+    } finally {
+      OWP.queue = previous;
+      styleAttempts = 0;
+      connectCalls = 0;
+      headerInjections = 0;
+    }
+  });
+
   it('keeps initialization retryable after a synchronous failure', () => {
     OWP.state.initialized = false;
     assert.throws(() => OWP.app.init(), /style injection failed/);

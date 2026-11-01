@@ -49,7 +49,7 @@ const loadConfigPage = (storedConfig) => {
     };
   };
   const $ = (selector) => {
-    if (selector === pageElement || selector === formElement) {
+    if (selector === pageElement || selector === formElement || selector?.isField) {
       return { parents: () => [pageElement] };
     }
     if (selector === '.pluginConfigurationPage' || selector === '.openwatchpartyConfigurationForm') {
@@ -109,6 +109,10 @@ const loadConfigPage = (storedConfig) => {
     },
     click(id) {
       fields.get(id).handlers.click.call(pageElement);
+    },
+    choose(id, value) {
+      fields.get(id).value = value;
+      fields.get(id).handlers.change.call({ isField: true, id, value });
     }
   };
 };
@@ -191,6 +195,61 @@ describe('configuration page sync adjustment setting', () => {
     assert.equal(form.saved.length, 1);
     assert.equal(form.saved[0].ShowSyncNudgeButton, false);
     assert.equal(form.saved[0].HideNativeSyncPlayButton, true);
+  });
+});
+
+describe('configuration page appearance theme', () => {
+  const baseConfig = {
+    JwtSecret: VALID_SECRET,
+    SessionServerUrl: 'wss://media.example/ws'
+  };
+  const theme = form => form.fields.get('AppearancePreset').value;
+  const opacity = form => [form.fields.get('AppearanceOpacity').value, form.fields.get('AppearanceOpacityValue').text];
+
+  it('loads Glass for a missing or unknown theme, and saves it', async () => {
+    for (const AppearancePreset of [undefined, 'neon', 'constructor']) {
+      const form = loadConfigPage({ ...baseConfig, AppearancePreset });
+      await form.show();
+      assert.equal(theme(form), 'glass', String(AppearancePreset));
+      await form.submit();
+      assert.equal(form.saved[0].AppearancePreset, 'glass');
+    }
+  });
+
+  it('round-trips a stored theme without changing the stored opacity', async () => {
+    const form = loadConfigPage({ ...baseConfig, AppearancePreset: 'light', AppearanceOpacity: 70 });
+    await form.show();
+    assert.equal(theme(form), 'light');
+    assert.deepEqual(opacity(form), [70, '70 %']);
+
+    await form.submit();
+
+    assert.equal(form.saved[0].AppearancePreset, 'light');
+    assert.equal(form.saved[0].AppearanceOpacity, 70);
+  });
+
+  it('moves the opacity to the suggestion of the chosen theme, which can then change', async () => {
+    const form = loadConfigPage(baseConfig);
+    await form.show();
+    for (const [preset, suggested] of [['solid', 100], ['light', 85], ['contrast', 100], ['glass', 55]]) {
+      form.choose('AppearancePreset', preset);
+      assert.deepEqual(opacity(form), [suggested, `${suggested} %`], preset);
+    }
+    form.choose('AppearancePreset', 'light');
+    form.fields.get('AppearanceOpacity').value = 90;
+
+    await form.submit();
+
+    assert.equal(form.saved[0].AppearancePreset, 'light');
+    assert.equal(form.saved[0].AppearanceOpacity, 90);
+  });
+
+  it('restores Glass with the reset button', async () => {
+    const form = loadConfigPage({ ...baseConfig, AppearancePreset: 'contrast', AppearanceOpacity: 100 });
+    await form.show();
+    form.click('ResetAppearanceButton');
+    assert.equal(theme(form), 'glass');
+    assert.deepEqual(opacity(form), [55, '55 %']);
   });
 });
 

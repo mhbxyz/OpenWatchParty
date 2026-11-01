@@ -12,6 +12,7 @@
         panel.removeEventListener('keydown', lc.panelStopPropagation);
         panel.removeEventListener('keyup', lc.panelStopPropagation);
         panel.removeEventListener('keypress', lc.panelStopPropagation);
+        panel.removeEventListener('wheel', lc.panelStopPropagation);
       }
       lc.panelStopPropagation = null;
     }
