@@ -39,7 +39,7 @@ pub const CLIENT_MESSAGE_TYPES: [&str; 24] = [
 ];
 
 /// Message types the server sends, plus `other` for anything not listed.
-pub const SERVER_MESSAGE_TYPES: [&str; 19] = [
+pub const SERVER_MESSAGE_TYPES: [&str; 20] = [
     "client_hello",
     "auth_success",
     "error",
@@ -58,6 +58,7 @@ pub const SERVER_MESSAGE_TYPES: [&str; 19] = [
     "queue_state",
     "queue_details",
     "start_state",
+    "chat_history",
     "other",
 ];
 

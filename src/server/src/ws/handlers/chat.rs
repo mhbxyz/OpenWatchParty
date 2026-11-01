@@ -1,7 +1,7 @@
-use super::super::constants::MAX_CHAT_MESSAGE_LENGTH;
+use super::super::constants::{CHAT_HISTORY_LIMIT, MAX_CHAT_MESSAGE_LENGTH};
 use super::super::dispatch::{send_error, ErrorCode};
 use crate::messaging::ClientSender;
-use crate::types::{IncomingMessage, ServerMessageType, SharedState, WsMessage};
+use crate::types::{ChatEntry, IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
 
 fn validate_chat(text: &str) -> Result<(), &'static str> {
@@ -17,6 +17,61 @@ fn validate_chat(text: &str) -> Result<(), &'static str> {
 }
 
 type BroadcastData = (Vec<ClientSender>, WsMessage);
+
+/// Keeps the message for members who join later, the oldest going first.
+fn remember(room: &mut Room, message: &WsMessage, user_id: &str, username: &str, text: &str) {
+    room.chat_history.push_back(ChatEntry {
+        client: message.client.clone().unwrap_or_default(),
+        user_id: user_id.to_string(),
+        username: username.to_string(),
+        text: text.to_string(),
+        server_ts: message.server_ts.unwrap_or_else(now_ms),
+    });
+    while room.chat_history.len() > CHAT_HISTORY_LIMIT {
+        room.chat_history.pop_front();
+    }
+}
+
+/// The room's history, to a member that negotiated `chat_history` and just
+/// joined. Nothing when it is empty.
+pub(in crate::ws) fn send_chat_history(
+    room: &Room,
+    clients: &std::collections::HashMap<String, crate::types::Client>,
+    client_id: &str,
+) {
+    let Some(client) = clients
+        .get(client_id)
+        .filter(|client| client.supports_chat_history)
+    else {
+        return;
+    };
+    if room.chat_history.is_empty() {
+        return;
+    }
+    // `own`: sent by this member's user, from this or an earlier connection.
+    let messages: Vec<_> = room
+        .chat_history
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "client": entry.client,
+                "username": entry.username,
+                "text": entry.text,
+                "server_ts": entry.server_ts,
+                "own": !entry.user_id.is_empty() && entry.user_id == client.user_id,
+            })
+        })
+        .collect();
+    let message = WsMessage {
+        msg_type: ServerMessageType::ChatHistory,
+        room: Some(room.room_id.clone()),
+        client: None,
+        payload: Some(serde_json::json!({ "messages": messages })),
+        ts: now_ms(),
+        server_ts: Some(now_ms()),
+    };
+    crate::messaging::send_message(Some(client.sender.clone()), &message, Some(client_id));
+}
 
 fn collect_chat_senders(
     room_id: &str,
@@ -95,7 +150,7 @@ pub(in crate::ws) async fn handle_chat_message(
     }
 
     let result = {
-        let locked = state.read().await;
+        let mut locked = state.write().await;
         if let Some(room) = locked.rooms.get(room_id) {
             if room.clients.iter().any(|id| id == client_id) {
                 let username = locked
@@ -103,6 +158,11 @@ pub(in crate::ws) async fn handle_chat_message(
                     .get(client_id)
                     .map(|c| c.user_name.clone())
                     .unwrap_or_else(|| "Anonymous".to_string());
+                let user_id = locked
+                    .clients
+                    .get(client_id)
+                    .map(|c| c.user_id.clone())
+                    .unwrap_or_default();
                 let delivery = collect_chat_senders(
                     room_id,
                     client_id,
@@ -113,6 +173,8 @@ pub(in crate::ws) async fn handle_chat_message(
                 )
                 .expect("room membership checked");
                 crate::messaging::send_to_senders(&delivery.0, &delivery.1, "chat message");
+                let room = locked.rooms.get_mut(room_id).expect("room checked");
+                remember(room, &delivery.1, &user_id, &username, chat_text);
                 Ok(())
             } else {
                 Err((
@@ -149,6 +211,53 @@ mod tests {
     fn assert_error_code(message: WsMessage, code: &str) {
         assert_eq!(message.msg_type, ServerMessageType::Error);
         assert_eq!(message.payload.unwrap()["code"], code);
+    }
+
+    #[tokio::test]
+    async fn a_room_keeps_its_last_messages_for_later_members() {
+        let state = test_helpers::create_state();
+        let (mut host, _host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
+        host.room_id = Some("room".to_string());
+        let (outsider, _outsider_rx) = test_helpers::create_client_with_rx("u2", "Eve", true);
+        {
+            let mut locked = state.write().await;
+            locked.clients.insert("host".to_string(), host);
+            locked.clients.insert("outsider".to_string(), outsider);
+            locked.rooms.insert(
+                "room".to_string(),
+                test_helpers::create_room("room", "host"),
+            );
+        }
+        for i in 0..CHAT_HISTORY_LIMIT + 2 {
+            let text = format!("message {i}");
+            handle_chat_message(
+                "host",
+                &chat_message(Some("room"), Some(serde_json::json!({ "text": text }))),
+                &state,
+            )
+            .await;
+        }
+        handle_chat_message(
+            "outsider",
+            &chat_message(
+                Some("room"),
+                Some(serde_json::json!({ "text": "not here" })),
+            ),
+            &state,
+        )
+        .await;
+
+        let locked = state.read().await;
+        let history = &locked.rooms["room"].chat_history;
+        assert_eq!(history.len(), CHAT_HISTORY_LIMIT);
+        // The oldest go first.
+        assert_eq!(history.front().unwrap().text, "message 2");
+        let last = history.back().unwrap();
+        assert_eq!(last.text, format!("message {}", CHAT_HISTORY_LIMIT + 1));
+        assert_eq!(last.username, "Franco");
+        assert_eq!(last.user_id, "u1");
+        assert_eq!(last.client, "host");
+        assert!(last.server_ts > 0);
     }
 
     #[test]

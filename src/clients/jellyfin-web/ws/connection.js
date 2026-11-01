@@ -69,6 +69,9 @@
 
   const handleAuthenticatedConnection = () => {
     state.connectionPhase = 'authenticated';
+    // Only an authenticated connection ends the backoff: a server that rejects
+    // the token still opens the socket, then closes it at its auth timeout.
+    state.reconnectAttempts = 0;
     if (OWP.actions?.consumePendingInvite) OWP.actions.consumePendingInvite();
     if (!state.rejoinPending || !state.desiredRoomId) return;
     const roomId = state.desiredRoomId;
@@ -83,7 +86,6 @@
     clearReconnectTimer();
     state.isConnecting = false;
     state.connectionPhase = token ? 'authenticating' : 'authenticated';
-    state.reconnectAttempts = 0;
     state.authRetryAttempts = 0;
     state.authRetryAt = 0;
     state.authFailedToken = '';
@@ -187,6 +189,7 @@
       case 'queue_state': h.handleQueueState(msg); break;
       case 'queue_details': h.handleQueueDetails(msg); break;
       case 'start_state': h.handleStartState(msg); break;
+      case 'chat_history': h.handleChatHistory(msg); break;
       case 'error': h.handleError(msg); break;
     }
   };

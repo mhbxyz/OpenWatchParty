@@ -94,6 +94,25 @@ test('a guest suggests a series episode and the host accepts it', async () => {
   }
 });
 
+test('accepting a suggestion replaces guest metadata with the host library item', async () => {
+  const id = await helpers.findMovieId(guest, 'Sprite Fright');
+  await guest.evaluate(itemId => window.OpenWatchParty.queue.suggest({
+    id: itemId, title: 'Guest supplied title', series: 'f'.repeat(32)
+  }), id);
+  await openQueue(host);
+  const suggestion = host.locator('.owp-queue-suggestion', { hasText: 'Guest supplied title' });
+  await expect(suggestion).toBeVisible();
+  await helpers.clickRoomBar(host, suggestion.getByRole('button', { name: 'Add to the queue' }));
+
+  for (const page of [host, guest]) {
+    await openQueue(page);
+    await expect(queueTitles(page)).toHaveText([CURRENT, 'Sprite Fright']);
+    const queued = await page.evaluate(itemId => window.OpenWatchParty.state.queueItems.find(item => item.id === itemId), id);
+    expect(queued.series).toBeUndefined();
+    await expect(page.locator('.owp-queue-suggestion')).toHaveCount(0);
+  }
+});
+
 test('a guest withdraws one suggestion and the host dismisses another', async () => {
   await search(guest, 'Sprite');
   await helpers.clickRoomBar(guest, guest.locator('.owp-queue-result', { hasText: 'Sprite Fright' }).getByRole('button', { name: 'Suggest' }));

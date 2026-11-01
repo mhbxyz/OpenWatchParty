@@ -149,7 +149,7 @@ Shared controls require a compatible server and host. With an older host or serv
 
 The panel follows the Jellyfin display language; English, Spanish, French and German (`en`, `es`, `fr`, `de`) are included.
 
-Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their opacity and text size under **Web Client** in the plugin settings (55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
+Over the player, the room bar, its drop-downs, the lobby panel, the up-next strip and the notifications are semi-transparent, so the video shows through them, blurred. The administrator sets their theme (Glass, Solid dark, Light or High contrast), opacity and text size under **Web Client** in the plugin settings (Glass, 55 % and 14 px by default). If your system asks apps to reduce transparency, they stay opaque.
 
 ![Close-up of the room bar with its chat composer open](/assets/images/watch-party-panel-closeup.png)
 
@@ -227,11 +227,12 @@ The chat feature allows you to communicate with other watch party participants i
 - **Timestamps** - Hover a message to see when it was sent
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
 - **SERVER lines** - OpenWatchParty's own notes about [starting together](#starting-together), with a tag and in italics; only "Started without…" counts as unread
+- **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 - **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
 
 ### Notes
-- Chat history is not saved; late joiners won't see previous messages
+- The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
 - The chat input doesn't interfere with video player controls
 
 ## Sync Indicator
