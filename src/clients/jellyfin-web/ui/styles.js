@@ -447,14 +447,29 @@
     }
     .owp-floating-reaction {
       position: absolute; bottom: ${px(80)};
-      font-size: ${px(36)}; line-height: 1; user-select: none;
-      pointer-events: none !important;
+      display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+      user-select: none; pointer-events: none !important;
       transform: translateZ(0);
       backface-visibility: hidden;
       -webkit-backface-visibility: hidden;
       will-change: transform, opacity;
       animation: owp-reaction-float 2.1s cubic-bezier(0.2, 0.6, 0.35, 1) forwards,
                  owp-reaction-fade 2.1s ease-out forwards;
+    }
+    .owp-reaction-emoji {
+      font-size: ${px(36)}; line-height: 1;
+    }
+    .owp-reaction-username {
+      margin-top: ${px(3)};
+      font-size: ${px(11)}; font-weight: 500; line-height: 1.2;
+      color: #e6f1fb;
+      background: rgba(20, 20, 20, 0.7);
+      padding: ${px(1)} ${px(6)};
+      border-radius: ${px(8)};
+      max-width: ${px(100)};
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      text-shadow: 0 ${px(1)} ${px(2)} rgba(0, 0, 0, 0.6);
+      box-shadow: 0 ${px(1)} ${px(4)} rgba(0, 0, 0, 0.4);
     }
     @keyframes owp-reaction-float {
       0% {

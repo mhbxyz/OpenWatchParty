@@ -921,4 +921,28 @@ describe('room bar', () => {
     assert.equal(panel().classList.contains(ROOM_MODE_CLASS), false);
     assert.equal(panel().querySelector('.owp-room-bar'), null);
   });
+
+  it('shows floating emoji reactions with the sender username', () => {
+    renderRoom({ userName: 'Alice' });
+    byId('owp-btn-react').click();
+    assert.equal(expanded('owp-btn-react'), 'true');
+    const tray = byId('owp-react-section');
+    assert.equal(tray.hidden, false);
+    const buttons = tray.querySelectorAll('.owp-reaction-btn');
+    assert.equal(buttons.length, 8);
+
+    buttons[0].click();
+    const overlay = document.getElementById('owp-reactions-overlay');
+    assert.ok(overlay);
+    const reaction = overlay.querySelector('.owp-floating-reaction');
+    assert.ok(reaction);
+    assert.equal(reaction.querySelector('.owp-reaction-emoji').textContent, '👍');
+    assert.equal(reaction.querySelector('.owp-reaction-username').textContent, 'Alice');
+
+    OWP.reactions.showReaction('❤️', 'Bob');
+    const reactions = overlay.querySelectorAll('.owp-floating-reaction');
+    assert.equal(reactions.length, 2);
+    assert.equal(reactions[1].querySelector('.owp-reaction-emoji').textContent, '❤️');
+    assert.equal(reactions[1].querySelector('.owp-reaction-username').textContent, 'Bob');
+  });
 });

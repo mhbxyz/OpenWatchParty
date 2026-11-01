@@ -47,10 +47,19 @@
     return overlay;
   };
 
-  const showFloatingReaction = (emoji) => {
+  const showFloatingReaction = (emoji, username) => {
     if (!ALLOWED_REACTIONS.includes(emoji)) return;
     const overlay = getOrCreateReactionsOverlay();
-    const el = createElement('span', 'owp-floating-reaction', emoji);
+    const el = createElement('div', 'owp-floating-reaction');
+
+    const emojiEl = createElement('span', 'owp-reaction-emoji', emoji);
+    el.appendChild(emojiEl);
+
+    const name = username !== undefined ? username : (state.userName || t('anonymous'));
+    if (name) {
+      const nameEl = createElement('span', 'owp-reaction-username', name);
+      el.appendChild(nameEl);
+    }
 
     // Randomize starting X position along bottom right/center (68% to 88% across viewport)
     const startXPercent = 68 + (Math.random() * 20);
