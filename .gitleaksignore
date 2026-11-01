@@ -1,0 +1,3 @@
+# Malformed PEM literals used to test rejected RSA imports, not usable keys.
+# Limit the exception to this historical test fixture finding.
+cbc11c1c78714416e0b4510e7aa359bcf1395a46:src/plugins/jellyfin/OpenWatchParty.Tests/SigningKeyFileTests.cs:private-key:20
