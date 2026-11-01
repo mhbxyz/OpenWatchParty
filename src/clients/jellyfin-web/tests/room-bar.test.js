@@ -933,6 +933,8 @@ describe('room bar', () => {
     assert.equal(buttons.length, 8);
 
     buttons[0].click();
+    assert.equal(tray.hidden, true);
+    assert.equal(expanded('owp-btn-react'), 'false');
     const overlay = document.getElementById('owp-reactions-overlay');
     assert.ok(overlay);
     const reaction = overlay.querySelector('.owp-floating-reaction');
@@ -984,5 +986,23 @@ describe('room bar', () => {
       payload: { emoji: '👍', username: 'Alice' }
     });
     assert.equal(overlay.querySelectorAll('.owp-floating-reaction').length, 2);
+  });
+
+  it('opens reaction tray on hover and closes on mouseleave', async () => {
+    renderRoom();
+    const btn = byId('owp-btn-react');
+    const tray = byId('owp-react-section');
+    assert.equal(tray.hidden, true);
+
+    btn.dispatchEvent({ type: 'mouseenter' });
+    assert.equal(tray.hidden, false);
+    assert.equal(expanded('owp-btn-react'), 'true');
+
+    btn.dispatchEvent({ type: 'mouseleave' });
+    assert.equal(tray.hidden, false);
+
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert.equal(tray.hidden, true);
+    assert.equal(expanded('owp-btn-react'), 'false');
   });
 });

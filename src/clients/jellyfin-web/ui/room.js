@@ -103,9 +103,38 @@
     showFloatingReaction(emoji, username);
   };
 
+  let reactHoverTimer = null;
+  const clearReactHoverTimer = () => {
+    if (reactHoverTimer) {
+      clearTimeout(reactHoverTimer);
+      reactHoverTimer = null;
+    }
+  };
+
+  const openReactSection = () => {
+    clearReactHoverTimer();
+    if (state.roomBarSection !== 'react') {
+      state.roomBarSection = 'react';
+      applyRoomSection();
+    }
+  };
+
+  const scheduleCloseReactSection = () => {
+    clearReactHoverTimer();
+    reactHoverTimer = setTimeout(() => {
+      reactHoverTimer = null;
+      if (state.roomBarSection === 'react') {
+        state.roomBarSection = '';
+        applyRoomSection();
+      }
+    }, 250);
+  };
+
   const createReactSection = () => {
     const section = createElement('div');
     section.id = 'owp-react-section';
+    section.addEventListener('mouseenter', openReactSection);
+    section.addEventListener('mouseleave', scheduleCloseReactSection);
     ALLOWED_REACTIONS.forEach((emoji) => {
       const btn = createElement('button', 'owp-reaction-btn', emoji);
       btn.type = 'button';
@@ -113,6 +142,9 @@
       btn.setAttribute('aria-label', emoji);
       btn.onclick = () => {
         sendReaction(emoji);
+        clearReactHoverTimer();
+        state.roomBarSection = '';
+        applyRoomSection();
       };
       section.appendChild(btn);
     });
@@ -218,6 +250,9 @@
     if (open !== 'chat') {
       OWP.emoji?.closePicker?.();
       OWP.emoji?.hideSuggestions?.();
+    }
+    if (open !== 'react') {
+      clearReactHoverTimer();
     }
     if (open === 'sync') updateSyncSection();
     if (open === 'chat' && OWP.chat && OWP.chat.isChatVisible()) {
@@ -405,7 +440,12 @@
     chatBtn.onclick = () => toggleRoomSection('chat');
 
     const reactBtn = createBarButton('owp-btn-react', t('reactions'), 'mood', 'owp-react-section');
-    reactBtn.onclick = () => toggleRoomSection('react');
+    reactBtn.addEventListener('mouseenter', openReactSection);
+    reactBtn.addEventListener('mouseleave', scheduleCloseReactSection);
+    reactBtn.onclick = () => {
+      clearReactHoverTimer();
+      toggleRoomSection('react');
+    };
 
     // Leaving always asks first; compatible hosts can pass the room on or close it.
     const leaveBtn = createBarButton('owp-btn-leave', t('leaveRoom'), 'logout', 'owp-leave-confirm');
