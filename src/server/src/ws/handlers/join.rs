@@ -1374,7 +1374,13 @@ mod tests {
     async fn joining_room_with_disabled_reactions_sends_disabled_reaction_state() {
         let (state, jwt_config, mut guest_rx) = state_with_joinable_room().await;
         // Host disabled reactions in the room
-        state.write().await.rooms.get_mut("room").unwrap().reactions_enabled = false;
+        state
+            .write()
+            .await
+            .rooms
+            .get_mut("room")
+            .unwrap()
+            .reactions_enabled = false;
 
         handle_join_room("guest", &join_message("room"), &state, &jwt_config).await;
 

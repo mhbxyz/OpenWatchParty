@@ -123,18 +123,14 @@ pub(in crate::ws) async fn handle_reaction(
         let mut locked = state.write().await;
         let room_clients = match locked.rooms.get(room_id) {
             None => Err((ErrorCode::RoomNotFound, "Room not found")),
-            Some(room) if !room.clients.iter().any(|id| id == client_id) => {
-                Err((
-                    ErrorCode::NotRoomMember,
-                    "Client is not a member of this room",
-                ))
-            }
-            Some(room) if !room.reactions_enabled => {
-                Err((
-                    ErrorCode::ReactionsDisabled,
-                    "Reactions are disabled in this room",
-                ))
-            }
+            Some(room) if !room.clients.iter().any(|id| id == client_id) => Err((
+                ErrorCode::NotRoomMember,
+                "Client is not a member of this room",
+            )),
+            Some(room) if !room.reactions_enabled => Err((
+                ErrorCode::ReactionsDisabled,
+                "Reactions are disabled in this room",
+            )),
             Some(room) => Ok(room.clients.clone()),
         };
 
@@ -206,7 +202,11 @@ pub(crate) fn send_reactions_enabled_to_client(
             ts: now_ms(),
             server_ts: Some(now_ms()),
         };
-        send_to_senders(std::slice::from_ref(&client.sender), &msg, "join reaction state");
+        send_to_senders(
+            std::slice::from_ref(&client.sender),
+            &msg,
+            "join reaction state",
+        );
     }
 }
 
@@ -240,10 +240,7 @@ mod tests {
         let msg = reaction_message(None, Some(serde_json::json!({ "emoji": "❤️" })));
         handle_reaction("c1", &msg, &state).await;
 
-        assert_error_code(
-            test_helpers::recv_msg(&mut rx).unwrap(),
-            "ROOM_ID_REQUIRED",
-        );
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "ROOM_ID_REQUIRED");
     }
 
     #[tokio::test]
@@ -287,10 +284,7 @@ mod tests {
         let msg = reaction_message(Some("r1"), Some(serde_json::json!({ "emoji": "❤️" })));
         handle_reaction("c1", &msg, &state).await;
 
-        assert_error_code(
-            test_helpers::recv_msg(&mut rx).unwrap(),
-            "NOT_ROOM_MEMBER",
-        );
+        assert_error_code(test_helpers::recv_msg(&mut rx).unwrap(), "NOT_ROOM_MEMBER");
     }
 
     #[tokio::test]
