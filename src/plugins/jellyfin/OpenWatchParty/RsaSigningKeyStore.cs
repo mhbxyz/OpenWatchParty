@@ -64,7 +64,16 @@ internal sealed class RsaSigningKeyStore
                 return false;
             }
             rsa = RSA.Create();
-            rsa.ImportFromPem(stored.PrivateKeyPem);
+            try
+            {
+                rsa.ImportFromPem(stored.PrivateKeyPem);
+            }
+            catch (Exception keyError) when (keyError is ArgumentException or CryptographicException)
+            {
+                rsa.Dispose();
+                rsa = null;
+                throw new InvalidDataException("The active RSA signing key cannot be imported", keyError);
+            }
             issuer = stored.Issuer;
             kid = stored.Kid;
             return true;
@@ -73,7 +82,12 @@ internal sealed class RsaSigningKeyStore
 
     internal bool IsActive
     {
-        get { lock (_lock) return Load()?.Active == true; }
+        get
+        {
+            var active = TryLoadActive(out _, out _, out var rsa);
+            rsa?.Dispose();
+            return active;
+        }
     }
 
     private StoredKey? Load() => !File.Exists(_path)

@@ -185,7 +185,7 @@ public sealed class TokenResponseTests
         return JsonDocument.Parse(JsonSerializer.Serialize(result.Value));
     }
 
-    private static OpenWatchPartyController CreateController()
+    internal static OpenWatchPartyController CreateController()
     {
         var context = new DefaultHttpContext
         {
