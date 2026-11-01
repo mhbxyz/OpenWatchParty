@@ -436,7 +436,7 @@ public class OpenWatchPartyController : ControllerBase
         {
             return RsaSigningKeyStore.ForPlugin()?.IsActive == true;
         }
-        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
+        catch (Exception keyError) when (keyError is System.Text.Json.JsonException or IOException or InvalidDataException or UnauthorizedAccessException)
         {
             return null;
         }

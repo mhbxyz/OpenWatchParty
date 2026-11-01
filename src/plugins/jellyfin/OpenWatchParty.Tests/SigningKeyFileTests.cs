@@ -16,6 +16,9 @@ public sealed class SigningKeyFileTests
     [InlineData("{ not json")]
     [InlineData("")]
     [InlineData("[]")]
+    [InlineData("""{"Version":1,"Issuer":"urn:test","Kid":"test","PrivateKeyPem":"not a PEM","Active":true}""")]
+    [InlineData("""{"Version":1,"Issuer":"urn:test","Kid":"test","PrivateKeyPem":"-----BEGIN PRIVATE KEY-----\nMII","Active":true}""")]
+    [InlineData("""{"Version":1,"Issuer":"urn:test","Kid":"test","PrivateKeyPem":"-----BEGIN PRIVATE KEY-----\nAQID\n-----END PRIVATE KEY-----","Active":true}""")]
     public void UnreadableKeyFileBlocksIssuanceWithAClearError(string content)
     {
         using var host = new TestPlugin();
@@ -36,6 +39,18 @@ public sealed class SigningKeyFileTests
         using var body = JsonDocument.Parse(JsonSerializer.Serialize(result.Value));
         Assert.Equal(UnreadableKey, body.RootElement.GetProperty("error").GetString());
         Assert.True(body.RootElement.GetProperty("configuration_error").GetBoolean());
+    }
+
+    [Fact]
+    public void LoadingAnActiveKeyWithInvalidDerReportsAnUnreadableFile()
+    {
+        using var host = new TestPlugin();
+        Directory.CreateDirectory(Path.GetDirectoryName(host.SigningKeyPath)!);
+        File.WriteAllText(host.SigningKeyPath,
+            """{"Version":1,"Issuer":"urn:test","Kid":"test","PrivateKeyPem":"-----BEGIN PRIVATE KEY-----\nAQID\n-----END PRIVATE KEY-----","Active":true}""");
+        var store = new RsaSigningKeyStore(host.SigningKeyPath);
+
+        Assert.Throws<InvalidDataException>(() => store.TryLoadActive(out _, out _, out _));
     }
 
     [Fact]
