@@ -72,25 +72,63 @@ test('the host searches the library and adds a movie after the room item', async
 });
 
 test('a guest suggests a series episode and the host accepts it', async () => {
-  await search(guest, 'OWP Test Show');
-  const result = guest.locator('.owp-queue-result', {
-    hasText: 'OWP Test Show',
-    has: guest.locator('.owp-queue-sub', { hasText: /^Series/ })
-  }).first();
-  await helpers.clickRoomBar(guest, result.getByRole('button', { name: 'Suggest' }));
-  await helpers.clickRoomBar(guest, guest.getByRole('button', { name: 'Close search' }));
-
-  await expect(host.locator('.owp-toast-system', { hasText: /suggested “/ })).toBeVisible({ timeout: 15_000 });
-  await expect(host.locator('#owp-btn-queue .owp-queue-badge')).toHaveText('1');
-  await openQueue(host);
-  const suggestion = host.locator('.owp-queue-suggestion', { hasText: 'OWP Test Show' });
-  await helpers.clickRoomBar(host, suggestion.getByRole('button', { name: 'Add to the queue' }));
-
+  const id = await helpers.findMovieId(host, 'Sprite Fright');
+  // CI has movies only. As in queue-fill-retry.spec.js, give a real playable
+  // item episode metadata at the library API boundary, restoring it below.
   for (const page of [host, guest]) {
-    await openQueue(page);
-    await expect(queueTitles(page)).toHaveCount(2, { timeout: 15_000 });
-    await expect(queueTitles(page).nth(1)).toContainText('OWP Test Show');
-    await expect(page.locator('.owp-queue-suggestion')).toHaveCount(0);
+    await page.evaluate(async itemId => {
+      const api = window.ApiClient;
+      const item = await api.getItem(api.getCurrentUserId(), itemId);
+      const name = 'OWP Queue Series';
+      const seriesId = 'fedcbafedcbafedcbafedcbafedcba12';
+      const episode = { ...item, Type: 'Episode', SeriesId: seriesId, SeriesName: name,
+        ParentIndexNumber: 1, IndexNumber: 1, LocationType: 'FileSystem' };
+      const original = window.__queueSeriesFixture = { getItem: api.getItem, getJSON: api.getJSON };
+      api.getItem = function(userId, selectedId, ...args) {
+        if (selectedId === itemId) return Promise.resolve(episode);
+        return original.getItem.call(this, userId, selectedId, ...args);
+      };
+      api.getJSON = function(url, ...args) {
+        const request = new URL(String(url), window.location.href);
+        if (request.searchParams.get('searchTerm') === name) {
+          const types = (request.searchParams.get('IncludeItemTypes') || '').split(',');
+          return Promise.resolve({ Items: types.includes('Series') ? [{ Id: seriesId, Name: name, Type: 'Series' }] : [] });
+        }
+        if (request.pathname.endsWith('/Shows/NextUp') && request.searchParams.get('seriesId') === seriesId) {
+          return Promise.resolve({ Items: [episode] });
+        }
+        return original.getJSON.call(this, url, ...args);
+      };
+    }, id);
+  }
+  try {
+    await search(guest, 'OWP Queue Series');
+    const result = guest.locator('.owp-queue-result', {
+      hasText: 'OWP Queue Series',
+      has: guest.locator('.owp-queue-sub', { hasText: /^Series/ })
+    }).first();
+    await helpers.clickRoomBar(guest, result.getByRole('button', { name: 'Suggest' }));
+    await helpers.clickRoomBar(guest, guest.getByRole('button', { name: 'Close search' }));
+
+    await expect(host.locator('.owp-toast-system', { hasText: /suggested “/ })).toBeVisible({ timeout: 15_000 });
+    await expect(host.locator('#owp-btn-queue .owp-queue-badge')).toHaveText('1');
+    await openQueue(host);
+    const suggestion = host.locator('.owp-queue-suggestion', { hasText: 'OWP Queue Series' });
+    await helpers.clickRoomBar(host, suggestion.getByRole('button', { name: 'Add to the queue' }));
+
+    for (const page of [host, guest]) {
+      await openQueue(page);
+      await expect(queueTitles(page)).toHaveCount(2, { timeout: 15_000 });
+      await expect(queueTitles(page).nth(1)).toContainText('OWP Queue Series');
+      await expect(page.locator('.owp-queue-suggestion')).toHaveCount(0);
+    }
+  } finally {
+    for (const page of [host, guest]) await page.evaluate(() => {
+      const original = window.__queueSeriesFixture;
+      window.ApiClient.getItem = original.getItem;
+      window.ApiClient.getJSON = original.getJSON;
+      delete window.__queueSeriesFixture;
+    });
   }
 });
 
@@ -146,12 +184,12 @@ test('a guest withdraws one suggestion and the host dismisses another', async ()
     .getByRole('button', { name: 'Withdraw my suggestion' }));
   await expect(guest.locator('.owp-queue-suggestion')).toHaveCount(0);
 
-  await search(guest, 'OWP Ready Lab');
-  await helpers.clickRoomBar(guest, guest.locator('.owp-queue-result', { hasText: 'OWP Ready Lab' }).first()
+  await search(guest, 'Sprite');
+  await helpers.clickRoomBar(guest, guest.locator('.owp-queue-result', { hasText: 'Sprite Fright' }).first()
     .getByRole('button', { name: 'Suggest' }));
   await helpers.clickRoomBar(guest, guest.getByRole('button', { name: 'Close search' }));
   await openQueue(host);
-  const suggestion = host.locator('.owp-queue-suggestion', { hasText: 'OWP Ready Lab' });
+  const suggestion = host.locator('.owp-queue-suggestion', { hasText: 'Sprite Fright' });
   await helpers.clickRoomBar(host, suggestion.getByRole('button', { name: 'Dismiss' }));
   await expect(host.locator('.owp-queue-suggestion')).toHaveCount(0);
   await expect(guest.locator('.owp-queue-suggestion')).toHaveCount(0);
