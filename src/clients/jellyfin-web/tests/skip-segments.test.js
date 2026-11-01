@@ -292,6 +292,35 @@ describe('skippable segments of the room item', () => {
     assert.deepEqual(toasts, ['The host skipped the intro']);
   });
 
+  it('does not reject an automatic skip after seek permission is granted', async () => {
+    OWP.segments.refresh();
+    await answer('item-a');
+    OWP.state.roomPermissions = { seek: true };
+    OWP.state.syncCooldownUntil = localNow + 8000;
+    video.currentTime = 30;
+    video.dispatch('seeked');
+    assert.deepEqual(toasts, []);
+    assert.equal(OWP.state.syncCooldownUntil, localNow + 8000);
+    delete OWP.state.roomPermissions;
+  });
+
+  it('names a guest as the initiator of a permitted segment skip', async () => {
+    OWP.segments.refresh();
+    await answer('item-a');
+    h.handlePlayerEvent(seek(30, 'other-guest'), video);
+    assert.deepEqual(toasts, ['A guest skipped the intro']);
+  });
+
+  it('announces a host skip once when buffering reports its target before seeked', async () => {
+    OWP.segments.refresh();
+    await answer('item-a');
+    const buffering = seek(30);
+    buffering.payload.action = 'buffering';
+    h.handlePlayerEvent(buffering, video);
+    h.handlePlayerEvent(seek(30), video);
+    assert.deepEqual(toasts, ['The host skipped the intro']);
+  });
+
   it('brings a guest whose Jellyfin skipped the intro by itself back to the room at once', async () => {
     OWP.segments.refresh();
     await answer('item-a');

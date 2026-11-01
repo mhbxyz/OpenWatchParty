@@ -44,6 +44,14 @@
   // The canonical event retains the initiating member, even after readiness.
   const fromGuest = msg => Boolean(msg.client) && msg.client !== state.roomHostId;
 
+  const notifySegmentSkip = (msg, before, position) => {
+    if (!OWP.segments || !ui.showToast) return;
+    OWP.segments.whenKnown(() => {
+      const skipped = OWP.segments.skipped(before, position);
+      if (skipped) ui.showToast(t(fromGuest(msg) ? SKIP_TOASTS[skipped].replace('host', 'guest') : SKIP_TOASTS[skipped]));
+    });
+  };
+
   const applyPlayerEvent = (msg, fallbackVideo) => {
     const video = resolveVideo(fallbackVideo);
     if (!video || !msg.payload) return false;
@@ -92,15 +100,13 @@
           state.syncStatus = 'synced';
           if (applyToVideo) video.pause();
         }
-        if (OWP.segments && ui.showToast) {
-          OWP.segments.whenKnown(() => {
-            const skipped = OWP.segments.skipped(before, position);
-            if (skipped) ui.showToast(t(SKIP_TOASTS[skipped]));
-          });
-        }
+        notifySegmentSkip(msg, before, position);
         break;
       }
       case 'buffering':
+        // Buffering may report the skip target before seeked arrives.
+        notifySegmentSkip(msg, state.lastSyncPlayState === 'playing'
+          ? OWP.playback.expectedPosition?.() : state.lastSyncPosition, position);
         state.roomWaiting = true;
         applyPosition(video, position, false, null, applyToVideo);
         state.lastSyncPlayState = 'paused';
@@ -124,6 +130,7 @@
       state.reloadGuestCommand = { msg, roomId: state.roomId, attempt: state.playbackActionAttempt };
       return true;
     }
+    const before = video.currentTime;
     const changed = playing === video.paused;
     // A start the room waited for plays the held video at this same time
     // (app/start.js), maybe first: this play still resumed the room.
@@ -143,6 +150,7 @@
     state.wantsToPlay = playing;
     if (changed && playing) OWP.playback.safePlay(video, 'guest play command');
     else if (changed) video.pause();
+    if (msg.payload.action === 'seek') notifySegmentSkip(msg, before, position);
     // Scheduled play retains its initiator; only guest actions get this toast.
     if ((changed || resumedByStart) && ui.showToast && fromGuest(msg)) ui.showToast(t(playing ? 'guestResumed' : 'guestPaused'));
     return true;

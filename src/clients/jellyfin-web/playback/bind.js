@@ -153,7 +153,7 @@
     const position = video.currentTime;
     // Maybe once Jellyfin answers: the room is looked at then.
     OWP.segments.whenKnown(() => {
-      if (!state.inRoom || state.isHost || state.lastSyncPlayState !== 'playing') return;
+      if (!state.inRoom || state.isHost || state.roomPermissions?.seek || state.lastSyncPlayState !== 'playing') return;
       // A stream that reloaded meanwhile is another video.
       if (state.currentVideoElement !== video) return;
       const roomPosition = playback.expectedPosition();
