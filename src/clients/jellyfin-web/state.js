@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'queue_suggestions', 'start_when_ready', 'chat_history'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -176,6 +176,8 @@
     queueCountdownUntil: 0, // Server time the room moves to the next item, 0 without a countdown
     queueLastAdded: null,   // The item the room's queue_add appended last, where filling goes on
     queueReceived: false,   // Whether queue_state came since entering the room or reconnecting
+    queueSuggestions: [],   // Suggestions visible to this member, from queue_details
+    queueUnavailable: [],   // Per-item availability visible to this member, from queue_details
   });
 
   // A play the room holds until its members are ready, from start_state when

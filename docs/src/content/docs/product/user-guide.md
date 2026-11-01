@@ -169,7 +169,7 @@ In a room the panel becomes a single bar at the top right (below the header when
 - **Participants** (people icon and count) - Opens the list of who is watching, with a **Host** badge on the host and each person's status under their name (older session servers show only the number of people)
 - **Chat** (chat icon) - Opens the chat; a red badge counts unread messages
 - **Sync adjustment** (circular arrows, guests only, when the administrator enables it) - Shows how far you are from the host and lets you nudge your video toward them; see [Sync adjustment](#sync-adjustment)
-- **Queue** (list icon, while the room has a queue) - Opens the room's queue; see [Watching a series](#watching-a-series)
+- **Queue** (list icon) - Opens the room's queue and library search; see [Using the room queue](#using-the-room-queue)
 - **Invite** (share icon, host only) - Copies a short-lived invite link that joins people to this room automatically
 - **Leave** (exit icon) - Guests confirm leaving normally. On a compatible server, a host with other participants can choose **Leave** to pass the room to the named next host or **Close for everyone** to end it. A host who is alone, or connected to an older server, sees the existing **Close room** confirmation.
 - **Close (X)** - Only hides the bar: you stay in the room
@@ -192,12 +192,18 @@ The participants list shows how each person is doing, with a colored dot:
 
 A status changes after it has held for about a second. People on an older version of OpenWatchParty show no status.
 
-## Watching a series
+## Using the room queue
 
-While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. The room queue can contain up to 20 items, including the current episode. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.
+The room queue can contain any movie, series episode or video in the host's Jellyfin library, up to 20 items including the current one. Select **Add to the queue** and search by title; choosing a series adds the next episode for your Jellyfin user, or its first episode when you have no next one. If the current room item is not in the queue yet, it is added first.
+
+Guests on a compatible client can use **Suggest something for the queue**. A suggestion waits below the queue with the name of the person who made it. The guest can withdraw their own suggestion; the host sees a badge and notice, then can add or dismiss it. A room keeps up to 10 suggestions, and the host always decides what enters the queue.
+
+When an item is not present in one or more current members' Jellyfin libraries, a **Not available for…** warning appears under that queued item or suggestion. The warning names you first when it affects you, then the other affected members. It does not remove the item; it lets the host choose something everyone can open.
+
+While the room plays an episode, the host's player also fills the queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. Episodes missing from the host's library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host.
 
 - **Queue** (list icon in the bar) opens the list: watched episodes dimmed with a check, the one playing highlighted as **Watching**, and the upcoming ones numbered.
-- The host can go to the **Previous** or **Next** episode, and play, move up, move down or remove an upcoming one. Guests see the list only.
+- The host can go to the **Previous** or **Next** item, and play, move up, move down or remove an upcoming one. Guests see the same queue and can make suggestions.
 - **Up next:** when the host's video reaches the credits (an *Outro* segment, as Intro Skipper marks them), or 15 seconds before the end of an episode without them, everyone sees the next title and a 10-second countdown: below the bar, or on its own over the video while the panel is closed. The host can **Cancel** it or go to the **Next** episode at once. Pausing the room or seeking back before the credits cancels it; it starts again if the room plays on in the credits, unless the host cancelled it on that episode.
 - When the room moves to another episode, everyone loads it and starts from the beginning together, as when joining a room.
 

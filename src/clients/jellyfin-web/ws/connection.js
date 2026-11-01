@@ -146,6 +146,7 @@
       state.participants = [];
       Object.assign(state, OWP.stateFactories.createQueueState(), OWP.stateFactories.createStartState());
       state.roomBarSection = '';
+      if (OWP.queue?.resetRoom) OWP.queue.resetRoom();
     }
     ui.render();
     if (state.autoReconnect && !state.isConnecting) {
@@ -186,6 +187,7 @@
       case 'pong': h.handlePong(msg); break;
       case 'chat_message': if (OWP.chat && msg.payload) OWP.chat.receive(msg); break;
       case 'queue_state': h.handleQueueState(msg); break;
+      case 'queue_details': h.handleQueueDetails(msg); break;
       case 'start_state': h.handleStartState(msg); break;
       case 'chat_history': h.handleChatHistory(msg); break;
       case 'error': h.handleError(msg); break;

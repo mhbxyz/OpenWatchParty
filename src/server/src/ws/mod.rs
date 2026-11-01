@@ -7,6 +7,7 @@ mod validation;
 
 pub use connection::client_connection;
 pub(crate) use connection::SessionClock;
+pub(crate) use handlers::send_queue_details;
 
 #[cfg(test)]
 mod concurrency_tests {

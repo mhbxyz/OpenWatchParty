@@ -213,6 +213,22 @@
     .owp-queue-actions .owp-bar-btn { height: ${px(22)}; padding: 0 ${px(4)}; }
     .owp-queue-actions .owp-bar-btn[aria-disabled="true"] { opacity: 0.35; cursor: default; }
     .owp-queue-note { margin-top: ${px(6)}; font-size: ${px(11)}; color: var(--owp-faint); }
+    .owp-queue-badge { padding: 0 ${px(5)}; border-radius: ${px(8)}; background: var(--owp-accent-bg); color: var(--owp-accent); font-size: ${px(11)}; line-height: 1.45; }
+    .owp-queue-sub { display: block; font-size: ${px(11)}; color: var(--owp-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .owp-queue-warn { color: var(--owp-warn); }
+    .owp-queue-warn .owp-icon { width: ${px(11)}; height: ${px(11)}; vertical-align: ${px(-1)}; margin-right: ${px(3)}; }
+    .owp-queue-suggestion .owp-queue-warn { display: inline; }
+    .owp-queue-two { flex: 1; min-width: 0; }
+    .owp-queue-two .owp-queue-name { display: block; }
+    .owp-queue-suggest-title { margin: ${px(8)} 0 ${px(2)}; padding-top: ${px(6)}; border-top: 1px solid rgba(var(--owp-ink),0.1); font-weight: 500; }
+    .owp-queue-search { display: flex; align-items: center; gap: ${px(6)}; margin-bottom: ${px(4)}; }
+    .owp-queue-search-box { flex: 1; min-width: 0; display: flex; align-items: center; gap: ${px(6)}; padding: ${px(4)} ${px(8)}; border-radius: ${px(6)}; border: 1px solid rgba(var(--owp-ink),0.14); color: var(--owp-muted); }
+    .owp-queue-search-box:focus-within { border-color: var(--owp-accent); }
+    .owp-queue-search-box input { flex: 1; min-width: 0; background: transparent; border: none; outline: none; color: var(--owp-text); font-family: inherit; font-size: ${px(12)}; padding: 0; }
+    /* The section has its own close button; the browser's clear button would be a second x */
+    .owp-queue-search-box input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+    .owp-queue-result .owp-pill-btn { flex-shrink: 0; }
+    .owp-queue-state { flex-shrink: 0; font-size: ${px(11)}; color: var(--owp-faint); padding: 0 ${px(4)}; }
     /* "Up next": under the bar, or on its own where the bar would be */
     .owp-queue-next {
       position: relative; overflow: hidden; display: flex; flex-wrap: wrap; align-items: center; gap: ${px(6)} ${px(8)};

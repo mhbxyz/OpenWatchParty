@@ -6,6 +6,7 @@
   const t = OWP.i18n.t;
 
   const UPCOMING = 5;                // Episodes the host keeps queued after the room's item
+  const SEARCH_RESULTS = 8;          // Library search results shown in the queue section
   const TICKS_PER_SECOND = 10000000; // Jellyfin times are in ticks of 100 ns
 
   // The server keeps the queue and runs the countdown; the host's client fills
@@ -31,6 +32,232 @@
   const episodeTitle = episode => (Number.isInteger(episode.ParentIndexNumber) && Number.isInteger(episode.IndexNumber)
     ? t('queueEpisodeTitle', { season: episode.ParentIndexNumber, episode: episode.IndexNumber, name: episode.Name || '' })
     : episode.Name || episode.Id);
+  // An episode's season and number alone, as a series result says which one it adds.
+  const episodeCode = episode => (Number.isInteger(episode.ParentIndexNumber) && Number.isInteger(episode.IndexNumber)
+    ? t('queueEpisodeCode', { season: episode.ParentIndexNumber, episode: episode.IndexNumber })
+    : episode.Name || episode.Id);
+  const cutTitle = value => Array.from(String(value || '')).slice(0, 100).join('');
+  const itemTitle = item => cutTitle(item.Type === 'Episode'
+    ? t('queueSeriesEpisodeTitle', { series: item.SeriesName || '', episode: episodeTitle(item) })
+    : item.Name || item.Id);
+  const withSeries = item => state.serverFeatures.includes('start_when_ready')
+    && item.Type === 'Episode' && /^[0-9a-f]{32}$/i.test(item.SeriesId || '');
+  const queueItem = item => ({
+    id: item.Id,
+    title: itemTitle(item),
+    ...(withSeries(item) ? { series: item.SeriesId } : {})
+  });
+
+  let searchTimer = null;
+  let searchRequest = 0;
+  let roomGeneration = 0;
+
+  const resolveSeries = async (series, userId) => {
+    let result = await window.ApiClient.getJSON(window.ApiClient.getUrl('Shows/NextUp', {
+      seriesId: series.Id, userId, limit: 1, disableFirstEpisode: false
+    }));
+    let episode = (result?.Items || []).find(item => item.LocationType !== 'Virtual');
+    if (!episode) {
+      result = await window.ApiClient.getJSON(window.ApiClient.getUrl(`Shows/${series.Id}/Episodes`, {
+        userId, limit: 1
+      }));
+      episode = (result?.Items || []).find(item => item.LocationType !== 'Virtual');
+    }
+    return episode || null;
+  };
+
+  const searchResult = async (item, userId) => {
+    let source = item;
+    let kind;
+    let detail = '';
+    if (item.Type === 'Series') {
+      source = await resolveSeries(item, userId);
+      if (!source) return null;
+      kind = t('queueKindSeries');
+      detail = t('queueContinuesWith', { episode: episodeCode(source) });
+    } else if (item.Type === 'Episode') {
+      kind = t('queueKindEpisode');
+      detail = item.SeriesName || '';
+    } else if (item.Type === 'Movie') {
+      kind = t('queueKindMovie');
+      detail = Number.isInteger(item.ProductionYear) ? String(item.ProductionYear) : '';
+    } else {
+      kind = t('queueKindVideo');
+      detail = Number.isInteger(item.ProductionYear) ? String(item.ProductionYear) : '';
+    }
+    const entry = queueItem(source);
+    // A series is shown by its name; the queue gets the episode's title.
+    return { item: entry, label: item.Type === 'Series' && item.Name ? item.Name : entry.title, kind, detail };
+  };
+
+  // null means that the debounced request is in flight; [] with searched
+  // false clears results for a query shorter than two characters.
+  const search = (term, receive) => {
+    const request = ++searchRequest;
+    if (searchTimer) OWP.timers.clear(searchTimer);
+    searchTimer = null;
+    const query = String(term || '').trim();
+    if (query.length < 2) {
+      receive([], false);
+      return;
+    }
+    receive(null, true);
+    searchTimer = OWP.timers.setTimeout(async () => {
+      searchTimer = null;
+      try {
+        const userId = window.ApiClient.getCurrentUserId();
+        // Episodes are asked for apart and listed last: a show's name matches
+        // all its episodes too, which would push the show itself out.
+        const find = types => window.ApiClient.getJSON(window.ApiClient.getUrl(`Users/${userId}/Items`, {
+          searchTerm: query,
+          IncludeItemTypes: types,
+          Recursive: true,
+          Limit: SEARCH_RESULTS,
+          Fields: 'ProductionYear'
+        }));
+        const [titles, episodes] = await Promise.all([find('Movie,Series,Video,MusicVideo'), find('Episode')]);
+        const items = [...(titles?.Items || []), ...(episodes?.Items || [])].slice(0, SEARCH_RESULTS);
+        // A series whose next episode can't be looked up is left out, not
+        // the whole search.
+        const resolved = await Promise.all(items.map(item => searchResult(item, userId).catch((err) => {
+          report('search-series', err);
+          return null;
+        })));
+        if (request === searchRequest) receive(resolved.filter(Boolean), true);
+      } catch (err) {
+        if (request === searchRequest) receive([], true);
+        report('search', err);
+      }
+    }, 300, 'room');
+  };
+
+  const add = async (item) => {
+    if (!isQueueHost()) return;
+    const roomId = state.roomId;
+    const clientId = state.clientId;
+    const mediaId = state.roomMediaId;
+    const userId = window.ApiClient.getCurrentUserId();
+    const generation = roomGeneration;
+    const isCurrentContext = () => generation === roomGeneration && isQueueHost()
+      && state.roomId === roomId && state.clientId === clientId
+      && state.roomMediaId === mediaId && window.ApiClient.getCurrentUserId() === userId;
+    let selected;
+    try {
+      selected = queueItem(await window.ApiClient.getItem(userId, item.id));
+    } catch (err) {
+      report('add-selected', err);
+      return;
+    }
+    if (!isCurrentContext()) return;
+    const items = [];
+    if (state.roomMediaId && state.roomMediaId !== selected.id
+        && !state.queueItems.some(entry => entry.id === state.roomMediaId)) {
+      try {
+        const current = await window.ApiClient.getItem(userId, mediaId);
+        items.push(queueItem(current));
+      } catch (err) {
+        report('add-current', err);
+      }
+    }
+    items.push(selected);
+    // A library response must not add an earlier room's items to a new queue.
+    if (!isCurrentContext()) return;
+    send('queue_add', { items });
+  };
+
+  const suggest = item => send('queue_suggest', item);
+  const dismiss = id => send('queue_dismiss', { id });
+
+  let availabilityRoom = '';
+  let availabilityClient = '';
+  let availabilityUser = '';
+  let availability = new Map();
+  let availabilityPending = new Set();
+  let availabilitySent = null;
+
+  const availabilityIds = () => [...new Set([
+    ...state.queueItems.map(item => item.id),
+    ...state.queueSuggestions.map(item => item.id)
+  ])];
+  const sendAvailability = () => {
+    if (!state.inRoom || !state.serverFeatures.includes('queue_suggestions')) return;
+    const active = new Set(availabilityIds());
+    const missing = [...availability]
+      .filter(([id, available]) => active.has(id) && available === false)
+      .map(([id]) => id)
+      .sort();
+    const key = JSON.stringify(missing);
+    if (availabilitySent === null && missing.length === 0) return;
+    if (availabilitySent === key) return;
+    availabilitySent = key;
+    send('queue_availability', { missing });
+  };
+  const checkAvailability = () => {
+    if (!state.inRoom || !state.serverFeatures.includes('queue_suggestions') || !window.ApiClient) return;
+    const userId = window.ApiClient.getCurrentUserId();
+    if (availabilityRoom !== state.roomId || availabilityClient !== state.clientId || availabilityUser !== userId) {
+      availabilityRoom = state.roomId;
+      availabilityClient = state.clientId;
+      availabilityUser = userId;
+      availability = new Map();
+      availabilityPending = new Set();
+      availabilitySent = null;
+    }
+    const roomId = state.roomId;
+    const clientId = state.clientId;
+    const cache = availability;
+    const isCurrent = () => cache === availability && state.inRoom && state.roomId === roomId
+      && state.clientId === clientId && window.ApiClient.getCurrentUserId() === userId;
+    availabilityIds().forEach((id) => {
+      if (availability.has(id) || availabilityPending.has(id)) return;
+      availabilityPending.add(id);
+      window.ApiClient.getItem(userId, id).then(() => {
+        if (!isCurrent()) return;
+        availabilityPending.delete(id);
+        availability.set(id, true);
+        sendAvailability();
+      }).catch((err) => {
+        if (!isCurrent()) return;
+        availabilityPending.delete(id);
+        if (err?.status === 404 || err?.statusCode === 404) availability.set(id, false);
+        sendAvailability();
+      });
+    });
+    sendAvailability();
+  };
+
+  // The host hears about suggestions that arrive while it is host. Those the
+  // first queue_details in a room brings, and those seen as a guest, are only
+  // recorded, so becoming host or joining doesn't replay them.
+  let noticeRoom = '';
+  let noticedSuggestions = new Set();
+  const onQueueDetails = () => {
+    if (noticeRoom === state.roomId && state.isHost) {
+      state.queueSuggestions.forEach((suggestion) => {
+        if (!noticedSuggestions.has(suggestion.id) && !suggestion.mine) {
+          OWP.ui.showToast?.(t('queueSuggested', { name: suggestion.by, title: suggestion.title }));
+        }
+      });
+    }
+    noticeRoom = state.roomId;
+    noticedSuggestions = new Set(state.queueSuggestions.map(item => item.id));
+    checkAvailability();
+  };
+
+  const resetRoom = () => {
+    roomGeneration++;
+    if (searchTimer) OWP.timers.clear(searchTimer);
+    searchTimer = null;
+    searchRequest++;
+    availabilityRoom = '';
+    availabilityClient = '';
+    availabilityUser = '';
+    availability = new Map();
+    availabilityPending = new Set();
+    availabilitySent = null;
+    noticeRoom = '';
+    noticedSuggestions = new Set();
+  };
 
   // The host fills an empty queue, then tops it up only when the room moves on
   // from an item this client saw as host. It waits for the room's queue_state,
@@ -159,6 +386,7 @@
   queue.onQueueState = () => {
     countdownRequest = '';
     queue.refresh();
+    checkAvailability();
     const video = utils.getVideo?.();
     if (video) queue.onVideoTime(video);
   };
@@ -204,6 +432,14 @@
   Object.assign(queue, {
     nextItem,
     previousItem,
+    search,
+    add,
+    suggest,
+    dismiss,
+    accept: add,
+    withdraw: dismiss,
+    onQueueDetails,
+    resetRoom,
     advance: id => send('queue_advance', { id }),
     remove: id => send('queue_remove', { id }),
     move: (id, to) => send('queue_move', { id, to }),

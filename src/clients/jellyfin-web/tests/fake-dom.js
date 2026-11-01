@@ -104,6 +104,13 @@ class FakeNode {
     if (index !== -1) this.parentNode.childNodes.splice(index, 1);
     this.parentNode = null;
   }
+
+  replaceWith(node) {
+    const parent = this.parentNode;
+    if (!parent) return;
+    parent.insertBefore(node, this);
+    this.remove();
+  }
 }
 
 class FakeText extends FakeNode {
@@ -234,6 +241,14 @@ class FakeElement extends FakeNode {
 
   click() {
     this.dispatchEvent({ type: 'click', stopPropagation() {}, preventDefault() {} });
+  }
+
+  focus() {
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
+
+  blur() {
+    if (globalThis.document?.activeElement === this) globalThis.document.activeElement = null;
   }
 
   querySelectorAll(selector) {
