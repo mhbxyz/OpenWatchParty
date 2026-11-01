@@ -468,19 +468,19 @@
       background: transparent; cursor: pointer; font-size: ${px(18)}; line-height: 1;
       transition: transform 0.12s ease, background 0.15s;
     }
-    .owp-reaction-btn:hover { background: rgba(255, 255, 255, 0.12); transform: scale(1.2); }
+    .owp-reaction-btn:hover { background: rgba(var(--owp-ink), 0.12); transform: scale(1.2); }
     .owp-reaction-btn:active { transform: scale(0.95); }
     .owp-reaction-btn.owp-disabled { opacity: 0.35; pointer-events: none; transform: none; }
-    .owp-react-divider { border-left: 1px solid rgba(255, 255, 255, 0.18); height: ${px(20)}; margin: 0 ${px(4)}; flex-shrink: 0; }
+    .owp-react-divider { border-left: 1px solid var(--owp-line); height: ${px(20)}; margin: 0 ${px(4)}; flex-shrink: 0; }
     .owp-reaction-control-btn {
       display: inline-flex; align-items: center; justify-content: center;
       width: ${px(28)}; height: ${px(28)}; border: none; border-radius: ${px(6)};
-      background: transparent; cursor: pointer; color: #ecebe6; padding: 0; flex-shrink: 0;
+      background: transparent; cursor: pointer; color: var(--owp-text); padding: 0; flex-shrink: 0;
       transition: background 0.15s, color 0.15s;
     }
-    .owp-reaction-control-btn:hover { background: rgba(255, 255, 255, 0.15); }
-    .owp-reaction-control-btn.active { color: #f59e0b; }
-    .owp-reaction-control-btn.muted { color: #888888; }
+    .owp-reaction-control-btn:hover { background: rgba(var(--owp-ink), 0.15); }
+    .owp-reaction-control-btn.active { color: var(--owp-warn); }
+    .owp-reaction-control-btn.muted { color: var(--owp-muted); }
     .owp-bar-btn.owp-reactions-disabled { opacity: 0.5; }
     .owp-bar-btn.owp-reactions-muted {
       position: relative;
@@ -493,7 +493,7 @@
       left: 50%;
       width: ${px(16)};
       height: ${px(2)};
-      background: #f09595;
+      background: var(--owp-bad);
       transform: translate(-50%, -50%) rotate(-45deg);
       border-radius: ${px(1)};
       pointer-events: none;
@@ -528,8 +528,8 @@
     .owp-reaction-username {
       margin-top: ${px(3)};
       font-size: ${px(11)}; font-weight: 500; line-height: 1.2;
-      color: #e6f1fb;
-      background: rgba(20, 20, 20, 0.7);
+      color: var(--owp-text-strong);
+      background: rgba(var(--owp-surface-deep), 0.75);
       padding: ${px(1)} ${px(6)};
       border-radius: ${px(8)};
       max-width: ${px(100)};
