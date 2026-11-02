@@ -11,9 +11,12 @@ OWP.ui = {
 OWP.utils.getPlaybackManager = () => null;
 OWP.utils.getVideo = () => currentVideo;
 OWP.utils.log = () => {};
+OWP.utils.startSyncing = () => {};
+OWP.utils.isVideoReady = () => true;
 OWP.actions = { send: () => {} };
 require('../playback/play.js');
 require('../playback/bind.js');
+require('../ws/handlers/sync.js');
 
 describe('safePlay', () => {
   beforeEach(() => {
@@ -29,6 +32,11 @@ describe('safePlay', () => {
     OWP.state.bound = false;
     OWP.state.currentVideoElement = null;
     OWP.state.videoListeners = null;
+    OWP.state.guestPaused = false;
+    OWP.state.ownCommandUntil = 0;
+    OWP.state.heardRoomState = null;
+    OWP.state.isBuffering = false;
+    OWP.state.syncCooldownUntil = 0;
     currentVideo = null;
   });
 
@@ -67,6 +75,73 @@ describe('safePlay', () => {
     assert.equal(await OWP.playback.safePlay(null), false);
   });
 
+  it('tracks room updates without retrying playback after an autoplay rejection', async () => {
+    const error = new Error('user gesture required');
+    error.name = 'NotAllowedError';
+    let playCalls = 0;
+    const video = {
+      paused: true,
+      currentTime: 5,
+      playbackRate: 1,
+      play: () => { playCalls++; return Promise.reject(error); }
+    };
+    const update = (position, serverTs, playState = 'playing') => {
+      OWP._wsHandlers.handleStateUpdate({
+        room: 'room-a', server_ts: serverTs,
+        payload: { position, play_state: playState }
+      }, video);
+    };
+
+    update(30, 1000);
+    await Promise.resolve();
+    assert.equal(OWP.state.playbackBlocked, true);
+
+    update(31, 2000);
+    await Promise.resolve();
+    update(0, 3000, 'paused');
+    await Promise.resolve();
+
+    assert.equal(playCalls, 1);
+    assert.equal(OWP.state.lastSyncPosition, 0);
+    assert.equal(OWP.state.lastSyncServerTs, 3000);
+    assert.equal(OWP.state.lastSyncPlayState, 'paused');
+    assert.equal(OWP.state.syncStatus, 'blocked');
+    assert.equal(toasts.length, 1);
+  });
+
+  it('tracks a playing room at its reported position while waiting for a user play', () => {
+    OWP.state.playbackBlocked = true;
+    OWP.state.syncStatus = 'blocked';
+    const video = {
+      paused: true, currentTime: 5, playbackRate: 1,
+      play: () => Promise.resolve()
+    };
+
+    OWP._wsHandlers.handleStateUpdate({
+      room: 'room-a', server_ts: 4000,
+      payload: { position: 32, play_state: 'playing' }
+    }, video);
+
+    assert.equal(OWP.state.lastSyncPosition, 32);
+    assert.equal(OWP.state.lastSyncServerTs, 4000);
+    assert.equal(OWP.state.syncStatus, 'blocked');
+  });
+
+  it('still applies a room pause if the video is playing with a stale blocked flag', () => {
+    OWP.state.playbackBlocked = true;
+    const video = {
+      paused: false, currentTime: 5,
+      pause() { this.paused = true; }
+    };
+
+    OWP._wsHandlers.handleStateUpdate({
+      room: 'room-a', server_ts: 5000,
+      payload: { position: 5, play_state: 'paused' }
+    }, video);
+
+    assert.equal(video.paused, true);
+  });
+
   it('ignores a rejection invalidated by a newer action in the same room', async () => {
     let rejectPlay;
     const video = {
@@ -82,7 +157,7 @@ describe('safePlay', () => {
     assert.equal(toasts.length, 0);
   });
 
-  it('clears blocked state from the real video play event', () => {
+  it('clears blocked state on a user play and allows later room playback recovery', async () => {
     const listeners = new Map();
     currentVideo = {
       currentTime: 0,
@@ -100,6 +175,21 @@ describe('safePlay', () => {
     assert.equal(OWP.state.playbackBlocked, false);
     assert.equal(OWP.state.playbackFailureNotified, false);
     assert.equal(OWP.state.syncStatus, 'syncing');
+    let playCalls = 0;
+    currentVideo.paused = true;
+    currentVideo.play = () => {
+      playCalls++;
+      currentVideo.paused = false;
+      return Promise.resolve();
+    };
+    OWP._wsHandlers.handleStateUpdate({
+      room: 'room-a', server_ts: 6000,
+      payload: { position: 6, play_state: 'playing' }
+    }, currentVideo);
+    await Promise.resolve();
+    assert.equal(playCalls, 1);
+    assert.equal(currentVideo.paused, false);
+    assert.equal(OWP.state.playbackBlocked, false);
     OWP.playback.cleanupVideoListeners();
   });
 });

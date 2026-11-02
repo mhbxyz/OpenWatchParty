@@ -220,7 +220,8 @@
       state.lastSyncPlayState = msg.payload.play_state || state.lastSyncPlayState;
       if (msg.payload.play_state === 'playing') state.roomWaiting = false;
     }
-    if (state.guestPaused) {
+    // A rejected play needs user action, not another attempt on every update.
+    if (state.guestPaused || (state.playbackBlocked && video.paused)) {
       state.lastSyncServerTs = msg.server_ts || utils.getServerNow();
       state.lastSyncPosition = msg.payload.position ?? state.lastSyncPosition;
       return;
