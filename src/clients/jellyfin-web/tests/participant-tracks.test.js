@@ -325,6 +325,39 @@ describe('participant tracks', () => {
       assert.equal(focused.getAttribute('aria-expanded'), 'true');
     });
 
+    for (const type of ['participant_statuses', 'participant_tracks']) {
+      it(`keeps the focused tracks arrow through a ${type} update`, () => {
+        renderPeople(people());
+        if (folds()[1].getAttribute('aria-expanded') === 'true') folds()[1].click();
+        folds()[1].click();
+        const oldFold = folds()[1];
+        assert.equal(document.activeElement, oldFold);
+
+        if (type === 'participant_statuses') {
+          h.handleParticipantStatuses(message(type, { statuses: ['playing', 'buffering', 'in_sync', 'loading'] }));
+        } else {
+          h.handleParticipantTracks(tracksMessage(people().map(person => person.tracks)));
+        }
+
+        assert.notEqual(folds()[1], oldFold);
+        assert.equal(document.activeElement, folds()[1]);
+        assert.equal(folds()[1].getAttribute('aria-expanded'), 'true');
+        assert.deepEqual(values(boxes()[0]), ['English', 'Off']);
+      });
+    }
+
+    it('does not steal focus from another control when the tracks list updates', () => {
+      renderPeople(people());
+      folds()[1].click();
+      const other = document.createElement('button');
+      byId(PANEL_ID).appendChild(other);
+      other.focus();
+
+      h.handleParticipantTracks(tracksMessage(people().map(person => person.tracks)));
+
+      assert.equal(document.activeElement, other);
+    });
+
     it('closes on a press in the panel outside the box, and stays open on one inside it', () => {
       renderPeople(people());
       folds()[0].click();

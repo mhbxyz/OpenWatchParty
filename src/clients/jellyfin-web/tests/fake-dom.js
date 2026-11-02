@@ -236,6 +236,10 @@ class FakeElement extends FakeNode {
     this.dispatchEvent({ type: 'click', stopPropagation() {}, preventDefault() {} });
   }
 
+  focus() {
+    if (globalThis.document) globalThis.document.activeElement = this;
+  }
+
   querySelectorAll(selector) {
     return descendants(this).filter(element => matchesSelector(element, selector));
   }

@@ -106,6 +106,8 @@
   };
 
   const fillParticipantList = (list) => {
+    const active = document.activeElement;
+    const focusedTracksKey = active && list.contains(active) ? active.dataset?.tracksKey : '';
     watchPresses();
     if (!state.participants.length) {
       openTracks = '';
@@ -144,6 +146,10 @@
       item.append(avatar, main);
       return item;
     }));
+    if (focusedTracksKey) {
+      const replacement = Array.from(list.querySelectorAll('.owp-tracks-fold')).find(fold => fold.dataset.tracksKey === focusedTracksKey);
+      if (replacement) replacement.focus({ preventScroll: true });
+    }
   };
 
 
