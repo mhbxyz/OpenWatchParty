@@ -237,7 +237,9 @@
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
-    if (state.pendingMediaId) {
+    // Let an active seek or scheduled room command finish before correcting drift.
+    if (state.pendingMediaId || video.seeking
+        || (state.pendingPlayUntil && utils.getServerNow() < state.pendingPlayUntil)) {
       if (video.playbackRate !== 1) video.playbackRate = 1;
       return;
     }
