@@ -111,6 +111,7 @@ describe('host queue', () => {
     sent = [];
     playing = '';
     itemRequests = 0;
+    failItem = false;
     segments = {};
     segmentRequests = 0;
     hostVideo = null;
@@ -330,16 +331,121 @@ describe('host queue', () => {
     assert.deepEqual(sent, []);
   });
 
-  it('tries the room item again after the library fails to answer', async () => {
+  it('retries the room item after five seconds without a new room message', async (t) => {
+    let now = 10000;
+    t.mock.method(Date, 'now', () => now);
     enterRoom();
     failItem = true;
     OWP.queue.refresh();
     await settle();
     assert.deepEqual(sent, []);
-    OWP.queue.refresh();
+    now += 4999;
+    OWP.queue.retryFill();
+    await settle();
+    assert.equal(itemRequests, 1);
+    now++;
+    OWP.queue.retryFill();
     await settle();
     assert.deepEqual(sent.map(ids), [['e1', 'e2', 'e3', 'e5', 'e6', 'e7']]);
   });
+
+  it('stops after three retries and gives a new room item its own budget', async (t) => {
+    let now = 10000;
+    t.mock.method(Date, 'now', () => now);
+    enterRoom();
+    for (let attempt = 0; attempt < 7; attempt++) {
+      failItem = true;
+      OWP.queue.refresh();
+      await settle();
+      now += 5000;
+    }
+    assert.equal(itemRequests, 4);
+    failItem = false;
+    OWP.state.roomMediaId = 'e2';
+    OWP.queue.refresh();
+    await settle();
+    assert.equal(itemRequests, 5);
+    assert.equal(sent[0].payload.items[0].id, 'e2');
+  });
+
+  it('retries a failed episode-list request once and stops after success', async (t) => {
+    let now = 10000;
+    t.mock.method(Date, 'now', () => now);
+    const getJSON = globalThis.ApiClient.getJSON;
+    let episodeRequests = 0;
+    t.mock.method(globalThis.ApiClient, 'getJSON', async request => {
+      if (request.path === 'Shows/show/Episodes' && ++episodeRequests === 1) throw new Error('offline');
+      return getJSON(request);
+    });
+    enterRoom();
+    OWP.queue.refresh();
+    await settle();
+    now += 5000;
+    OWP.queue.retryFill();
+    await settle();
+    assert.equal(episodeRequests, 2);
+    assert.equal(sent.filter(message => message.type === 'queue_add').length, 1);
+    now += 5000;
+    OWP.queue.retryFill();
+    await settle();
+    assert.equal(episodeRequests, 2);
+  });
+
+  it('drops a failed fill when the room changes before its retry', async (t) => {
+    let now = 10000;
+    t.mock.method(Date, 'now', () => now);
+    enterRoom();
+    failItem = true;
+    OWP.queue.refresh();
+    await settle();
+    enterRoom({ roomMediaId: 'e8' });
+    OWP.queue.refresh();
+    await settle();
+    now += 5000;
+    OWP.queue.retryFill();
+    await settle();
+    assert.equal(itemRequests, 2);
+    assert.deepEqual(sent.map(ids), [['e8', 'e9']]);
+  });
+
+  it('uses the current fill cursor when it changes during a retry wait', async (t) => {
+    let now = 10000;
+    t.mock.method(Date, 'now', () => now);
+    enterRoom({ queueItems: ['e1', 'e2', 'e3'].map(item), queueLastAdded: 'e3' });
+    OWP.queue.refresh();
+    await settle();
+    OWP.state.roomMediaId = 'e2';
+    failItem = true;
+    OWP.queue.refresh();
+    await settle();
+    OWP.state.queueLastAdded = 'e5';
+    OWP.queue.refresh();
+    await settle();
+    assert.equal(itemRequests, 2);
+    assert.deepEqual(sent.map(ids), [['e6', 'e7', 'e8', 'e9']]);
+    now += 5000;
+    OWP.queue.retryFill();
+    await settle();
+    assert.deepEqual(sent.map(ids), [['e6', 'e7', 'e8', 'e9']]);
+  });
+
+  for (const fields of [{ inRoom: false }, { isHost: false }, { queueReceived: false }]) {
+    it(`drops a pending retry when ${Object.keys(fields)[0]} is lost`, async (t) => {
+      let now = 10000;
+      t.mock.method(Date, 'now', () => now);
+      enterRoom();
+      failItem = true;
+      OWP.queue.refresh();
+      await settle();
+      Object.assign(OWP.state, fields);
+      OWP.queue.refresh();
+      now += 5000;
+      OWP.queue.retryFill();
+      await settle();
+      assert.equal(itemRequests, 1);
+      assert.deepEqual(sent, []);
+    });
+  }
 
   it('asks the library once per starting point', async () => {
     enterRoom({ roomMediaId: 'e9' });

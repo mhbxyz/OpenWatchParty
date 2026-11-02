@@ -1,12 +1,18 @@
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
+const formatTime = seconds => {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+};
+
 export function initializeWatchDemo(demo) {
     const videos = [...demo.querySelectorAll('video')];
     const [host, guest] = videos;
     const toggle = demo.querySelector('[data-demo-toggle]');
     const replay = demo.querySelector('[data-demo-restart]');
     const caption = demo.querySelector('[data-demo-caption]');
-    const progress = demo.querySelector('.demo-progress span');
+    const clock = demo.querySelector('[data-demo-clock]');
+    const screenTimes = [...demo.querySelectorAll('[data-demo-time]')];
     let events = [];
     let visible = false;
     let userPaused = false;
@@ -24,15 +30,23 @@ export function initializeWatchDemo(demo) {
     const setPlaying = value => {
       playing = value;
       demo.classList.toggle('is-playing', value);
-      toggle.textContent = value ? 'Pause demo' : 'Play demo';
+      toggle.setAttribute('aria-pressed', String(value));
       toggle.setAttribute('aria-label', value ? 'Pause the two recordings' : 'Play the two recordings');
+    };
+
+    const paint = () => {
+      const duration = Number.isFinite(host.duration) && host.duration > 0 ? host.duration : 0;
+      demo.style.setProperty('--progress', duration ? host.currentTime / duration : 0);
+      clock.textContent = `${formatTime(host.currentTime)} / ${formatTime(duration)}`;
+      screenTimes[0].textContent = formatTime(host.currentTime);
+      screenTimes[1].textContent = formatTime(guest.currentTime);
     };
 
     const update = (now = performance.now()) => {
       if (Number.isFinite(host.duration) && host.duration > 0) {
-        progress.style.transform = `scaleX(${host.currentTime / host.duration})`;
+        paint();
         const event = events.findLast(item => item.at <= host.currentTime);
-        if (event) caption.textContent = event.label;
+        if (event && caption.textContent !== event.label) caption.textContent = event.label;
         const drift = guest.currentTime - host.currentTime;
         if (!guest.seeking && guest.readyState >= 3) {
           if (Math.abs(drift) > .4 && now - lastSeek > 1500) {
@@ -79,6 +93,7 @@ export function initializeWatchDemo(demo) {
     };
 
     videos.forEach(video => { video.controls = false; video.muted = true; });
+    host.addEventListener('loadedmetadata', paint);
     toggle.addEventListener('click', () => {
       userPaused = playing || pendingPlay;
       userStarted = !userPaused;

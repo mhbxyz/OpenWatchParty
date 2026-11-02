@@ -609,4 +609,37 @@ describe('room reconnection lifecycle', () => {
     assert.equal(first.onclose, null);
   });
 
+  it('keeps backing off while the server rejects the token, and resets once authenticated', async () => {
+    await OWP.actions.connect();
+    const attempts = [];
+    for (let i = 0; i < 3; i++) {
+      const socket = sockets[i];
+      socket.open();
+      socket.receive({ type: 'error', payload: { code: 'AUTHENTICATION_FAILED', message: 'Authentication failed' } });
+      // The server closes the unauthenticated socket at its auth timeout.
+      socket.serverClose();
+      attempts.push(OWP.state.reconnectAttempts);
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.deepEqual(attempts, [1, 2, 3]);
+    sockets[3].open();
+    assert.equal(OWP.state.reconnectAttempts, 3);
+    sockets[3].receive({ type: 'auth_success', payload: { user_name: 'Guest' } });
+    assert.equal(OWP.state.reconnectAttempts, 0);
+  });
+
+  it('resets the backoff when a connection without a token opens', async () => {
+    const originalFetchAuthToken = OWP.actions.fetchAuthToken;
+    OWP.state.authToken = null;
+    OWP.state.reconnectAttempts = 3;
+    OWP.actions.fetchAuthToken = async () => ({ mode: 'insecure', token: null });
+    try {
+      await OWP.actions.connect();
+      sockets[0].open();
+      assert.equal(OWP.state.reconnectAttempts, 0);
+    } finally {
+      OWP.actions.fetchAuthToken = originalFetchAuthToken;
+    }
+  });
+
 });

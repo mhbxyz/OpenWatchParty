@@ -2,23 +2,30 @@
 import { withBase } from '../lib/paths';
 ---
 <div class="watch-demo" data-timeline-url={withBase('/assets/video/watch-party-demo.json')} aria-label="A real watch party recorded in two browsers">
-          <div class="demo-pair">
-            <figure class="demo-screen demo-screen-host">
-              <div class="screen-top"><span class="screen-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Hosting the night</span><span class="screen-person">Host</span></div>
-              <div class="screen-video"><video controls muted playsinline preload="metadata" poster={withBase('/assets/video/watch-party-host.jpg')} aria-label="Recording of the host creating a room, chatting and controlling playback"><source src={withBase('/assets/video/watch-party-host.mp4')} type="video/mp4"></video></div>
-              <figcaption><span class="viewer-avatar">H</span><span>You pick the film.</span></figcaption>
-            </figure>
-            <div class="screen-connection" aria-hidden="true"><span></span><svg viewBox="0 0 24 24"><path d="M4 9h14l-3-3M20 15H6l3 3"/></svg><span></span></div>
-            <figure class="demo-screen demo-screen-guest">
-              <div class="screen-top"><span class="screen-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>Joining from elsewhere</span><span class="screen-person">Guest</span></div>
-              <div class="screen-video"><video controls muted playsinline preload="metadata" poster={withBase('/assets/video/watch-party-guest.jpg')} aria-label="Recording of a guest joining the same room, chatting and pausing playback for everyone"><source src={withBase('/assets/video/watch-party-guest.mp4')} type="video/mp4"></video></div>
-              <figcaption><span class="viewer-avatar guest-avatar">G</span><span>Your friends share the moment.</span></figcaption>
-            </figure>
-          </div>
-          <div class="demo-toolbar"><div class="demo-caption"><span class="live-dot"></span><span data-demo-caption>Two browsers. One movie night.</span></div><div class="demo-actions"><button type="button" data-demo-toggle aria-label="Play the two recordings">Play demo</button><button type="button" data-demo-restart aria-label="Restart the two recordings">Replay <span aria-hidden="true">↺</span></button></div></div>
-          <div class="demo-progress" aria-hidden="true"><span></span></div>
-          <p class="demo-footnote">A real session in Jellyfin Web. <a href="#media-credits">Film: Wing It! by Blender Studio</a></p>
-        </div>
+  <div class="demo-frame">
+    <div class="demo-pair">
+      <figure class="demo-screen demo-screen-host">
+        <video muted playsinline preload="metadata" poster={withBase('/assets/video/watch-party-host.jpg')} aria-label="Recording of the host creating a room, chatting and controlling playback"><source src={withBase('/assets/video/watch-party-host.mp4')} type="video/mp4"></video>
+        <figcaption class="screen-tag"><i aria-hidden="true"></i><span>HOST · You pick the film</span><span data-demo-time>00:00</span></figcaption>
+      </figure>
+      <figure class="demo-screen demo-screen-guest">
+        <video muted playsinline preload="metadata" poster={withBase('/assets/video/watch-party-guest.jpg')} aria-label="Recording of a guest joining the same room, chatting and pausing playback for everyone"><source src={withBase('/assets/video/watch-party-guest.mp4')} type="video/mp4"></video>
+        <figcaption class="screen-tag"><i aria-hidden="true"></i><span>GUEST · Joining from elsewhere</span><span data-demo-time>00:00</span></figcaption>
+      </figure>
+    </div>
+    <div class="demo-toolbar">
+      <button class="demo-play" type="button" data-demo-toggle aria-label="Play the two recordings" aria-pressed="false">
+        <svg class="icon-play" aria-hidden="true"><use href="#demo-play"/></svg>
+        <svg class="icon-pause" aria-hidden="true"><use href="#demo-pause"/></svg>
+      </button>
+      <span class="demo-clock" data-demo-clock>00:00 / 00:33</span>
+      <div class="demo-progress" aria-hidden="true"><span></span><b></b></div>
+      <span class="demo-status" aria-live="polite"><i aria-hidden="true"></i><span data-demo-caption>Two browsers. One movie night.</span></span>
+      <button class="demo-restart" type="button" data-demo-restart aria-label="Restart the two recordings">Replay <span aria-hidden="true">↺</span></button>
+    </div>
+  </div>
+  <p class="demo-footnote">Two separate Jellyfin sessions, one timeline. <a href="#media-credits">Film: Wing It! by Blender Studio</a></p>
+</div>
 <script>
   import { initializeWatchDemo } from '../scripts/watch-demo.js';
   document.querySelectorAll('.watch-demo').forEach(initializeWatchDemo);

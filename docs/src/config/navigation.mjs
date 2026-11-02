@@ -70,5 +70,5 @@ export const sidebar = [
 export const fontHead = [
   { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
   { tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
-  { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap' } },
+  { tag: 'link', attrs: { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Manrope:wght@500;600;700;800&display=swap' } },
 ];

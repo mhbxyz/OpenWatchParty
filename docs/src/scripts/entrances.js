@@ -5,10 +5,8 @@ export const introducePage = () => {
 
     const entrances = new Map();
     const offsets = {
-      up: 'translateY(22px)',
+      up: 'translateY(28px)',
       down: 'translateY(-10px)',
-      left: 'translateX(-22px)',
-      right: 'translateX(22px)',
       fade: 'none',
     };
     const observer = new IntersectionObserver(entries => {
@@ -17,7 +15,7 @@ export const introducePage = () => {
         entrances.get(entry.target)?.play();
         observer.unobserve(entry.target);
       });
-    }, { threshold: .08, rootMargin: '0px 0px -28px 0px' });
+    }, { threshold: .15, rootMargin: '0px 0px -28px 0px' });
 
     const reveal = (selector, direction = 'up', delay = 0, stagger = 0, immediate = false) => {
       document.querySelectorAll(selector).forEach((element, index) => {
@@ -28,15 +26,15 @@ export const introducePage = () => {
           to.transform = 'none';
         }
         const animation = element.animate([from, to], {
-          duration: 680,
+          duration: 800,
           delay: delay + index * stagger,
-          easing: 'cubic-bezier(.22, 1, .36, 1)',
+          easing: 'cubic-bezier(.2, .7, .2, 1)',
           fill: 'both',
         });
         animation.pause();
         entrances.set(element, animation);
         animation.onfinish = () => {
-          // Release the effect so menus and video controls keep their normal layout.
+          // Release the effect so hover transforms, menus and video controls keep their normal behaviour.
           entrances.delete(element);
           animation.cancel();
         };
@@ -45,23 +43,20 @@ export const introducePage = () => {
       });
     };
 
-    const stagger = window.matchMedia('(min-width: 761px)').matches ? 90 : 0;
+    const stagger = window.matchMedia('(min-width: 761px)').matches ? 120 : 0;
     reveal('.site-header', 'down', 0, 0, true);
-    reveal('.hero-kicker', 'fade', 80, 0, true);
-    reveal('.hero h1', 'up', 140, 0, true);
-    reveal('.hero-description', 'right', 220, 0, true);
-    reveal('.hero-actions', 'up', 300, 0, true);
-    reveal('.hero-note', 'fade', 380, 0, true);
-    reveal('.demo-screen-host', 'left', 330);
-    reveal('.demo-screen-guest', 'right', 430);
-    reveal('.screen-connection, .demo-toolbar, .demo-progress, .demo-footnote', 'fade', 520);
-    reveal('.promise-strip', 'fade');
+    reveal('.hero-kicker', 'up', 50, 0, true);
+    reveal('.hero h1', 'up', 150, 0, true);
+    reveal('.hero-support', 'up', 350, 0, true);
+    reveal('.demo-frame', 'up', 450, 0, true);
+    reveal('.demo-footnote', 'fade', 650, 0, true);
+    reveal('.promise-item', 'up', 0, stagger);
     reveal('.section-heading', 'up');
-    reveal('.step', 'up', 40, stagger);
-    reveal('.steps-note, .preview-intro', 'fade', 100);
-    reveal('.feature', 'up', 50, stagger);
-    reveal('.guide-copy', 'left');
-    reveal('.guide-links > a', 'right', 40, stagger / 2);
+    reveal('.step', 'up', 0, stagger);
+    reveal('.steps-note', 'fade', 100);
+    reveal('.feature-tabs', 'up');
+    reveal('.guide-copy', 'up');
+    reveal('.guide-links', 'up', 150);
     reveal('.site-footer', 'fade');
 
     // Keyboard navigation must never land on a control waiting to appear.

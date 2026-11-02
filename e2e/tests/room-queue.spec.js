@@ -50,7 +50,7 @@ async function openQueuedRoom() {
   await helpers.waitForSettled(host);
   await helpers.createRoom(host);
   const room = await helpers.owpState(host);
-  await helpers.joinRoomFromHeader(guest, room.roomName);
+  await helpers.joinRoomFromHeader(guest, room.roomId);
   await helpers.expectParticipants(guest, 2);
   await helpers.waitForSettled(guest);
 

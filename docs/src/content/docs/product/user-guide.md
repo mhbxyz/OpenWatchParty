@@ -221,11 +221,12 @@ The chat feature allows you to communicate with other watch party participants i
 - **Timestamps** - Hover a message to see when it was sent
 - **Unread badge** - A red badge on the chat icon counts messages that arrived while the chat was closed
 - **SERVER lines** - OpenWatchParty's own notes about [starting together](#starting-together), with a tag and in italics; only "Started without…" counts as unread
+- **Earlier messages** - Joining a room shows its last 50 messages, without counting them as unread
 - **Message limit** - Messages are limited to 500 characters
 - **Emoji picker** - Choose from categorized emojis or type shortcodes like `:smile:` with autocomplete suggestions
 
 ### Notes
-- Chat history is not saved; late joiners won't see previous messages
+- The room keeps its last 50 messages in memory for late joiners; they disappear when the room closes or the server restarts. SERVER lines are local to each client and are not part of this history.
 - The chat input doesn't interfere with video player controls
 
 ## Sync Indicator

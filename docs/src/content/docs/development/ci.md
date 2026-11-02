@@ -35,6 +35,10 @@ For OpenWatchParty `0.8.0`, the source release tag is `v0.8.0`; CI documents its
 
 After the release image has been published, the current maintainer must update the production Compose image to the new digest and run `infra/scripts/verify-pins.sh`. The publish workflow does not update production Compose. The production pin is a follow-up to image publication because the digest is only known after the build completes. Follow [the release process](/development/release/) for the sequence and verification details.
 
+## Restart failed pull request checks
+
+An allowlisted author can comment `/rerun` on a pull request they opened. The `rerun.yml` workflow restarts failed or timed out jobs for the current commit in CI, E2E, Security, and Server Hardening. `/rerun e2e` limits the restart to the workflow with that name. Checks that are still running, and the publish workflow, are left alone. The command does not grant repository write access.
+
 ## Run checks locally
 
 ```bash

@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -222,6 +222,7 @@
     pendingMediaId: '',
     mediaSwitchUntil: 0,   // Until then, a closed player is OWP opening the room media
     pendingMediaUntil: 0,
+    heardRoomState: null,  // A guest's latest room command or state update, for the room state a loading item syncs to
     pendingJoinRoomId: '',  // Room to join after navigating to video player
     guestPaused: false,
     ownCommandUntil: 0,
