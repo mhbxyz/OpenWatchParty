@@ -108,12 +108,12 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// Gets or sets the color preset of the same elements: "glass" (the default), "solid", "light"
-    /// or "contrast". Any other value is "glass".
+    /// Gets or sets the color preset of the same elements: "glass" (the default), "solid", "light",
+    /// "contrast" or "jellyfin". Any other value is "glass".
     /// </summary>
     public string AppearancePreset
     {
         get => _appearancePreset;
-        set => _appearancePreset = value is "glass" or "solid" or "light" or "contrast" ? value : "glass";
+        set => _appearancePreset = value is "glass" or "solid" or "light" or "contrast" or "jellyfin" ? value : "glass";
     }
 }
