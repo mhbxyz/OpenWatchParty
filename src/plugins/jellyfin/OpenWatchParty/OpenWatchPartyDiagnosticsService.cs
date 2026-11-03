@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.WebSockets;
 using System.Text.Json;
 using OpenWatchParty.Plugin.Configuration;
 
@@ -27,6 +29,8 @@ public sealed class OpenWatchPartyDiagnosticsService
 {
     // A session server's /health is a few hundred bytes.
     private const int HealthResponseMaxBytes = 64 * 1024;
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(5);
+    private const string ConnectionFailed = "Connection failed for the configured session destination";
 
     public DiagnosticsResponse CreateStatus(
         PluginConfiguration configuration,
@@ -83,7 +87,7 @@ public sealed class OpenWatchPartyDiagnosticsService
             using var handler = new HttpClientHandler { AllowAutoRedirect = false };
             using var client = new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromSeconds(5),
+                Timeout = CheckTimeout,
                 MaxResponseContentBufferSize = HealthResponseMaxBytes,
             };
             var stopwatch = Stopwatch.StartNew();
@@ -93,12 +97,20 @@ public sealed class OpenWatchPartyDiagnosticsService
             {
                 checks.Add(Fail("session_http", $"Session server returned HTTP {(int)response.StatusCode}", "SESSION_HTTP"));
             }
-            else
+            else if (ReadHealth(body) is var (sessionVersion, protocol))
             {
-                var (sessionVersion, protocol) = ReadHealth(body);
                 checks.Add(protocol == 1
                     ? new DiagnosticCheck("session_http", "pass", $"Session {sessionVersion ?? "unknown"}, protocol {protocol}", null, stopwatch.ElapsedMilliseconds)
                     : new DiagnosticCheck("session_http", "fail", "Session protocol is incompatible", "PROTOCOL_VERSION", stopwatch.ElapsedMilliseconds));
+            }
+            else
+            {
+                // Behind a proxy that routes only /ws (and /invite) to the
+                // session server, /health on that host belongs to another
+                // application, Jellyfin itself in the documented setup. The
+                // WebSocket the clients use tells whether the session server
+                // answers there.
+                checks.Add(await ProbeWebSocketAsync(websocket, cancellationToken).ConfigureAwait(false));
             }
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException or JsonException or UriFormatException)
@@ -108,13 +120,23 @@ public sealed class OpenWatchPartyDiagnosticsService
         return Build(configuration, jellyfinVersion, injection, checks);
     }
 
-    // Whatever answers on the session destination may not be a session server:
-    // a body of another shape reads as an unknown version and protocol 0.
-    private static (string? Version, int Protocol) ReadHealth(string body)
+    // A session server's /health is a JSON object with a protocol version; an
+    // unusable version reads as protocol 0. Any other body comes from another
+    // application and reads as null.
+    private static (string? Version, int Protocol)? ReadHealth(string body)
     {
-        using var document = JsonDocument.Parse(body);
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object) return (null, 0);
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+        using var parsed = document;
+        var root = parsed.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("protocol_version", out _)) return null;
         var version = root.TryGetProperty("version", out var versionValue) && versionValue.ValueKind == JsonValueKind.String
             ? versionValue.GetString()
             : null;
@@ -124,6 +146,61 @@ public sealed class OpenWatchPartyDiagnosticsService
             ? number
             : 0;
         return (version, protocol);
+    }
+
+    // Connects as a client would, without an Origin header (the server accepts
+    // non-browser clients), and expects the server's first message,
+    // client_hello.
+    private static async Task<DiagnosticCheck> ProbeWebSocketAsync(Uri websocket, CancellationToken cancellationToken)
+    {
+        using var socket = new ClientWebSocket();
+        socket.Options.CollectHttpResponseDetails = true;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(CheckTimeout);
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            await socket.ConnectAsync(websocket, timeout.Token).ConfigureAwait(false);
+            var buffer = new byte[4096];
+            var received = await socket.ReceiveAsync(buffer, timeout.Token).ConfigureAwait(false);
+            var hello = received.MessageType == WebSocketMessageType.Text && IsClientHello(buffer.AsMemory(0, received.Count));
+            var elapsed = stopwatch.ElapsedMilliseconds;
+            try
+            {
+                await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, timeout.Token).ConfigureAwait(false);
+            }
+            catch (Exception error) when (error is WebSocketException or OperationCanceledException)
+            {
+                // Leaving without the closing handshake is harmless here.
+            }
+            return hello
+                ? new DiagnosticCheck("session_http", "pass", "Session server answers on the WebSocket; /health belongs to another service", null, elapsed)
+                : Fail("session_http", "The session destination is not an OpenWatchParty session server", "SESSION_NOT_OWP");
+        }
+        catch (WebSocketException) when (socket.HttpStatusCode is not 0 and not HttpStatusCode.SwitchingProtocols)
+        {
+            return Fail("session_http", $"WebSocket handshake returned HTTP {(int)socket.HttpStatusCode}", "SESSION_WEBSOCKET");
+        }
+        catch (Exception error) when (error is WebSocketException or OperationCanceledException or HttpRequestException)
+        {
+            return Fail("session_http", ConnectionFailed, "SESSION_UNREACHABLE");
+        }
+    }
+
+    private static bool IsClientHello(ReadOnlyMemory<byte> message)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(message);
+            return document.RootElement.ValueKind == JsonValueKind.Object
+                && document.RootElement.TryGetProperty("type", out var type)
+                && type.ValueKind == JsonValueKind.String
+                && type.GetString() == "client_hello";
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
     }
 
     private static DiagnosticsResponse Build(
@@ -175,7 +252,7 @@ public sealed class OpenWatchPartyDiagnosticsService
     {
         if (Uri.TryCreate(message, UriKind.Absolute, out _))
         {
-            return "Connection failed for the configured session destination";
+            return ConnectionFailed;
         }
         return message.Length <= 300 ? message : message[..300];
     }
