@@ -105,11 +105,8 @@ public sealed class OpenWatchPartyDiagnosticsService
             }
             else
             {
-                // Behind a proxy that routes only /ws (and /invite) to the
-                // session server, /health on that host belongs to another
-                // application, Jellyfin itself in the documented setup. The
-                // WebSocket the clients use tells whether the session server
-                // answers there.
+                // Behind a proxy that routes only /ws to the session server,
+                // /health belongs to another application: probe /ws instead.
                 checks.Add(await ProbeWebSocketAsync(websocket, cancellationToken).ConfigureAwait(false));
             }
         }
