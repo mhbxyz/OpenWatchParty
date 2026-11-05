@@ -276,6 +276,9 @@
                     var authCheck = diagnostics && diagnostics.AuthenticationMode === 'jwt'
                         ? (diagnostics.Checks || []).find(function(check) { return check.Id === 'authentication_configuration'; })
                         : null;
+                    // Valid authentication with no stored secret can only be the RSA
+                    // key, so the form may then be saved without a secret.
+                    this.keyIssuesTokensWithoutSecret = Boolean(authCheck && authCheck.Status === 'pass' && !(config.JwtSecret || '').trim());
                     if (authCheck && authCheck.Status === 'pass') {
                         status.text(configT('authEnabled')).css({ background: '#173d2a', color: '#8ee6b5' });
                     } else if ((config.JwtSecret || '').trim() && validationError) {
@@ -625,7 +628,7 @@
                     allowInsecure = false;
                     $('#AllowInsecureNoAuth', page).prop('checked', false);
                 }
-                if (!jwtSecret && !allowInsecure) {
+                if (!jwtSecret && !allowInsecure && !OpenWatchPartyConfigurationPage.keyIssuesTokensWithoutSecret) {
                     Dashboard.alert(configT('configureAuth'));
                     return false;
                 }

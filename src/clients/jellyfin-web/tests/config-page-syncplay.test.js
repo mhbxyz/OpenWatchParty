@@ -21,6 +21,7 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const fields = new Map();
   const handlers = {};
   const saved = [];
+  const alerts = [];
   const pageElement = { id: 'page' };
   const formElement = { id: 'form' };
   const field = (id) => {
@@ -86,7 +87,7 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
     Dashboard: {
       showLoadingMsg: () => {},
       hideLoadingMsg: () => {},
-      alert: (message) => { throw new Error(`Unexpected alert: ${message}`); },
+      alert: (message) => { alerts.push(message); },
       processPluginConfigurationUpdateResult: () => {}
     },
     $
@@ -106,6 +107,7 @@ const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   return {
     fields,
     saved,
+    alerts,
     authStatusCalls,
     authStatus(config, result) {
       updateAuthStatus.call(page, pageElement, config, result);
@@ -311,6 +313,66 @@ describe('configuration page appearance settings', () => {
 
     assert.equal(form.saved[0].AppearanceOpacity, 55);
     assert.equal(form.saved[0].AppearanceTextSize, 14);
+  });
+});
+
+describe('configuration page authentication on save', () => {
+  const baseConfig = { JwtSecret: '', AllowInsecureNoAuth: false, SessionServerUrl: 'wss://media.example/ws' };
+  const activeRsa = {
+    AuthenticationMode: 'jwt',
+    Checks: [{ Id: 'authentication_configuration', Status: 'pass', Summary: 'Authentication configuration is valid' }]
+  };
+
+  it('saves an empty secret when diagnostics confirm active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: activeRsa });
+    await form.show();
+    await form.submit();
+
+    assert.deepEqual(form.alerts, []);
+    assert.equal(form.saved.length, 1);
+    assert.equal(form.saved[0].JwtSecret, '');
+    assert.equal(form.saved[0].AllowInsecureNoAuth, false);
+  });
+
+  it('rejects an invalid secret entered even with active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: activeRsa });
+    await form.show();
+    form.fields.get('JwtSecret').value = 'short';
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['JWT secret must contain at least 32 Unicode characters']);
+  });
+
+  it('rejects clearing a stored secret even when diagnostics pass', async () => {
+    const form = loadConfigPage({ ...baseConfig, JwtSecret: 'stored' }, { diagnostics: activeRsa });
+    await form.show();
+    form.fields.get('JwtSecret').value = '';
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
+  });
+
+  it('rejects an empty secret without active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: {
+      AuthenticationMode: 'insecure',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT authentication is not configured' }]
+    } });
+    await form.show();
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
+  });
+
+  it('rejects an empty secret while diagnostics have not responded', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: new Promise(() => {}) });
+    await form.show();
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
   });
 });
 
