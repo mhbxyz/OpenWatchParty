@@ -246,8 +246,12 @@ The diagnostics routes require administrator elevation:
 - `GET /OpenWatchParty/Diagnostics/Status` returns redacted readiness checks and
   plugin, Jellyfin, ABI and protocol version details.
 - `POST /OpenWatchParty/Diagnostics/Run` repeats the checks and attempts a
-  session-server `/health` request with a five-second timeout. A failed check is
-  reported in the response rather than changing the plugin configuration.
+  session-server `/health` request with a five-second timeout. When `/health` on
+  that host answers as another application (a reverse proxy that routes only
+  `/ws` and `/invite` to the session server), it connects to the WebSocket
+  destination instead and expects the server's `client_hello`; that check passes
+  without a session version. A failed check is reported in the response rather
+  than changing the plugin configuration.
 
 The RSA signing-key routes also require administrator elevation:
 

@@ -249,7 +249,9 @@ The health probe runs inside the Jellyfin process, so it resolves the session se
 
 1. Set an explicit **Session server URL** (`ws://host:port/ws`) that is reachable from both Jellyfin and the browser, rather than relying on same-host auto-detection.
 2. In Docker, put Jellyfin and the session server on a shared network and use the service name (for example `ws://owp-session-server:3000/ws`) if the browser reaches it through a reverse proxy.
-3. Re-run `Run diagnostics`: `session_http` must report the session server version and protocol before a watch party can work.
+3. Re-run `Run diagnostics`: `session_http` must report the session server version and protocol, or that the session server answers on the WebSocket, before a watch party can work.
+
+Behind a reverse proxy that sends only `/ws` and `/invite` to the session server, `/health` on that host is Jellyfin's own. The check then connects to the WebSocket destination instead: it passes as "Session server answers on the WebSocket", fails with `SESSION_WEBSOCKET` when the handshake is refused (the HTTP status is shown), and with `SESSION_NOT_OWP` when something else answers there.
 
 ### HLS Streaming Issues
 

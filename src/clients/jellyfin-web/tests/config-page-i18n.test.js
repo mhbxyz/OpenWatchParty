@@ -62,6 +62,8 @@ describe('configuration page localization', () => {
     assert.equal(context.configCheckSummary('Authentication configuration is valid'), 'La configuración de autenticación es válida');
     assert.equal(context.configCheckSummary('Session 0.5.0, protocol 1'), 'Sesión 0.5.0, protocolo 1');
     assert.equal(context.configCheckSummary('Session server returned HTTP 502'), 'El servidor de sesión respondió HTTP 502');
+    assert.equal(context.configCheckSummary('Session server answers on the WebSocket; /health belongs to another service'), 'El servidor de sesión responde por WebSocket; /health es de otro servicio');
+    assert.equal(context.configCheckSummary('WebSocket handshake returned HTTP 403'), 'El WebSocket respondió HTTP 403');
     assert.equal(context.configStatus('warning'), 'AVISO');
     assert.equal(context.configStatus('constructor'), 'CONSTRUCTOR');
   });
@@ -180,5 +182,6 @@ describe('configuration page localization', () => {
     }
     assert.ok(diagnostics.includes('$"Session {sessionVersion ?? "unknown"}, protocol {protocol}"'));
     assert.ok(diagnostics.includes('$"Session server returned HTTP {(int)response.StatusCode}"'));
+    assert.ok(diagnostics.includes('$"WebSocket handshake returned HTTP {(int)socket.HttpStatusCode}"'));
   });
 });
