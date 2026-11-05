@@ -114,7 +114,7 @@
     },
     HOME_SECTION_ID: 'owp-home-section',
     PROTOCOL_VERSION: 1,          // WebSocket protocol version declared in the auth message
-    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
+    CLIENT_FEATURES: ['host_transfer', 'participant_status', 'participant_tracks', 'shared_playback_control', 'media_queue', 'start_when_ready', 'chat_history'],
     protocol,
     host,
     DEFAULT_WS_URL: `${protocol}//${host}:3000/ws`,
@@ -195,12 +195,13 @@
     inRoom: false,
     roomName: '',
     participantCount: 0,
-    participants: [],      // [{ name, isHost, status }] from participant_list and participant_statuses
+    participants: [],      // [{ name, isHost, status, tracks }] from participant_list, participant_statuses and participant_tracks
     lastParticipantCount: 0,
     statusesRoomId: '',    // The room whose server sent participant_statuses: it accepts participant_status
     statusCandidate: '',   // This client's status, and since when, until it holds long enough to send
     statusCandidateSince: 0,
     statusSentKey: '',     // room|client|status last sent, so a status is sent once per room and connection
+    tracksSentKey: '',     // room|client|tracks last sent (participant_tracks), the same way
     lastSyncServerTs: 0,
     lastSyncPosition: 0,
     lastSyncPlayState: '',

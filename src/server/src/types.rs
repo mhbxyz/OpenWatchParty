@@ -62,6 +62,10 @@ pub struct Room {
     pub statuses: HashMap<String, &'static str>,
     #[serde(skip)]
     pub status_broadcast: StatusBroadcast,
+    /// Each member's last reported audio and subtitle tracks
+    /// (`participant_tracks`), by client id.
+    #[serde(skip)]
+    pub tracks: HashMap<String, serde_json::Value>,
     /// Until when a guest's play or pause holds against the host's state
     /// updates sent before the host applied it.
     #[serde(skip)]
@@ -204,6 +208,7 @@ pub enum ClientMessageType {
     ClientLog,
     ChatMessage,
     ParticipantStatus,
+    ParticipantTracks,
     QueueAdd,
     QueueRemove,
     QueueMove,
@@ -232,6 +237,7 @@ impl ClientMessageType {
             Self::ClientLog => "client_log",
             Self::ChatMessage => "chat_message",
             Self::ParticipantStatus => "participant_status",
+            Self::ParticipantTracks => "participant_tracks",
             Self::QueueAdd => "queue_add",
             Self::QueueRemove => "queue_remove",
             Self::QueueMove => "queue_move",
@@ -251,6 +257,7 @@ pub enum ServerMessageType {
     RoomCapabilities,
     ParticipantList,
     ParticipantStatuses,
+    ParticipantTracks,
     ClientHello,
     AuthSuccess,
     Error,
@@ -288,6 +295,7 @@ impl ServerMessageType {
             Self::ChatMessage => "chat_message",
             Self::ParticipantList => "participant_list",
             Self::ParticipantStatuses => "participant_statuses",
+            Self::ParticipantTracks => "participant_tracks",
             Self::QueueState => "queue_state",
             Self::StartState => "start_state",
             Self::ChatHistory => "chat_history",
@@ -355,6 +363,7 @@ mod tests {
             "chat_message",
             "participant_list",
             "participant_statuses",
+            "participant_tracks",
             "room_capabilities",
         ] {
             for fixture in [
@@ -512,6 +521,7 @@ mod tests {
             ClientLog,
             ChatMessage,
             ParticipantStatus,
+            ParticipantTracks,
             QueueAdd,
             QueueRemove,
             QueueMove,

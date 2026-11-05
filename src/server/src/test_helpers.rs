@@ -58,6 +58,7 @@ pub fn create_room(room_id: &str, host_id: &str) -> Room {
         command_cooldown_until: None,
         statuses: HashMap::new(),
         status_broadcast: Default::default(),
+        tracks: HashMap::new(),
         guest_command_until: None,
         queue: Default::default(),
         not_ready: HashMap::new(),

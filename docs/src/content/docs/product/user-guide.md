@@ -192,6 +192,8 @@ The participants list shows how each person is doing, with a colored dot:
 
 A status changes after it has held for about a second. People on an older version of OpenWatchParty show no status.
 
+The arrow at the end of a person's row shows which **Audio** and **Subtitles** they have on (for example "Español (doblaje)" and "Spanish (forced)", or **Off**). It is only to see them: everyone chooses their own tracks in the player. Select the arrow again, or anywhere else in the panel, to close it. People on an older version show no arrow.
+
 ## Watching a series
 
 While the room plays an episode, the host's player fills the room's queue with the next episodes of the series, in Jellyfin's order across seasons, up to five episodes ahead, and tops it up each time the room moves to the next one. The room queue can contain up to 20 items, including the current episode. Episodes missing from the library are skipped, and one the host removes doesn't come back, even after the host reloads the page or someone else becomes the host. A room playing a movie has no queue and works as before.

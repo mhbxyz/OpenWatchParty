@@ -32,7 +32,7 @@ plugin.js                    # Loader - loads modules in parallel waves
     │   └── handlers/
     │       ├── clock.js, playback.js, room.js, sync.js
     └── app/                 # Initialization and cleanup
-        ├── cleanup.js, invite.js, lifecycle.js, queue.js
+        ├── cleanup.js, invite.js, lifecycle.js, queue.js, tracks.js
 ```
 
 The 40 modules are loaded in dependency waves, parallelizing where possible:
@@ -46,7 +46,8 @@ focus helpers live in `panel-elements.js`; lobby and help in `lobby.js`;
 participant presentation in `participants.js`; leave confirmation in
 `leave-confirm.js`; room sections and chat input setup in `room.js`; the room
 queue's section and up-next strip in `queue.js`, whose host logic (filling the
-queue, starting the countdown at the credits) is `app/queue.js`. `app/start.js`
+queue, starting the countdown at the credits) is `app/queue.js`. `app/tracks.js`
+reports this client's audio and subtitle tracks (`participant_tracks`). `app/start.js`
 reports this client's readiness and follows `start_state`; `room.js` shows it in
 the room bar.
 
@@ -130,7 +131,7 @@ state inventory; see [Client State Lifecycle](/technical/client-state/).
 | `joiningItemId` | string | Media ID being loaded |
 | `roomName` | string | Current room name |
 | `participantCount` | number | Room participant count |
-| `participants` | array | `{ name, isHost, status }` entries from `participant_list` and `participant_statuses`; empty until the server sends one |
+| `participants` | array | `{ name, isHost, status, tracks }` entries from `participant_list`, `participant_statuses` and `participant_tracks`; empty until the server sends one |
 | `roomBarSection` | string | Drop-down open under the room bar: `'people'`, `'chat'`, `'sync'`, `'queue'`, `'leave'` or `''` |
 | `roomMediaId` | string | The room's item from `room_state`; a change in the same room is a move to another queue item |
 | `queueItems` | array | `{ id, title }` entries from `queue_state` |
@@ -434,6 +435,9 @@ Stores the participants' names for the current room and shows them instead of th
 
 #### `participant_statuses`
 Stores each participant's status, when the list has the same length as the participants, and shows it under the name. It also marks the server as accepting `participant_status`, so `playback.reportStatus()` (run on every sync tick in a room) sends this client's status, from `playback.ownStatus()`, once it has held for `PARTICIPANT_STATUS_HOLD_MS`. The same sends go to a server that declared `participant_status` in its `auth_success` features; a server that does neither receives nothing.
+
+#### `participant_tracks`
+Stores each participant's tracks, when the list has the same length as the participants. In the participants list, a person whose report is for the room's current item gets an arrow at the end of the name line; it opens a box below with their **Audio** and **Subtitles**: the stream's title, else its language in the interface language (`Intl.DisplayNames`), marked when forced, and **Off** for no subtitles. One box is open at a time; the same arrow, or a press in the panel outside the box, closes it, and it stays open while the list redraws. `app/tracks.js` (`tracks.report()`, run on every sync tick in a room) reads this client's tracks from its own Jellyfin session every 5 seconds at most, or at once for a new item, and sends `participant_tracks` when they change, to a server that acknowledged the feature.
 
 #### `queue_state` and media queue
 The client advertises `media_queue` and receives queue snapshots only from a server that acknowledges that capability. The host's `app/queue.js` adds and removes Jellyfin items, fills upcoming episodes, moves to another item and starts/cancels the server countdown; guests receive authoritative `queue_state` and follow the room's `room_state` media. The queue holds at most 20 items by count. `last_added` is a persistent fill cursor, so an item the host removed is not re-added after reload or host transfer. The server owns the 10-second countdown and invalidates cancelled or replaced countdown tasks by generation. This count limit is not a byte or process-memory bound.

@@ -73,6 +73,7 @@ public class OpenWatchPartyController : ControllerBase
         "ws/connection.js",
         "app/invite.js",
         "app/queue.js",
+        "app/tracks.js",
         "app/start.js",
         "app/lifecycle.js",
         "app/cleanup.js"

@@ -12,6 +12,9 @@
   const PLAYER_ACTIONS = new Set(['play', 'pause', 'seek', 'buffering']);
   const PARTICIPANT_STATUSES = new Set(['playing', 'paused', 'in_sync', 'catching_up', 'buffering', 'loading', 'blocked', 'not_watching']);
   const NOT_READY_REASONS = new Set(['loading', 'transcoding', 'buffering', 'autoplay_blocked']);
+  const MAX_TRACK_TITLE_LENGTH = 100;
+  const TRACK_LANGUAGE = /^[A-Za-z0-9-]{1,16}$/;
+  const MEDIA_ID = /^[0-9a-f]{32}$/;
 
   const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const string = (value, max, allowEmpty = false) =>
@@ -107,6 +110,26 @@
     const { statuses } = message.payload;
     if (!Array.isArray(statuses) || statuses.length > MAX_PARTICIPANTS) return 'statuses is invalid';
     return statuses.every(status => status === null || PARTICIPANT_STATUSES.has(status)) ? null : 'status is invalid';
+  };
+
+  // One entry per participant, in participant_list order: the tracks it
+  // reported for an item ({ title?, language?, forced? } each, or null for
+  // none), or null for someone who has not reported any.
+  const track = value => object(value)
+    && onlyKeys(value, ['title', 'language', 'forced'])
+    && optional(value.title, title => string(title, MAX_TRACK_TITLE_LENGTH))
+    && optional(value.language, language => typeof language === 'string' && TRACK_LANGUAGE.test(language))
+    && optional(value.forced, forced => typeof forced === 'boolean');
+  const tracksReport = value => object(value)
+    && onlyKeys(value, ['media_id', 'audio', 'subtitle'])
+    && typeof value.media_id === 'string' && MEDIA_ID.test(value.media_id)
+    && nullable(value.audio, track) && nullable(value.subtitle, track);
+  const validateParticipantTracks = (message) => {
+    if (!payloadObject(message)) return 'payload must be an object';
+    if (!onlyKeys(message.payload, ['tracks'])) return 'participant_tracks has unknown fields';
+    const { tracks } = message.payload;
+    if (!Array.isArray(tracks) || tracks.length > MAX_PARTICIPANTS) return 'tracks is invalid';
+    return tracks.every(entry => entry === null || tracksReport(entry)) ? null : 'tracks entry is invalid';
   };
 
   const validateRoomClosed = (message) => {
@@ -228,6 +251,7 @@
     client_left: validateParticipantCount,
     participant_list: validateParticipantList,
     participant_statuses: validateParticipantStatuses,
+    participant_tracks: validateParticipantTracks,
     host_changed: validateHostChanged,
     room_closed: validateRoomClosed,
     player_event: validatePlayerEvent,
@@ -246,6 +270,7 @@
     'client_left',
     'participant_list',
     'participant_statuses',
+    'participant_tracks',
     'host_changed',
     'room_closed',
     'player_event',

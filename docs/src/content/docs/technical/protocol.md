@@ -24,7 +24,7 @@ The WebSocket protocol has its own version, independent of the product release. 
 
 **Compatibility rules:**
 
-- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history`.
+- Protocol version 1 supports additive, feature-negotiated message extensions. Clients advertise supported features in `auth`; `auth_success.features` acknowledges the server-supported subset. Current extensions include `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history`.
 - The web client validates known message and payload schemas strictly. An unknown server message type or unknown field is warned about and dropped by the client; the session continues. An unknown client request type receives `UNKNOWN_MESSAGE_TYPE`. Do not assume new fields on an existing payload are ignored by every client.
 - A server may send an optional extension only to clients that advertised the corresponding feature, or use a new message whose absence leaves legacy behavior intact. Version 1 remains unchanged for these additive extensions; changing an existing field's meaning or removing/retyping it requires a compatibility review and protocol version change.
 
@@ -66,7 +66,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
   "payload": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
   },
   "ts": 1678900000000
 }
@@ -76,7 +76,7 @@ Authenticate with a JWT token (if authentication is enabled), declare the client
 |---------------|------|----------|-------------|
 | `token` | string | No | JWT issued by the `/OpenWatchParty/Token` endpoint |
 | `protocol_version` | number | No | Client protocol version; defaults to `1` when omitted |
-| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history` |
+| `features` | array of strings | No | Optional client capabilities. The server currently recognizes `host_transfer`, `participant_status`, `participant_tracks`, `shared_playback_control`, `media_queue`, `start_when_ready` and `chat_history` |
 
 On a protocol version mismatch the server answers with `error` (`PROTOCOL_VERSION_UNSUPPORTED`) and closes the connection.
 Unknown feature names, non-string array entries, and a non-array `features` value are ignored. A client is eligible to become host only when it declared `host_transfer`, and gets `queue_state` only when it declared `media_queue`; the web client sends the [room queue](#room-queue) messages only to a server that acknowledged `media_queue`. The web client sends `participant_status` to a server that declared `participant_status`, or one that already sent `participant_statuses` for its room. A client gets `start_state` only when it declared `start_when_ready`, and the web client sends `readiness` and `start_now` (see [Start when ready](#start-when-ready)) only to a server that acknowledged it.
@@ -121,7 +121,7 @@ Create a new watch party room.
 
 **Effects:**
 - Client becomes host
-- After `room_state`, the host receives `room_capabilities` if it negotiated shared playback control, then its `participant_list` and `participant_statuses`
+- After `room_state`, the host receives `room_capabilities` if it negotiated shared playback control, then its `participant_list`, `participant_statuses` and `participant_tracks`
 - Members that negotiated `media_queue` receive the initial `queue_state`
 - Broadcast `room_list` to all clients
 
@@ -143,7 +143,7 @@ Join an existing room.
 - Client added to `room.clients`
 - Client removed from `room.ready_clients`
 - Broadcast `participants_update` to other participants
-- Broadcast `participant_list`, then `participant_statuses`, to everyone in the room, including the new client
+- Broadcast `participant_list`, then `participant_statuses` and `participant_tracks`, to everyone in the room, including the new client
 - Send `room_capabilities` to negotiated members; this reports whether the current host also supports shared guest playback
 - Send the new client `queue_state` if it negotiated `media_queue`
 - Send the new client `chat_history` if it negotiated `chat_history` and the room has messages
@@ -162,9 +162,9 @@ Leave the current room.
 ```
 
 **Effects:**
-- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list` and `participant_statuses`
+- If the host leaves and another member declared `host_transfer`: promote the earliest-joined supporting member, preserve media and playback state, clear `pending_play`, and broadcast `client_left`, `host_changed`, then `participant_list`, `participant_statuses` and `participant_tracks`
 - If the host leaves and no remaining member supports transfer, or the room is empty: close the room and broadcast `room_closed` as before
-- Otherwise: broadcast `client_left`, then `participant_list` and `participant_statuses` (the leaving client's status is dropped)
+- Otherwise: broadcast `client_left`, then `participant_list`, `participant_statuses` and `participant_tracks` (the leaving client's status and tracks are dropped)
 - Broadcast `room_list` to all
 
 A non-host WebSocket disconnect has the same room behavior as `leave_room`. When a
@@ -353,6 +353,32 @@ Report how this client is doing, for the room's participants list. Informational
 - A room gets at most one `participant_statuses` every 250 ms for status changes: the first change is sent at once, and later changes within the 250 ms are sent together when they end, with the latest statuses
 - The web client sends it only to a server that sent `participant_statuses` for its room (an older server answers unknown types with an error), once a status has held for a second, and again after reconnecting
 
+### `participant_tracks`
+
+Report the audio and subtitle tracks this client plays, for the others to see in the participants list. Informational only: nothing changes anyone's tracks. Sent only to a server that acknowledged the `participant_tracks` feature.
+
+```json
+{
+  "type": "participant_tracks",
+  "payload": {
+    "media_id": "09a5f21d9ff1211e52063842163eb2e0",
+    "audio": { "title": "Español (doblaje)", "language": "spa" },
+    "subtitle": { "language": "spa", "forced": true }
+  },
+  "ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `media_id` | string | The Jellyfin item the tracks belong to (32 hexadecimal digits) |
+| `audio`, `subtitle` | object or null | The track, or `null` for none (subtitles off). Each one has only these optional fields: `title` (the stream's title, 1 to 100 characters, no control characters; trimmed), `language` (its language code, 1 to 16 letters, digits or hyphens) and `forced` (boolean) |
+
+**Effects:**
+- The tracks are stored for the client's current room; a change is sent to the room as `participant_tracks`
+- A malformed payload, an unchanged report, or a client outside a room are ignored silently (no error)
+- The web client reads its own tracks from its Jellyfin session (`GET /Sessions?deviceId=`) every 5 seconds at most, and at once for a new item, and sends them when they change, once per room and connection
+
 ### Room queue
 
 `queue_add`, `queue_remove`, `queue_move`, `queue_advance` and `queue_countdown` change the server-authoritative room queue, bounded to 20 items by count, watched ones included. This count limit is not a byte-size or process-memory bound. Only the host sends them: other members get `HOST_PERMISSION_REQUIRED`, a client outside a room `NOT_IN_ROOM`, and a malformed payload `INVALID_QUEUE_PAYLOAD`. A command that changes nothing (an item already queued, an unknown id, the room's own item, a countdown already running) is ignored without an error. Members that declared `media_queue` get the result as `queue_state` (see below).
@@ -441,7 +467,7 @@ Sent after a successful `auth` with a JWT, and for feature-aware clients in inse
   "payload": {
     "user_name": "Alice",
     "protocol_version": 1,
-    "features": ["host_transfer", "participant_status", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
+    "features": ["host_transfer", "participant_status", "participant_tracks", "shared_playback_control", "media_queue", "start_when_ready", "chat_history"]
   },
   "ts": 1678900000000,
   "server_ts": 1678900000000
@@ -600,6 +626,31 @@ Each participant's last reported `participant_status`, in the same order as the 
 | `statuses[]` | string or null | The participant's status, or `null` if they have not reported one (an older client, say) |
 
 It is a separate message because `participant_list` rejects unknown fields: clients that do not know `participant_statuses` ignore it. The web client ignores a list of statuses whose length does not match its participants list.
+
+### `participant_tracks`
+
+Each participant's last reported `participant_tracks`, in the same order as the latest `participant_list`. Sent right after every `participant_statuses` that follows a `participant_list`, and to the whole room whenever a member's tracks change.
+
+```json
+{
+  "type": "participant_tracks",
+  "room": "uuid-room-id",
+  "payload": {
+    "tracks": [
+      { "media_id": "09a5f21d9ff1211e52063842163eb2e0", "audio": { "title": "Español (doblaje)", "language": "spa" }, "subtitle": null },
+      null
+    ]
+  },
+  "ts": 1678900000000,
+  "server_ts": 1678900000000
+}
+```
+
+| Payload Field | Type | Description |
+|---------------|------|-------------|
+| `tracks[]` | object or null | The participant's report, as it sent it (title trimmed, `media_id` in lowercase), or `null` if they have not sent one |
+
+Clients that do not know it ignore it, as for `participant_statuses`. The web client ignores a list whose length does not match its participants list, and shows only reports for the room's current item.
 
 ### `queue_state`
 

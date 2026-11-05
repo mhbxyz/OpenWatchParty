@@ -205,8 +205,8 @@ describe('room reconnection lifecycle', () => {
       payload: { participants: [{ name: 'Host', is_host: true }, { name: 'Guest', is_host: false }] }
     });
     assert.deepEqual(OWP.state.participants, [
-      { name: 'Host', isHost: true, status: null },
-      { name: 'Guest', isHost: false, status: null }
+      { name: 'Host', isHost: true, status: null, tracks: null },
+      { name: 'Guest', isHost: false, status: null, tracks: null }
     ]);
 
     // The queue that the host fills comes after room_state.

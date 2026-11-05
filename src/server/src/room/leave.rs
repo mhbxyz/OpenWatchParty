@@ -1,5 +1,8 @@
 use crate::messaging::{broadcast_room_list, collect_room_senders, send_to_senders, ClientSender};
-use crate::room::{close_room_parts, participant_list_message, participant_statuses_message};
+use crate::room::{
+    close_room_parts, participant_list_message, participant_statuses_message,
+    participant_tracks_message,
+};
 use crate::tasks::AppTasks;
 use crate::types::{Client, PendingHostReconnect, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -80,6 +83,7 @@ fn detach_client_from_room(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
+    room.tracks.remove(client_id);
     room.not_ready.remove(client_id);
     // The host's play waits no more; another member's goes on without the
     // one that left.
@@ -107,6 +111,7 @@ fn detach_client_from_room(
         }
         messages.push(participant_list_message(room, clients));
         messages.push(participant_statuses_message(room));
+        messages.push(participant_tracks_message(room));
         let senders = collect_room_senders(room, clients, None);
         Some(LeaveOutcome::Left((senders, messages)))
     }
@@ -136,6 +141,7 @@ fn begin_host_reconnect_grace(
     room.clients.retain(|id| id != client_id);
     room.ready_clients.remove(client_id);
     room.statuses.remove(client_id);
+    room.tracks.remove(client_id);
     room.not_ready.remove(client_id);
     if room.pending_play.take().is_some() {
         send_idle(room, clients);
@@ -149,6 +155,7 @@ fn begin_host_reconnect_grace(
         client_left_message(&room_id, client_id, room.clients.len()),
         participant_list_message(room, clients),
         participant_statuses_message(room),
+        participant_tracks_message(room),
     ];
     let senders = collect_room_senders(room, clients, None);
     Some((room_id, generation, (senders, messages)))
@@ -173,6 +180,7 @@ async fn expire_host_reconnect(room_id: String, generation: u64, state: SharedSt
                     host_changed,
                     participant_list_message(room, clients),
                     participant_statuses_message(room),
+                    participant_tracks_message(room),
                 ];
                 Some((collect_room_senders(room, clients, None), messages))
             } else {
@@ -511,7 +519,8 @@ mod tests {
                 "client_left",
                 "host_changed",
                 "participant_list",
-                "participant_statuses"
+                "participant_statuses",
+                "participant_tracks"
             ]
         );
         assert_eq!(messages[1].payload.as_ref().unwrap()["host_id"], "next");
@@ -542,6 +551,8 @@ mod tests {
             locked.clients.insert("guest".to_string(), guest);
             let mut room = test_helpers::create_room("room", "host");
             room.clients.push("guest".to_string());
+            room.tracks
+                .insert("host".to_string(), serde_json::json!({}));
             room.pending_play = Some(PendingPlay {
                 initiator_id: "host".to_string(),
                 position: 10.0,
@@ -563,6 +574,7 @@ mod tests {
             assert_eq!(locked.rooms["room"].host_id, "host");
             assert!(locked.rooms["room"].pending_host_reconnect.is_some());
             assert!(locked.rooms["room"].pending_play.is_none());
+            assert!(!locked.rooms["room"].tracks.contains_key("host"));
         }
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
@@ -575,6 +587,10 @@ mod tests {
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             ServerMessageType::ParticipantStatuses
+        );
+        assert_eq!(
+            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+            ServerMessageType::ParticipantTracks
         );
         assert_eq!(
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
@@ -592,10 +608,16 @@ mod tests {
             test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
             ServerMessageType::HostChanged
         );
-        assert_eq!(
-            test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
-            ServerMessageType::ParticipantList
-        );
+        for expected in [
+            ServerMessageType::ParticipantList,
+            ServerMessageType::ParticipantStatuses,
+            ServerMessageType::ParticipantTracks,
+        ] {
+            assert_eq!(
+                test_helpers::recv_msg(&mut guest_rx).unwrap().msg_type,
+                expected
+            );
+        }
 
         tasks.cancel();
         tasks.wait().await;

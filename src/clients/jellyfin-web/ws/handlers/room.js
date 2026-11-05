@@ -77,11 +77,13 @@
 
   h.handleParticipantList = (msg) => {
     if (!state.inRoom || msg.room !== state.roomId) return;
-    // The statuses for this list follow in participant_statuses.
+    // The statuses and tracks for this list follow in participant_statuses
+    // and participant_tracks.
     state.participants = msg.payload.participants.map(participant => ({
       name: participant.name,
       isHost: participant.is_host,
-      status: null
+      status: null,
+      tracks: null
     }));
     ui.updateParticipantList();
   };
@@ -96,6 +98,15 @@
     const { statuses } = msg.payload;
     if (statuses.length !== state.participants.length) return;
     state.participants = state.participants.map((participant, index) => ({ ...participant, status: statuses[index] }));
+    ui.updateParticipantList();
+  };
+
+  // Tracks in participant_list order, as for the statuses.
+  h.handleParticipantTracks = (msg) => {
+    if (!state.inRoom || msg.room !== state.roomId) return;
+    const { tracks } = msg.payload;
+    if (tracks.length !== state.participants.length) return;
+    state.participants = state.participants.map((participant, index) => ({ ...participant, tracks: tracks[index] }));
     ui.updateParticipantList();
   };
 

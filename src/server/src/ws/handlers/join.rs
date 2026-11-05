@@ -7,7 +7,7 @@ use crate::messaging::{
 };
 use crate::room::{
     handle_leave_without_transfer, host_changed_message, participant_list_message,
-    participant_statuses_message, send_leave_notification,
+    participant_statuses_message, participant_tracks_message, send_leave_notification,
 };
 use crate::types::{Client, IncomingMessage, Room, ServerMessageType, SharedState, WsMessage};
 use crate::utils::now_ms;
@@ -287,6 +287,7 @@ pub(in crate::ws) async fn handle_join_room(
                     }),
                     participant_list_message(room, clients),
                     participant_statuses_message(room),
+                    participant_tracks_message(room),
                 );
                 if reclaimed_host {
                     info!("Client {client_id} reclaimed host role in room {room_id}");
@@ -299,12 +300,13 @@ pub(in crate::ws) async fn handle_join_room(
         }
         enqueue_join_notifications(client_id, notifications);
         let joined = participants.is_some();
-        if let Some((senders, host_changed, list, statuses)) = participants {
+        if let Some((senders, host_changed, list, statuses, tracks)) = participants {
             if let Some(message) = host_changed {
                 send_to_senders(&senders, &message, "host reconnect");
             }
             send_to_senders(&senders, &list, "participant list");
             send_to_senders(&senders, &statuses, "participant statuses");
+            send_to_senders(&senders, &tracks, "participant tracks");
         }
         if let Some(room) = state.rooms.get(room_id) {
             crate::room::send_room_capabilities(room, &state.clients);
@@ -902,14 +904,18 @@ mod tests {
         let (mut host, mut host_rx) = test_helpers::create_client_with_rx("u1", "Franco", true);
         let (guest, mut guest_rx) = test_helpers::create_client_with_rx("u2", "Ana", true);
         host.room_id = Some("room".to_string());
+        let english = serde_json::json!({
+            "media_id": "0".repeat(32),
+            "audio": { "title": "English" },
+            "subtitle": null
+        });
         {
             let mut locked = state.write().await;
             locked.clients.insert("host".to_string(), host);
             locked.clients.insert("guest".to_string(), guest);
-            locked.rooms.insert(
-                "room".to_string(),
-                test_helpers::create_room("room", "host"),
-            );
+            let mut room = test_helpers::create_room("room", "host");
+            room.tracks.insert("host".to_string(), english.clone());
+            locked.rooms.insert("room".to_string(), room);
         }
 
         handle_join_room("guest", &join_message("room"), &state, &test_jwt_config()).await;
@@ -940,6 +946,13 @@ mod tests {
             assert_eq!(
                 statuses.payload.unwrap()["statuses"],
                 serde_json::json!([null, null])
+            );
+            // The one joining also learns the tracks the others reported.
+            let tracks = test_helpers::recv_msg(rx).unwrap();
+            assert_eq!(tracks.msg_type, ServerMessageType::ParticipantTracks);
+            assert_eq!(
+                tracks.payload.unwrap()["tracks"],
+                serde_json::json!([english, null])
             );
         }
     }

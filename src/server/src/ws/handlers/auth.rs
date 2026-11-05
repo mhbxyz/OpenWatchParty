@@ -10,6 +10,7 @@ use std::sync::Arc;
 
 const HOST_TRANSFER_FEATURE: &str = "host_transfer";
 const PARTICIPANT_STATUS_FEATURE: &str = "participant_status";
+const PARTICIPANT_TRACKS_FEATURE: &str = "participant_tracks";
 const SHARED_PLAYBACK_FEATURE: &str = "shared_playback_control";
 const MEDIA_QUEUE_FEATURE: &str = "media_queue";
 const START_WHEN_READY_FEATURE: &str = "start_when_ready";
@@ -57,6 +58,9 @@ fn declared_features(payload: Option<&serde_json::Value>) -> Option<Vec<String>>
     }
     if declared.contains(&PARTICIPANT_STATUS_FEATURE) {
         supported.push(PARTICIPANT_STATUS_FEATURE.to_string());
+    }
+    if declared.contains(&PARTICIPANT_TRACKS_FEATURE) {
+        supported.push(PARTICIPANT_TRACKS_FEATURE.to_string());
     }
     if declared.contains(&SHARED_PLAYBACK_FEATURE) {
         supported.push(SHARED_PLAYBACK_FEATURE.to_string());
@@ -704,6 +708,10 @@ mod tests {
             (
                 serde_json::json!(["host_transfer"]),
                 serde_json::json!(["host_transfer"]),
+            ),
+            (
+                serde_json::json!(["participant_tracks", "unknown"]),
+                serde_json::json!(["participant_tracks"]),
             ),
         ] {
             let state = test_helpers::create_state();

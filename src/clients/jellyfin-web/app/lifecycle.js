@@ -159,6 +159,7 @@
         playback.syncLoop();
       }
       if (state.inRoom && playback.reportStatus) playback.reportStatus();
+      if (state.inRoom && OWP.tracks?.report) OWP.tracks.report();
       if (state.inRoom && OWP.start?.report) OWP.start.report();
       if (OWP.queue?.retryFill) OWP.queue.retryFill();
       // Also outside a room and for the host, so that leaving, hosting or

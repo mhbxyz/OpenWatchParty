@@ -3,7 +3,8 @@ use super::super::validation::{is_valid_media_id, is_valid_position, sanitize_na
 use crate::messaging::{broadcast_room_list, send_message, send_to_senders, ClientSender};
 use crate::room::close_room_in_state;
 use crate::room::{
-    handle_leave, participant_list_message, participant_statuses_message, send_leave_notification,
+    handle_leave, participant_list_message, participant_statuses_message,
+    participant_tracks_message, send_leave_notification,
 };
 use crate::types::{
     IncomingMessage, PlayState, PlaybackState, Room, ServerMessageType, SharedState, WsMessage,
@@ -73,6 +74,7 @@ fn build_room(client_id: &str, host_name: &str, payload: Option<&serde_json::Val
         command_cooldown_until: None,
         statuses: HashMap::new(),
         status_broadcast: Default::default(),
+        tracks: HashMap::new(),
         guest_command_until: None,
         queue: Default::default(),
         not_ready: HashMap::new(),
@@ -172,6 +174,7 @@ pub(in crate::ws) async fn handle_create_room(
                 (
                     participant_list_message(room, clients),
                     participant_statuses_message(room),
+                    participant_tracks_message(room),
                 )
             });
         if let Some(notification) = previous_leave {
@@ -196,9 +199,10 @@ pub(in crate::ws) async fn handle_create_room(
         if let Some(room) = room {
             crate::room::send_room_capabilities(room, clients);
         }
-        if let Some((list, statuses)) = participant_list {
+        if let Some((list, statuses, tracks)) = participant_list {
             send_message(sender.clone(), &list, Some(client_id));
-            send_message(sender, &statuses, Some(client_id));
+            send_message(sender.clone(), &statuses, Some(client_id));
+            send_message(sender, &tracks, Some(client_id));
         }
         // The host's client fills the queue only once it has the room's.
         if let Some(room) = room {
@@ -329,6 +333,9 @@ mod tests {
             statuses.payload.unwrap()["statuses"],
             serde_json::json!([null])
         );
+        let tracks = test_helpers::recv_msg(&mut host_rx).unwrap();
+        assert_eq!(tracks.msg_type, ServerMessageType::ParticipantTracks);
+        assert_eq!(tracks.payload.unwrap()["tracks"], serde_json::json!([null]));
     }
 
     #[tokio::test]
