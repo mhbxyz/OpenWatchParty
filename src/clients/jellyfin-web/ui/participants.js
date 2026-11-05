@@ -36,7 +36,7 @@
     && participant.tracks.media_id === String(state.roomMediaId).toLowerCase() ? participant.tracks : null);
 
   // The language of a code such as "spa" or "pt-BR", in the interface's own
-  // language; '' when it is unknown.
+  // language; '' for none or "und", the code itself when it cannot be named.
   const languageName = (code) => {
     if (!code || code.toLowerCase() === 'und') return '';
     const language = OWP.i18n.locale();
