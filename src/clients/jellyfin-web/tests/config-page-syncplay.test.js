@@ -17,10 +17,11 @@ const VALID_SECRET = 'B0vLhmX5ZY1mQ4NfIYBcr8VWxOTQ02cbeQ9x7B3K4ow=';
 // Minimal jQuery stand-in: form fields keep their value/checked/text state and
 // their handlers, and the page and form selectors record the handlers the
 // configuration page registers.
-const loadConfigPage = (storedConfig) => {
+const loadConfigPage = (storedConfig, { diagnostics } = {}) => {
   const fields = new Map();
   const handlers = {};
   const saved = [];
+  const alerts = [];
   const pageElement = { id: 'page' };
   const formElement = { id: 'form' };
   const field = (id) => {
@@ -41,6 +42,9 @@ const loadConfigPage = (storedConfig) => {
       text(value) {
         if (value === undefined) return state.text;
         state.text = value;
+        return this;
+      },
+      css() {
         return this;
       },
       on: (events, handler) => {
@@ -83,21 +87,32 @@ const loadConfigPage = (storedConfig) => {
     Dashboard: {
       showLoadingMsg: () => {},
       hideLoadingMsg: () => {},
-      alert: (message) => { throw new Error(`Unexpected alert: ${message}`); },
+      alert: (message) => { alerts.push(message); },
       processPluginConfigurationUpdateResult: () => {}
     },
     $
   });
   vm.runInContext(script, context, { filename: 'configPage.html' });
   const page = context.OpenWatchPartyConfigurationPage;
+  const updateAuthStatus = page.updateAuthStatus;
+  const authStatusCalls = [];
   page.init = async () => {};
-  page.runDiagnostics = () => {};
-  page.updateAuthStatus = () => {};
+  page.runDiagnostics = async () => diagnostics;
+  page.updateAuthStatus = (target, config, result) => {
+    authStatusCalls.push([config, result]);
+    updateAuthStatus.call(page, target, config, result);
+  };
 
   const settle = () => new Promise(resolve => setImmediate(resolve));
   return {
     fields,
     saved,
+    alerts,
+    authStatusCalls,
+    authStatus(config, result) {
+      updateAuthStatus.call(page, pageElement, config, result);
+      return fields.get('AuthStatus').text;
+    },
     async show() {
       handlers.pageshow.call(pageElement);
       await settle();
@@ -298,5 +313,119 @@ describe('configuration page appearance settings', () => {
 
     assert.equal(form.saved[0].AppearanceOpacity, 55);
     assert.equal(form.saved[0].AppearanceTextSize, 14);
+  });
+});
+
+describe('configuration page authentication on save', () => {
+  const baseConfig = { JwtSecret: '', AllowInsecureNoAuth: false, SessionServerUrl: 'wss://media.example/ws' };
+  const activeRsa = {
+    AuthenticationMode: 'jwt',
+    Checks: [{ Id: 'authentication_configuration', Status: 'pass', Summary: 'Authentication configuration is valid' }]
+  };
+
+  it('saves an empty secret when diagnostics confirm active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: activeRsa });
+    await form.show();
+    await form.submit();
+
+    assert.deepEqual(form.alerts, []);
+    assert.equal(form.saved.length, 1);
+    assert.equal(form.saved[0].JwtSecret, '');
+    assert.equal(form.saved[0].AllowInsecureNoAuth, false);
+  });
+
+  it('rejects an invalid secret entered even with active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: activeRsa });
+    await form.show();
+    form.fields.get('JwtSecret').value = 'short';
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['JWT secret must contain at least 32 Unicode characters']);
+  });
+
+  it('rejects clearing a stored secret even when diagnostics pass', async () => {
+    const form = loadConfigPage({ ...baseConfig, JwtSecret: 'stored' }, { diagnostics: activeRsa });
+    await form.show();
+    form.fields.get('JwtSecret').value = '';
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
+  });
+
+  it('rejects an empty secret without active RSA', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: {
+      AuthenticationMode: 'insecure',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT authentication is not configured' }]
+    } });
+    await form.show();
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
+  });
+
+  it('rejects an empty secret while diagnostics have not responded', async () => {
+    const form = loadConfigPage(baseConfig, { diagnostics: new Promise(() => {}) });
+    await form.show();
+    await form.submit();
+
+    assert.equal(form.saved.length, 0);
+    assert.deepEqual(form.alerts, ['Configure a JWT secret or explicitly enable insecure development mode.']);
+  });
+});
+
+describe('configuration page authentication status', () => {
+  const keyDiagnostics = (status, summary) => ({
+    AuthenticationMode: 'jwt',
+    Checks: [{ Id: 'authentication_configuration', Status: status, Summary: summary }]
+  });
+
+  it('shows an active RSA signing key as enabled, whatever the shared secret', () => {
+    const form = loadConfigPage({});
+    const active = keyDiagnostics('pass', 'Authentication configuration is valid');
+    assert.equal(form.authStatus({ JwtSecret: '' }), 'BLOCKED: configure a JWT secret');
+    assert.equal(form.authStatus({ JwtSecret: '' }, active), 'Authentication enabled');
+    assert.equal(form.authStatus({ JwtSecret: 'short' }), 'BLOCKED: JWT secret must contain at least 32 Unicode characters');
+    assert.equal(form.authStatus({ JwtSecret: 'short' }, active), 'Authentication enabled');
+  });
+
+  it('shows the key error the diagnostics report, even with a valid shared secret', () => {
+    const form = loadConfigPage({});
+    const summary = 'The RSA signing key file (keys/signing-key.json) cannot be read; restore it or remove it';
+    assert.equal(form.authStatus({ JwtSecret: '' }, keyDiagnostics('fail', summary)), `BLOCKED: ${summary}`);
+    assert.equal(form.authStatus({ JwtSecret: VALID_SECRET }, keyDiagnostics('fail', summary)), `BLOCKED: ${summary}`);
+  });
+
+  it('keeps the shared secret and development mode statuses', () => {
+    const form = loadConfigPage({});
+    const insecure = { AuthenticationMode: 'insecure', Checks: [{ Id: 'authentication_configuration', Status: 'pass' }] };
+    assert.equal(form.authStatus({ JwtSecret: VALID_SECRET }, keyDiagnostics('pass')), 'Authentication enabled');
+    assert.equal(form.authStatus({ JwtSecret: '', AllowInsecureNoAuth: true }, insecure), 'INSECURE DEVELOPMENT MODE');
+    // Without a key or a secret the diagnostics fail too, but the page's own message is translated.
+    const unconfigured = { AuthenticationMode: 'insecure',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT authentication is not configured' }] };
+    assert.equal(form.authStatus({ JwtSecret: '' }, unconfigured), 'BLOCKED: configure a JWT secret');
+    const invalidSecret = { AuthenticationMode: 'jwt',
+      Checks: [{ Id: 'authentication_configuration', Status: 'fail', Summary: 'JWT secret must contain at least 32 Unicode characters' }] };
+    assert.equal(form.authStatus({ JwtSecret: 'short' }, invalidSecret), 'BLOCKED: JWT secret must contain at least 32 Unicode characters');
+  });
+
+  it('waits for diagnostics before showing the authentication status for an RSA-only setup', async () => {
+    const diagnostics = keyDiagnostics('pass', 'Authentication configuration is valid');
+    let resolveDiagnostics;
+    const pendingDiagnostics = new Promise(resolve => { resolveDiagnostics = resolve; });
+    const form = loadConfigPage({ JwtSecret: '' }, { diagnostics: pendingDiagnostics });
+    await form.show();
+    assert.equal(form.fields.get('AuthStatus')?.text || '', '');
+    assert.equal(form.authStatusCalls.length, 0);
+
+    resolveDiagnostics(diagnostics);
+    await new Promise(resolve => setImmediate(resolve));
+
+    assert.equal(form.authStatusCalls.length, 1);
+    assert.equal(form.authStatusCalls[0][1], diagnostics);
+    assert.equal(form.fields.get('AuthStatus').text, 'Authentication enabled');
   });
 });

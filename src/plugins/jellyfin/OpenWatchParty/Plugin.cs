@@ -28,7 +28,18 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         Instance = this;
         _logger = logger;
 
-        if (string.IsNullOrWhiteSpace(Configuration.JwtSecret))
+        // The RSA signing key, once active, issues the tokens whatever the shared secret says.
+        var rsaKeyActive = Controllers.OpenWatchPartyController.IsRsaSigningKeyActive();
+        if (rsaKeyActive == true)
+        {
+            _logger.LogInformation("[OpenWatchParty] JWT authentication is enabled with the RSA signing key.");
+        }
+        else if (rsaKeyActive == null)
+        {
+            _logger.LogError("[OpenWatchParty] Token issuance is blocked: {ValidationError}",
+                Controllers.OpenWatchPartyController.GetAuthenticationConfigurationError(Configuration));
+        }
+        else if (string.IsNullOrWhiteSpace(Configuration.JwtSecret))
         {
             if (Configuration.AllowInsecureNoAuth)
             {
