@@ -74,7 +74,9 @@
     const video = getVideo();
     if (!isGuestLocked(video)) return;
     const seekButton = event.target?.closest?.(SEEK_BUTTON_SELECTOR);
-    if (seekButton?.closest('.videoOsdBottom')) {
+    // Jellyfin's own Skip Intro (or credits, recap) prompt, outside the OSD,
+    // would take the guest away from the room for a moment.
+    if (seekButton?.closest('.videoOsdBottom') || event.target?.closest?.('.skip-button')) {
       blockEvent(event);
       return;
     }

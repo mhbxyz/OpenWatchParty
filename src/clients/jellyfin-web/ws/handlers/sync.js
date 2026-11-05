@@ -176,6 +176,7 @@
     if (OWP.actions?.completeRoomRejoin) OWP.actions.completeRoomRejoin(msg.room);
     ui.render();
     if (OWP.queue?.refresh) OWP.queue.refresh();
+    if (OWP.segments?.refresh) OWP.segments.refresh();
     if (acceptedAsGuest && msg.payload?.media_id) {
       state.pendingMediaId = msg.payload.media_id;
       state.pendingMediaUntil = 0;

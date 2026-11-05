@@ -31,7 +31,7 @@ The Watch Party button in the Jellyfin header opens the same panel, but **Create
 
 The **?** next to the panel's close button shows a short help. On the first run in a browser, the panel opens below the header button with this help; it is not shown again in that browser.
 
-As the host, you control playback for everyone. When you play, pause, or seek, all participants follow. Guests can play and pause too, for the whole room.
+As the host, you control playback for everyone. When you play, pause, or seek, all participants follow; that includes Jellyfin's own **Skip Intro** prompt (or credits, recap), which takes the whole room past the segment. Guests can play and pause too, for the whole room.
 
 ![The room bar during an active session](/assets/images/watch-party-panel.png)
 
@@ -132,7 +132,7 @@ This needs a session server and clients with the feature. With an older client o
 
 As a participant:
 
-While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
+While you are in a room, seeking is locked to the host: the timeline, skip, chapter, rewind, and fast-forward controls are dimmed, and keyboard seeking is ignored. Jellyfin's own **Skip Intro** prompt (or credits, recap) does nothing for you either and shows **"Only the host can seek"**; if your Jellyfin is set to skip them by itself, it skips and the room brings you back at once. Play and pause are shared: your pause pauses the whole room, the host included, and anyone's play resumes everyone. Only while the room waits for the host's stream (after a track change, for example) is the play control dimmed and does nothing.
 
 Shared controls require a compatible server and host. With an older host or server, your pause stays local and Play is locked while the room is paused. Resuming your local pause catches you up to the room. Upgrading clients does not grant guests permission to seek or close the room.
 
@@ -141,6 +141,7 @@ Shared controls require a compatible server and host. With an older host or serv
 | Host or a guest plays | Video starts automatically |
 | Host or a guest pauses | Video pauses automatically |
 | Host seeks | Video jumps to new position |
+| Host skips the intro, recap or credits with Jellyfin's Skip button | Video jumps past it, with a notification |
 | Host leaves | A compatible participant becomes host; otherwise the room closes |
 | Host reloads or briefly loses connection | The same signed-in user remains host when they reconnect within 10 seconds |
 | Drift detected | Playback speed adjusts (0.90x-1.15x) to catch up |
@@ -269,6 +270,7 @@ OpenWatchParty displays toast notifications to keep you informed about room acti
 These appear briefly in the center of the screen:
 - **"Host resumed playback"** - The host started playing
 - **"Host paused playback"** - The host paused
+- **"The host skipped the intro"** (or the recap, the credits) - The host used Jellyfin's Skip button on a segment Intro Skipper marked
 - **"A guest resumed playback"** / **"A guest paused playback"** - A guest played or paused the room
 - **"A participant joined the room"** - Someone joined
 - **"A participant left the room"** - Someone left
