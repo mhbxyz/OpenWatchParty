@@ -143,11 +143,8 @@
     }
   };
 
-  // A guest's Jellyfin set to skip intros (or credits, recaps) by itself takes
-  // it to the end of a segment the room still plays in (when the host skips,
-  // the room is past it too). The sync loop brings it back at once, without the
-  // cooldown that holds hard seeks for a while after an item starts, which is
-  // when intros come.
+  // A guest's Jellyfin that skips segments by itself jumps ahead of the room:
+  // bring it back at once, bypassing the seek cooldown after an item starts.
   const returnFromOwnSkip = (video) => {
     if (!OWP.segments) return;
     const position = video.currentTime;
