@@ -1,5 +1,5 @@
 # Build stage
-FROM rust:1.99-alpine@sha256:b1d5dd5a22a09404d3e798c0cf051b689077360374eb505fa5bb93c479693d87 AS builder
+FROM rust:1.99-alpine@sha256:44819b27be4c97b0e4d7203bd2e02c4820f97700211b6a37fb4c246a2de59383 AS builder
 
 # Build mode: "dev" (fast compile, debug) or "release" (optimized)
 ARG BUILD_MODE=dev
@@ -40,7 +40,7 @@ RUN touch src/main.rs && \
     fi
 
 # Runtime stage
-FROM alpine:3.24@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+FROM alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
 
 # Upgrade the base layer for Alpine security fixes (zlib, libssl, ...), then
 # install curl for healthcheck and ca-certificates for HTTPS
